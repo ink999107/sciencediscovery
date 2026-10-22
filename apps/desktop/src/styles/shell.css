@@ -221,6 +221,41 @@ body.is-resizing * {
   border-radius: 8px;
 }
 
+/* ===== sidebar footer: settings entry pinned to the bottom ===== */
+.sidebar-spacer { flex: 0 0 auto; min-height: 12px; }
+.sidebar-foot { border-top: 1px solid var(--border); padding-top: 10px; }
+.side-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--radius-s);
+  color: var(--text-secondary);
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background .12s ease, color .12s ease;
+}
+.side-action:hover { background: var(--surface-hover); color: var(--text-strong); }
+.side-action-icon {
+  width: 16px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+}
+
+.icon-button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: var(--radius-s);
+  color: var(--text-faint);
+}
+.icon-button:hover { background: var(--surface-hover); color: var(--text-heading); }
+
 /* ===== main area ===== */
 .main-area {
   min-width: 0;

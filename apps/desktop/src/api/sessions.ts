@@ -180,6 +180,27 @@ export function deleteSession(client: ApiClient, sessionId: string): Promise<{ d
 }
 
 /**
+ * Which execution machines a Project's Sessions may use.
+ *
+ * The list is the whole permission, not a hint: the API refuses a run whose
+ * runner is not in the effective list (`Runner <id> is not allowed by this
+ * Session`), and an empty array is meaningful — it forbids every machine. So
+ * the array is always sent complete, and always including `"local"` when the
+ * local machine should stay allowed, because omitting it disables local
+ * execution too.
+ */
+export function setProjectRunnerIds(
+  client: ApiClient,
+  projectId: string,
+  runnerIds: string[],
+): Promise<Project> {
+  return client.request<Project>(`/api/projects/${encodeURIComponent(projectId)}`, {
+    body: JSON.stringify({ runnerIds }),
+    method: "PATCH",
+  });
+}
+
+/**
  * Put files into this Session's workspace, where the agent reads them.
  *
  * One multipart request for the whole batch rather than one per file: the

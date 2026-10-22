@@ -16,6 +16,7 @@ import { useEffect } from "react";
 
 import type { ConfirmRequest } from "../app/use-workspace.js";
 import { TEXT } from "../text.js";
+import { claimsEscape } from "./dialog-escape.js";
 
 /**
  * The gate in front of everything irreversible.
@@ -33,7 +34,12 @@ export function ConfirmDialog({
 }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onDismiss();
+      if (!claimsEscape(event)) return;
+      // This dialog is the topmost one. Claim the key on its way up so the
+      // settings dialog behind it — listening on `window`, further along the
+      // same path — does not close as well.
+      event.preventDefault();
+      onDismiss();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);

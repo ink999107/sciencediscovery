@@ -26,6 +26,7 @@ interface Props {
   /** The per-file ceiling to state in that tooltip, already formatted. */
   attachLimit?: string;
   models: ModelProfile[];
+  onOpenSettings: () => void;
   onSelectModel: (modelId: string) => void;
   onSend: (content: string) => void;
   onStop: () => void;
@@ -50,6 +51,7 @@ export function Composer({
   attachBlocked,
   attachLimit,
   models,
+  onOpenSettings,
   onSelectModel,
   onSend,
   onStop,
@@ -248,6 +250,18 @@ export function Composer({
                 </button>
               );
             })}
+            <div className="dropdown-divider" />
+            <button
+              className="dropdown-row dropdown-row-sub"
+              onClick={() => {
+                setPicking(false);
+                onOpenSettings();
+              }}
+              type="button"
+            >
+              <span className="row-icon">＋</span>
+              <span className="row-label">{TEXT.composer.addCustomModel}</span>
+            </button>
           </div>
         </div>
       ) : null}

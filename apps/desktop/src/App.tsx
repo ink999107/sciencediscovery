@@ -32,6 +32,7 @@ import { ConfirmDialog } from "./views/ConfirmDialog.js";
 import { Conversation } from "./views/Conversation.js";
 import { OfflineScreen } from "./views/OfflineScreen.js";
 import { SessionBar } from "./views/SessionBar.js";
+import { SettingsDialog } from "./views/SettingsDialog.js";
 import { SetupWizard } from "./views/SetupWizard.js";
 import { Sidebar } from "./views/Sidebar.js";
 import { Toasts } from "./views/Toasts.js";
@@ -47,6 +48,7 @@ export function App({ initialToken }: Props) {
   /** Set when the server answered 401, so the gate can say "this one was
    *  refused" instead of the generic "we have no credential". */
   const [rejected, setRejected] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(() =>
     readStoredFlag(localStorage, RIGHT_PANEL_STORAGE_KEY),
   );
@@ -186,6 +188,7 @@ export function App({ initialToken }: Props) {
           actions={actions}
           activeSessionId={state.sessionId}
           connection={state.connection}
+          onOpenSettings={() => setSettingsOpen(true)}
           recent={state.recent}
         />
 
@@ -212,6 +215,7 @@ export function App({ initialToken }: Props) {
             attachBlocked={canUpload ? undefined : TEXT.composer.attachArchived}
             attachLimit={attachLimit}
             models={state.models}
+            onOpenSettings={() => setSettingsOpen(true)}
             onSelectModel={(modelId) => void actions.selectModel(modelId)}
             onSend={(content) => void actions.send(content)}
             onStop={() => void actions.stop()}
@@ -249,6 +253,15 @@ export function App({ initialToken }: Props) {
       ) : null}
 
       <Toasts onDismiss={actions.dismissToast} toasts={state.toasts} />
+
+      {settingsOpen ? (
+        <SettingsDialog
+          actions={actions}
+          client={client}
+          onClose={() => setSettingsOpen(false)}
+          state={state}
+        />
+      ) : null}
 
       {state.confirm ? (
         <ConfirmDialog onDismiss={actions.dismissConfirm} request={state.confirm} />

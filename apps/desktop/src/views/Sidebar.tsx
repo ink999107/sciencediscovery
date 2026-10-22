@@ -29,6 +29,7 @@ interface Props {
   actions: WorkspaceActions;
   activeSessionId?: string;
   connection: Connection;
+  onOpenSettings: () => void;
   recent: Session[];
 }
 
@@ -59,7 +60,7 @@ function basename(session: Session): string {
  * Project it needs at startup and every session it makes lands there. Naming
  * that owner here only ever raised a question the user could not act on.
  */
-export function Sidebar({ actions, activeSessionId, connection, recent }: Props) {
+export function Sidebar({ actions, activeSessionId, connection, onOpenSettings, recent }: Props) {
   const [menu, setMenu] = useState<MenuState>();
   const [renaming, setRenaming] = useState<Renaming>();
   const statusClass = CONNECTION_CLASS[connection];
@@ -182,6 +183,15 @@ export function Sidebar({ actions, activeSessionId, connection, recent }: Props)
           )}
         </div>
       </section>
+
+      <div className="sidebar-spacer" />
+
+      <div className="sidebar-foot">
+        <button className="side-action" onClick={onOpenSettings} title={TEXT.sidebar.settings} type="button">
+          <span className="side-action-icon">⚙️</span>
+          <span>{TEXT.sidebar.settings}</span>
+        </button>
+      </div>
 
       <RowMenu menu={menu} onClose={() => setMenu(undefined)} />
     </aside>

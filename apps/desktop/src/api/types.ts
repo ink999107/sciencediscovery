@@ -30,24 +30,64 @@ import type {
 } from "@sciencediscovery/schema";
 
 export type {
+  ApprovalMode,
   ChatMessage,
+  ConnectorManifest,
+  CreateModelProfileRequest,
   CreateModelProviderRequest,
   CreateSessionRequest,
   EffectiveRuntimeSettings,
+  EnvironmentCondaSourceId,
+  EnvironmentPackageSourceId,
+  EnvironmentPipSourceId,
+  EnvironmentSourceSettings,
+  KernelSession,
+  McpProxyPolicies,
   ModelConnectivityTestResult,
   ModelProfile,
   ModelProvider,
   ModelProviderPreset,
+  ModelProviderPresetId,
+  NpuDeviceStatus,
+  NpuInventory,
+  NpuRunnerSelectionsResponse,
+  PermissionAction,
   PermissionDecision,
   PermissionDecisionResult,
+  PermissionGrant,
+  PermissionGrantScope,
   PermissionRequest,
-  Project,
   ProviderModelEntry,
+  ProviderModelList,
   ProviderModelPreview,
+  Project,
+  ProxyDefaultPolicy,
+  ProxyPolicy,
+  ProxyServer,
+  ProxyServerKind,
+  ProxySettingsDetails,
+  RegisterRemoteHostRequest,
+  RemoteConnectLog,
+  RemoteConnectLogEntry,
+  RemoteHostConnectionKind,
+  RemoteHostKeyState,
+  RemoteHostReachability,
+  RemoteHostTarget,
+  RemoteRunnerStatus,
+  RunFailureCode,
   RunStreamEvent,
+  RunnerResources,
+  RunnerRuntimeStatus,
+  RunnerTarget,
+  RuntimeSessionRun,
+  RuntimeSettingsDetails,
   RuntimeSettingsOverrides,
+  RuntimeStatus,
+  SandboxNetworkMode,
+  SandboxNetworkSettings,
   ScientificArtifact,
   ScientificArtifactKind,
+  ScientificArtifactVersion,
   SendMessageRequest,
   Session,
   SessionArtifactOutput,
@@ -56,12 +96,69 @@ export type {
   SessionRun,
   SessionRunEvent,
   SessionRunStatus,
+  SkillDescriptor,
+  SkillSource,
+  Specialist,
+  SshConfigHostImport,
+  SshKeyFileListing,
+  SystemQuotaSettings,
+  SystemTimeoutSettings,
   ToolTrace,
+  TrustedRemoteHostKey,
+  UpdateProjectRequest,
   UpdateSessionRequest,
+  WorkspaceCapabilities,
   WorkspaceConflictPolicy,
   WorkspaceFile,
+  WorkspaceUploadItemResult,
   WorkspaceUploadResult,
 } from "@sciencediscovery/schema";
+
+/** One entry of `GET /api/mcp/sources`: the server's own manifest plus what it
+ *  last observed about reachability. The status carries the reason a server is
+ *  unusable, which is the only place that reason is exposed.
+ *
+ *  `tools` is a map keyed by tool id, not a list — a `Record` is what the wire
+ *  sends. Declaring it as an array here once hid a page that counted `.length`
+ *  on an object and therefore reported zero tools for every server. */
+export interface McpSource {
+  manifest: {
+    cache?: { enabled?: boolean; scope?: string; ttlSeconds?: number };
+    description?: string;
+    displayName?: string;
+    enabledByDefault?: boolean;
+    governance?: {
+      dataClassification?: string;
+      license?: string;
+      networkHosts?: string[];
+    };
+    id: string;
+    kinds?: string[];
+    publisher?: string;
+    tools?: Record<string, { description?: string; displayName?: string; id: string; kind?: string }>;
+    transport?: { mcpServerId?: string; type?: string };
+    version?: string;
+  };
+  status: {
+    availableTools?: string[];
+    catalogRevision?: string;
+    error?: string;
+    lastCheckedAt?: string;
+    missingTools?: string[];
+    sourceId?: string;
+    status: string;
+  };
+}
+
+/**
+ * `POST /api/remote-hosts/generate-key` — a key pair the product made for one
+ * machine. Only the public half is ever shown; the private half stays in the
+ * API's data directory and reaches the product as this path, never as material.
+ */
+export interface GeneratedRemoteHostKey {
+  privateKeyPath: string;
+  publicKey: string;
+}
 
 /** `GET /api/providers` answers both halves in one round trip. */
 export interface ProviderCatalog {

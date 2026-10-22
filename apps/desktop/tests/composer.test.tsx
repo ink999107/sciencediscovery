@@ -32,6 +32,7 @@ function render(
       attachBlocked={attach.blocked}
       attachLimit={attach.limit}
       models={[{ id: "m1", name: "测试模型" } as never]}
+      onOpenSettings={() => {}}
       onSelectModel={() => {}}
       onSend={() => {}}
       onStop={() => {}}
