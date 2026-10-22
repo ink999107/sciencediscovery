@@ -47,10 +47,13 @@ export const TOKEN_STORAGE_KEY = `${CURRENT_PREFIX}-token`;
  * much — while pretending the app could relocate it would not be.
  */
 export const DATA_DIR_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:data-dir`;
+export const RIGHT_PANEL_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:right-panel`;
 /** The interface language picked in 设置 › 通用. Namespaced rather than shared
  *  with `apps/web`: the two front ends may be read on the same origin, and a
  *  choice made here should not reword the other one without being asked. */
 export const LOCALE_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:locale`;
+/** How wide the user dragged the workspace panel, in CSS pixels. */
+export const PANEL_WIDTH_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:panel-width`;
 
 function safeRead(storage: ReadableStorage, key: string): string | null {
   try {

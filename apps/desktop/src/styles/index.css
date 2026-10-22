@@ -30,5 +30,6 @@
 @import "./shell.css";
 @import "./conversation.css";
 @import "./composer.css";
+@import "./workspace.css";
 @import "./overlays.css";
 @import "./wizard.css";

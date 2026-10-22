@@ -16,11 +16,16 @@ import type { ApiClient } from "./client.js";
 import type {
   CreateSessionRequest,
   Project,
+  ScientificArtifact,
   Session,
+  SessionArtifactOutput,
   SessionDetail,
   SessionListState,
   SessionRun,
   UpdateSessionRequest,
+  WorkspaceConflictPolicy,
+  WorkspaceFile,
+  WorkspaceUploadResult,
 } from "./types.js";
 
 /** Every Session belongs to a Project, and there is no Project picker in this
@@ -120,6 +125,51 @@ export function cancelCurrentRun(client: ApiClient, sessionId: string): Promise<
   );
 }
 
+export function listWorkspaceFiles(client: ApiClient, sessionId: string): Promise<WorkspaceFile[]> {
+  return client.request<WorkspaceFile[]>(`/api/sessions/${encodeURIComponent(sessionId)}/files`);
+}
+
+export function listArtifacts(client: ApiClient, sessionId: string): Promise<ScientificArtifact[]> {
+  return client.request<ScientificArtifact[]>(`/api/sessions/${encodeURIComponent(sessionId)}/artifacts`);
+}
+
+/** Each Artifact paired with the version this Session produced, so the panel
+ *  does not have to ask again which version is current. */
+export function listArtifactOutputs(
+  client: ApiClient,
+  sessionId: string,
+): Promise<SessionArtifactOutput[]> {
+  return client.request<SessionArtifactOutput[]>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/artifact-outputs`,
+  );
+}
+
+/** Artifact bytes, already decoded by the server: the CAS hash is not part of
+ *  the URL, and the response carries the version's own media type. */
+export async function readArtifactVersion(
+  client: ApiClient,
+  sessionId: string,
+  versionId: string,
+): Promise<string> {
+  const response = await client.fetchStream(
+    `/api/sessions/${encodeURIComponent(sessionId)}/artifact-versions/${encodeURIComponent(versionId)}/content`,
+  );
+  return response.text();
+}
+
+/** One workspace file's bytes, addressed by its workspace-relative path. The
+ *  server resolves the path inside the session workspace and refuses escapes. */
+export async function readWorkspaceFile(
+  client: ApiClient,
+  sessionId: string,
+  path: string,
+): Promise<string> {
+  const response = await client.fetchStream(
+    `/api/sessions/${encodeURIComponent(sessionId)}/file?path=${encodeURIComponent(path)}`,
+  );
+  return response.text();
+}
+
 /** The server requires the id repeated back as confirmation, so a stray call
  *  cannot delete anything a user did not name. */
 export function deleteSession(client: ApiClient, sessionId: string): Promise<{ deleted: string }> {
@@ -127,4 +177,47 @@ export function deleteSession(client: ApiClient, sessionId: string): Promise<{ d
     body: JSON.stringify({ confirmationId: sessionId }),
     method: "DELETE",
   });
+}
+
+/**
+ * Put files into this Session's workspace, where the agent reads them.
+ *
+ * One multipart request for the whole batch rather than one per file: the
+ * server counts the batch against the request-size quota, and a batch is also
+ * what the user did — they dropped a selection.
+ *
+ * `rename` is the default conflict policy because the alternative silently
+ * destroys the file the agent may already have read. A collision therefore
+ * produces `<name> (2)` rather than an error, and the result says which path
+ * each file actually landed on — the path, not the name, is what the caller
+ * has to report, since that is the only one that is true.
+ */
+export function uploadWorkspaceFiles(
+  client: ApiClient,
+  sessionId: string,
+  files: File[],
+  conflict: WorkspaceConflictPolicy = "rename",
+): Promise<WorkspaceUploadResult> {
+  const body = new FormData();
+  for (const file of files) body.append("files", file, file.name);
+  return client.request<WorkspaceUploadResult>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/workspace/upload?conflict=${conflict}`,
+    { body, method: "POST" },
+  );
+}
+
+/**
+ * The per-file ceiling the upload route enforces, read off `GET /api/health`.
+ *
+ * It is a quota setting rather than a constant, so it is only known once the
+ * service answers — and the block is absent in a build without the environment
+ * feature, hence `undefined` rather than a made-up default. The caller decides
+ * what to do about not knowing; this layer does not guess.
+ *
+ * The other two limits `health.workspace` carries are for a whole request and
+ * for the workspace, and this UI never shows either, so they are not read here.
+ */
+export async function getWorkspaceUploadLimit(client: ApiClient): Promise<number | undefined> {
+  const health = await client.request<{ workspace?: { maxFileBytes?: number } }>("/api/health");
+  return health.workspace?.maxFileBytes;
 }

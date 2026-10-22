@@ -15,7 +15,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { resolveCatalog, resolveConnection } from "./bootstrap.js";
+import { fileName } from "./paths.js";
 import { byRecency } from "./session-order.js";
+import { formatByteLimit, splitBySize } from "./upload.js";
+import {
+  addTab,
+  closeTab as closeTabIn,
+  initialTabState,
+  placeDocument,
+  type DocumentRequest,
+  type PreviewSlot,
+  type TabState,
+} from "./preview-tabs.js";
 import { ApiClient, isAbortError, isAuthFailure } from "../api/client.js";
 import { getHealth, getSettings, listModels, listProviders, setGlobalModel } from "../api/models.js";
 import {
@@ -24,10 +35,16 @@ import {
   createSession,
   deleteSession,
   getSession,
+  getWorkspaceUploadLimit,
+  listArtifactOutputs,
   listProjects,
   listRuns,
   listSessions,
+  listWorkspaceFiles,
+  readArtifactVersion,
+  readWorkspaceFile,
   updateSession,
+  uploadWorkspaceFiles,
 } from "../api/sessions.js";
 import { decidePermissionRequest } from "../api/permissions.js";
 import { listRunEvents, streamMessage, subscribeRunEvents, type RunEventHandler } from "../api/stream.js";
@@ -37,9 +54,11 @@ import type {
   ModelProviderPreset,
   PermissionDecision,
   Session,
+  SessionArtifactOutput,
   SessionDetail,
   SessionRun,
   SessionRunStatus,
+  WorkspaceFile,
 } from "../api/types.js";
 import { closeRunStream, reduceRunStream } from "../run-stream/reducer.js";
 import { emptyRunStream, isTerminalRunStatus, type RunStreamState } from "../run-stream/model.js";
@@ -75,6 +94,8 @@ export interface PendingMessage {
   content: string;
 }
 
+export type { PreviewSlot, TabState } from "./preview-tabs.js";
+
 export interface WorkspaceState {
   /** The project new sessions land in. */
   activeProjectId?: string;
@@ -89,6 +110,8 @@ export interface WorkspaceState {
   replays: RunReplay[];
   loadingSession: boolean;
   models: ModelProfile[];
+  outputs: SessionArtifactOutput[];
+  panelFiles: WorkspaceFile[];
   pendingMessage?: PendingMessage;
   /** What the model form needs to build a provider: the server's presets
    *  (which carry the protocol and variant) and the saved providers (which it
@@ -104,10 +127,21 @@ export interface WorkspaceState {
   running: boolean;
   selectedModelId?: string;
   sessionId?: string;
+  tabs: TabState;
   toasts: Toast[];
+  /** The per-file upload ceiling `/api/health` reported, in bytes. `undefined`
+   *  while it is unknown, which is not the same as no limit. */
+  uploadLimit?: number;
+  /** True while a batch of files is being sent, so the composer can say so and
+   *  a second drop cannot start a second upload. */
+  uploading: boolean;
 }
 
 export interface WorkspaceActions {
+  /** Opens another empty tab in the right panel. */
+  addPanelTab: () => void;
+  /** Returns true when the close emptied the panel, which collapses it. */
+  closeTab: (tabId: string) => boolean;
   /** Opens the confirmation dialog. Exposed so a settings row can route its own
    *  destructive action through the same dialog instead of growing a second one. */
   confirmAction: (request: ConfirmRequest) => void;
@@ -119,6 +153,9 @@ export interface WorkspaceActions {
   dismissToast: (id: number) => void;
   finishSetup: () => void;
   newSession: () => void;
+  openArtifact: (output: SessionArtifactOutput) => Promise<void>;
+  openFile: (file: WorkspaceFile) => Promise<void>;
+  selectPanelTab: (tabId: string) => void;
   openSession: (sessionId: string) => Promise<void>;
   renameSession: (session: Session, title: string) => Promise<void>;
   /** Re-read the model catalog after the wizard or settings changed it. */
@@ -132,6 +169,11 @@ export interface WorkspaceActions {
   setDefaultModel: (modelId: string) => Promise<void>;
   stop: () => Promise<void>;
   toast: (message: string, tone?: Toast["tone"]) => void;
+  /** Put files in the open session's workspace, opening a session first if the
+   *  app has none. Resolves true when at least one file was written — the
+   *  caller uses that to show where it went rather than opening the workspace
+   *  over an upload that never happened. */
+  uploadFiles: (files: File[]) => Promise<boolean>;
 }
 
 export interface WorkspaceHandle {
@@ -189,8 +231,15 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   const [running, setRunning] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<PendingMessage>();
   const [replays, setReplays] = useState<RunReplay[]>([]);
+  const [outputs, setOutputs] = useState<SessionArtifactOutput[]>([]);
+  const [panelFiles, setPanelFiles] = useState<WorkspaceFile[]>([]);
+  const [tabs, setTabs] = useState<TabState>(initialTabState);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [confirm, setConfirm] = useState<ConfirmRequest>();
+  const [uploading, setUploading] = useState(false);
+  /** The per-file ceiling `/api/health` reported. `undefined` means the service
+   *  did not say, which is not the same as "no limit" — see `splitBySize`. */
+  const [uploadLimit, setUploadLimit] = useState<number | undefined>(undefined);
 
   // Mirrors for the async paths. A run's own callbacks outlive the render that
   // started them, so they cannot close over the state they need to read.
@@ -482,6 +531,81 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     return createOpenSession();
   }, [createOpenSession]);
 
+  const refreshPanel = useCallback(
+    async (target: string) => {
+      try {
+        const [nextOutputs, nextFiles] = await Promise.all([
+          listArtifactOutputs(client, target),
+          listWorkspaceFiles(client, target),
+        ]);
+        // The panel belongs to the Session it was read for; a read that lands
+        // after the user has left it must not fill another Session's panel.
+        if (sessionRef.current !== target) return;
+        setOutputs(nextOutputs);
+        setPanelFiles(nextFiles);
+      } catch {
+        // The panel is secondary; a failure here must not disturb the run.
+      }
+    },
+    [client],
+  );
+
+  /**
+   * Send files to the open session's workspace, then re-read the panel.
+   *
+   * The re-read is the point: an upload that only added a toast would leave the
+   * workspace tree claiming the files are not there. `refreshPanel` is what the
+   * end of a run uses, and it already covers both halves — the tree, and the
+   * artifact list, because the route registers each upload as an artifact.
+   *
+   * An oversized file is dropped here rather than sent to be refused, but only
+   * when the server actually told us the ceiling: without it there is nothing to
+   * compare against, and a local guess that refuses a file the server would have
+   * accepted is a dead end the user cannot get around.
+   */
+  const uploadFiles = useCallback(
+    async (files: File[]): Promise<boolean> => {
+      if (files.length === 0) return false;
+      const { accepted, oversized } = uploadLimit === undefined
+        ? { accepted: files, oversized: [] as File[] }
+        : splitBySize(files, uploadLimit);
+      const ceiling = uploadLimit === undefined
+        ? undefined
+        : formatByteLimit(uploadLimit) ?? TEXT.upload.unlimited;
+      for (const file of oversized) {
+        if (ceiling !== undefined) toast(TEXT.upload.tooLarge(file.name, ceiling));
+      }
+      if (accepted.length === 0) return false;
+      setUploading(true);
+      try {
+        // Only now, after the local checks: a drop that is going to be refused
+        // for its size must not leave an empty session behind.
+        const target = await ensureSession();
+        if (target === undefined) return false;
+        const result = await uploadWorkspaceFiles(client, target, accepted);
+        await refreshPanel(target);
+        let landed = false;
+        for (const item of result.uploaded) {
+          // The path, not the name: a collision is renamed on the server, and
+          // the name the user chose is then not where the file is.
+          if (item.status === "failed") toast(TEXT.upload.failed(item.originalName, item.error ?? TEXT.errors.generic));
+          else {
+            landed = true;
+            toast(TEXT.upload.uploaded(item.path ?? item.originalName), "info");
+          }
+        }
+        for (const entry of result.errors) toast(TEXT.upload.failed(entry.name, entry.error));
+        return landed;
+      } catch (reason) {
+        report(reason);
+        return false;
+      } finally {
+        setUploading(false);
+      }
+    },
+    [client, ensureSession, refreshPanel, report, toast, uploadLimit],
+  );
+
   // ── run stream ───────────────────────────────────────────────────────────
   /** The stream's write into the shared run state, bound to the Session the
    *  run belongs to. Leaving a Session aborts its wire, but events already
@@ -526,9 +650,9 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         if (!isAuthFailure(reason) && sessionRef.current === target) report(reason);
       }
       if (sessionRef.current === target) setPendingMessage(undefined);
-      await refreshSessionLists();
+      await Promise.all([refreshSessionLists(), refreshPanel(target)]);
     },
-    [buildReplays, client, commitReplays, refreshSessionLists, report, resetRun],
+    [buildReplays, client, commitReplays, refreshPanel, refreshSessionLists, report, resetRun],
   );
 
   /** Follow an already-existing run. `live` marks it as unfinished, which is
@@ -674,6 +798,11 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     replayEpoch.current += 1;
     replaysRef.current = [];
     setReplays([]);
+    // Open documents belong to the session's workspace, so leaving the session
+    // takes them with it rather than showing another session's file contents.
+    setTabs(initialTabState());
+    setOutputs([]);
+    setPanelFiles([]);
     resetRun();
   }, [resetRun]);
 
@@ -725,6 +854,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         if (sessionRef.current !== id) return;
         setDetail(fresh);
         setSelectedModelId(fresh.modelId ?? defaultModelRef.current);
+        void refreshPanel(id);
         setLoadingSession(false);
         // Replaying a run is the only way its thinking block comes back — the
         // persisted transcript has no thinking field at all — so every finished
@@ -746,7 +876,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         report(reason);
       }
     },
-    [buildReplays, clearSession, client, commitReplays, follow, report],
+    [buildReplays, clearSession, client, commitReplays, follow, refreshPanel, report],
   );
 
   const selectModel = useCallback(
@@ -806,6 +936,67 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     [refreshSessionLists, report, startDraft],
   );
 
+  const settleTab = useCallback((id: string, patch: Partial<PreviewSlot>) => {
+    setTabs((current) => ({
+      ...current,
+      tabs: current.tabs.map((tab) => (tab.id === id ? { ...tab, ...patch } : tab)),
+    }));
+  }, []);
+
+  const openPreview = useCallback(
+    async (request: DocumentRequest, read: (target: string) => Promise<string>) => {
+      const target = sessionRef.current;
+      if (!target) return;
+      // Placement happens before the read, so the tab appears immediately and
+      // the content lands in it when it arrives.
+      const placed = placeDocument(tabs.tabs, tabs.activeTabId, request);
+      const openedId = placed.activeTabId;
+      setTabs(placed);
+      try {
+        settleTab(openedId, { content: await read(target), loading: false });
+      } catch (reason) {
+        settleTab(openedId, { error: errorMessage(reason), loading: false });
+      }
+    },
+    [settleTab, tabs.activeTabId, tabs.tabs],
+  );
+
+  const openFile = useCallback(
+    (file: WorkspaceFile) =>
+      openPreview(
+        { label: fileName(file.path), path: file.path },
+        (target) => readWorkspaceFile(client, target, file.path),
+      ),
+    [client, openPreview],
+  );
+
+  const openArtifact = useCallback(
+    (output: SessionArtifactOutput) =>
+      openPreview(
+        { label: fileName(output.artifact.name), path: output.version.sourcePath ?? "" },
+        (target) => readArtifactVersion(client, target, output.version.id),
+      ),
+    [client, openPreview],
+  );
+
+  const selectPanelTab = useCallback((tabId: string) => {
+    setTabs((current) => ({ ...current, activeTabId: tabId }));
+  }, []);
+
+  const addPanelTab = useCallback(() => setTabs((current) => addTab(current.tabs)), []);
+
+  // Closing the last tab leaves a fresh home tab in state and reports that the
+  // panel should collapse; re-opening it therefore starts from 新标签页 rather
+  // than from whatever was closed.
+  const closeTab = useCallback(
+    (tabId: string): boolean => {
+      const result = closeTabIn(tabs.tabs, tabs.activeTabId, tabId);
+      setTabs({ activeTabId: result.activeTabId, tabs: result.tabs });
+      return result.collapse;
+    },
+    [tabs.activeTabId, tabs.tabs],
+  );
+
   const finishSetup = useCallback(() => {
     // Re-runs the bootstrap effect, which is also what loads the Project the
     // first-run wizard could not have seen yet.
@@ -843,6 +1034,16 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     void refreshModels();
   }, [refreshModels, usable]);
 
+  // The upload ceiling is a quota setting, so it can only be read from the
+  // service. A failure leaves it unknown rather than guessed, and uploading
+  // still works — the check it enables is a convenience, not a permission.
+  useEffect(() => {
+    if (!usable) return;
+    void getWorkspaceUploadLimit(client)
+      .then((limit) => setUploadLimit(limit))
+      .catch(() => setUploadLimit(undefined));
+  }, [client, usable]);
+
   // Unmounting must not leave anything running that the user cannot stop; the
   // stream is dropped, and the backend's own cancel route is the only thing
   // that ends the work itself.
@@ -860,6 +1061,8 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
 
   const actions: WorkspaceActions = useMemo(
     () => ({
+      addPanelTab,
+      closeTab,
       confirmAction,
       deleteSession: (session) =>
         confirmAction({
@@ -875,18 +1078,24 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       dismissToast,
       finishSetup,
       newSession,
+      openArtifact,
+      openFile,
       openSession,
       renameSession: (session, title) =>
         mutate({ id: session.id, operation: () => updateSession(client, session.id, { title }) }),
       refreshCatalog,
       retryBoot,
       selectModel,
+      selectPanelTab,
       send,
       setDefaultModel,
       stop,
       toast,
+      uploadFiles,
     }),
     [
+      addPanelTab,
+      closeTab,
       confirmAction,
       decidePermission,
       dismissConfirm,
@@ -894,14 +1103,18 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       finishSetup,
       mutate,
       newSession,
+      openArtifact,
+      openFile,
       openSession,
       refreshCatalog,
       retryBoot,
       selectModel,
+      selectPanelTab,
       send,
       setDefaultModel,
       stop,
       toast,
+      uploadFiles,
     ],
   );
 
@@ -913,6 +1126,8 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     detail,
     loadingSession,
     models,
+    outputs,
+    panelFiles,
     pendingMessage,
     presets,
     providers,
@@ -922,7 +1137,10 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     running,
     selectedModelId,
     sessionId,
+    tabs,
     toasts,
+    uploadLimit,
+    uploading,
   };
 
   return { actions, boot, state };

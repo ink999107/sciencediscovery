@@ -23,10 +23,12 @@ import { sessionTitle } from "./session-title.js";
 interface Props {
   actions: WorkspaceActions;
   detail?: SessionDetail;
+  onToggleWorkspace: () => void;
+  workspaceOpen: boolean;
 }
 
 /**
- * Names the open session.
+ * Names the open session and carries the one control that acts on the panel.
  *
  * The crumb is the session alone. It used to lead with the owning Project,
  * which said nothing the user could act on: `UpdateSessionRequest` has no
@@ -37,7 +39,7 @@ interface Props {
  * there is no ⋯ here, because every entry it would carry — rename, archive,
  * delete — is already on the session's own sidebar row.
  */
-export function SessionBar({ actions, detail }: Props) {
+export function SessionBar({ actions, detail, onToggleWorkspace, workspaceOpen }: Props) {
   const [renaming, setRenaming] = useState(false);
   const title = detail ? sessionTitle(detail.title) : TEXT.sessionBar.home;
 
@@ -51,6 +53,29 @@ export function SessionBar({ actions, detail }: Props) {
         >
           {title}
         </span>
+      </div>
+      <div className="bar-actions">
+        <button
+          aria-expanded={workspaceOpen}
+          aria-label={TEXT.sessionBar.workspaceToggle}
+          className="bar-icon-button"
+          onClick={onToggleWorkspace}
+          title={TEXT.sessionBar.workspaceToggle}
+          type="button"
+        >
+          {/* A panel outline with its own right-hand pane: the shape of the
+              thing the button opens, rather than a generic grid glyph. */}
+          <svg
+            aria-hidden="true"
+            fill="none"
+            height="16"
+            viewBox="0 0 24 24"
+            width="16"
+          >
+            <rect height="14" rx="2.5" stroke="currentColor" strokeWidth="2" width="18" x="3" y="5" />
+            <path d="M16 5v14" stroke="currentColor" strokeWidth="2" />
+          </svg>
+        </button>
       </div>
       {renaming && detail ? (
         <PromptDialog

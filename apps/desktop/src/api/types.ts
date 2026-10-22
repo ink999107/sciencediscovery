@@ -41,13 +41,16 @@ export type {
   PermissionDecision,
   PermissionDecisionResult,
   PermissionRequest,
+  Project,
   ProviderModelEntry,
   ProviderModelPreview,
-  Project,
   RunStreamEvent,
   RuntimeSettingsOverrides,
+  ScientificArtifact,
+  ScientificArtifactKind,
   SendMessageRequest,
   Session,
+  SessionArtifactOutput,
   SessionDetail,
   SessionListState,
   SessionRun,
@@ -55,6 +58,9 @@ export type {
   SessionRunStatus,
   ToolTrace,
   UpdateSessionRequest,
+  WorkspaceConflictPolicy,
+  WorkspaceFile,
+  WorkspaceUploadResult,
 } from "@sciencediscovery/schema";
 
 /** `GET /api/providers` answers both halves in one round trip. */

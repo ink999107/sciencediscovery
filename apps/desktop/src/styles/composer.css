@@ -64,6 +64,27 @@
   background: var(--surface);
   border-top: 1px solid var(--border-soft);
 }
+/* 上传文件. Same footprint as the model pill — one row, so a different size
+   would read as a different kind of control — but it is the one button here
+   that puts something into the turn rather than deciding who answers it. */
+.composer-attach {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  transition: background .12s ease, color .12s ease;
+}
+.composer-attach:hover { background: var(--primary-soft); color: var(--primary-strong); }
+.composer-attach:disabled { opacity: .5; cursor: default; }
+.composer-attach:disabled:hover { background: none; color: var(--text-secondary); }
+/* The real input is unreachable by design: the button is what the user sees and
+   what a keyboard can reach, and `display: none` keeps the native control — whose
+   styling cannot be made to match — out of the row entirely. */
+.composer-file-input { display: none; }
 /* model selector pill (replaces previous icons) */
 .composer-model-pill {
   display: inline-flex;

@@ -19,12 +19,20 @@ import { TEXT } from "../text.js";
 import { providerName } from "./provider-name.js";
 
 interface Props {
+  /** Why uploading is not on offer, or `undefined` when it is. A reason rather
+   *  than a flag because the button's tooltip has to say what is missing — a
+   *  disabled paperclip with no explanation is a dead end. */
+  attachBlocked?: string;
+  /** The per-file ceiling to state in that tooltip, already formatted. */
+  attachLimit?: string;
   models: ModelProfile[];
   onSelectModel: (modelId: string) => void;
   onSend: (content: string) => void;
   onStop: () => void;
+  onUpload: (files: File[]) => void;
   running: boolean;
   selectedModelId?: string;
+  uploading: boolean;
 }
 
 /**
@@ -39,16 +47,21 @@ interface Props {
  * beside it would only repeat what the transcript's run line already says.
  */
 export function Composer({
+  attachBlocked,
+  attachLimit,
   models,
   onSelectModel,
   onSend,
   onStop,
+  onUpload,
   running,
   selectedModelId,
+  uploading,
 }: Props) {
   const [text, setText] = useState("");
   const [picking, setPicking] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
 
   const selected = models.find((model) => model.id === selectedModelId) ?? models[0];
   /** The stored name is the server's; the pill shows it in the interface's
@@ -130,6 +143,51 @@ export function Composer({
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </button>
+
+        {/* The paperclip follows the model pill: a file is a different kind of
+            thing from it — it is what the turn is given, not how the turn is
+            run. */}
+        <button
+          aria-label={TEXT.composer.attach}
+          className="composer-attach"
+          disabled={attachBlocked !== undefined || uploading}
+          onClick={() => picker.current?.click()}
+          title={attachBlocked ?? TEXT.composer.attachHint(attachLimit)}
+          type="button"
+        >
+          {uploading ? (
+            <span className="spinner" />
+          ) : (
+            <svg
+              fill="none"
+              height="16"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.8"
+              viewBox="0 0 24 24"
+              width="16"
+            >
+              {/* A paperclip, which is what the gesture is: it sends nothing on
+                  its own, it puts the file within reach of what does. */}
+              <path d="M20.5 11.5 12 20a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5L10 18a2 2 0 0 1-3-3l7.5-7.5" />
+            </svg>
+          )}
+        </button>
+        <input
+          className="composer-file-input"
+          multiple
+          onChange={(event) => {
+            const chosen = [...(event.target.files ?? [])];
+            // Cleared so that choosing the same file twice in a row still
+            // fires a change event: the input's value would otherwise be
+            // unchanged and the browser would swallow the second selection.
+            event.target.value = "";
+            if (chosen.length > 0) onUpload(chosen);
+          }}
+          ref={picker}
+          type="file"
+        />
 
         {running ? (
           <button
