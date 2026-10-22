@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import type { RunStreamEvent } from "../api/types.js";
+import type { RunStreamEvent, ToolTrace } from "../api/types.js";
 import { TEXT } from "../text.js";
 import {
   type AssistantResponse,
@@ -22,14 +22,15 @@ import {
   mergeText,
   turnFor,
 } from "./model.js";
+import { mergePermission } from "./permission.js";
 
 /**
  * Event types this version knows about and deliberately does not render yet.
  *
  * They stay out of the unknown-event counter so that "N events this build
  * cannot draw" means an actual surprise rather than a phase-two backlog.
- * Everything here is a tool, permission, artifact, plan or orchestration
- * surface with no placeholder in the current design.
+ * Everything here is an artifact, plan or orchestration surface with no
+ * placeholder in the current design.
  */
 const DEFERRED_EVENT_TYPES: ReadonlySet<string> = new Set([
   "agent.phase",
@@ -39,8 +40,6 @@ const DEFERRED_EVENT_TYPES: ReadonlySet<string> = new Set([
   "evolve_run.created",
   "idea_research.created",
   "idea_tree.phase",
-  "permission.required",
-  "permission.resolved",
   "plan.updated",
   "remote_job.proposed",
   "reviewer_checkpoint.updated",
@@ -49,11 +48,27 @@ const DEFERRED_EVENT_TYPES: ReadonlySet<string> = new Set([
   "subagent.step",
   "subagent.updated",
   "subagent.usage",
-  "tool.completed",
-  "tool.output",
-  "tool.started",
   "workspace.changed",
 ]);
+
+/**
+ * Events the run state has no place for, but which are not surprises either.
+ *
+ * `tool.output` is the one member: a tool's result is persisted to its own
+ * substream (`tool-<toolCallId>`) and the card reads it from there on demand,
+ * so nothing in this reducer needs it. Two details make it worth a set of its
+ * own rather than a place in `DEFERRED_EVENT_TYPES`:
+ *
+ *  - It is *also* fanned out live over the run's own event stream, where it
+ *    carries no `id:` line (the frame decoder tolerates that and reports no
+ *    sequence for it) and `sequence: 0` in the JSON route's sibling records.
+ *    Counting it as unknown would make a perfectly normal run report "N events
+ *    this build cannot draw".
+ *  - It must not advance the replay cursor either: it is a copy of something
+ *    already on the substream, and reading it back through `?after=` would only
+ *    make the reconnect ask for the same bytes twice.
+ */
+const STREAMED_ELSEWHERE: ReadonlySet<string> = new Set(["tool.output"]);
 
 /**
  * Fold one stream event into the live transcript.
@@ -75,7 +90,7 @@ export function reduceRunStream(
     case "run.queued":
       // The earliest place a run id is visible at all: the POST that starts
       // the run does not return one.
-      return { ...advanced, runId: event.run.id, status: event.run.status };
+      return { ...advanced, runId: event.run.id, ...runTimes(advanced, event.run), status: event.run.status };
 
     case "run.started":
       return { ...advanced, modelName: event.model.name, runId: event.runId, status: "running" };
@@ -119,9 +134,55 @@ export function reduceRunStream(
     case "assistant.response.settled":
       return withResponse(advanced, event.responseId, (response) => ({ ...response, settled: true }));
 
+    case "tool.started":
+      // Neither tool event carries a turn number, so the call belongs to the
+      // newest turn — the one the model is currently working in.
+      return withTurn(advanced, newestTurn(advanced), (turn) => {
+        const index = turn.tools.findIndex((tool) => tool.id === event.trace.id);
+        // A repeated start is a restart of the same call: keep where it sits
+        // and take the fresh trace.
+        if (index >= 0) {
+          return {
+            ...turn,
+            tools: turn.tools.map((tool, position) =>
+              position === index ? { ...tool, trace: event.trace } : tool),
+          };
+        }
+        return {
+          ...turn,
+          tools: [...turn.tools, { after: turn.responses.length - 1, id: event.trace.id, trace: event.trace }],
+        };
+      });
+
+    case "tool.completed":
+      return withTurn(advanced, newestTurn(advanced), (turn) => {
+        const index = turn.tools.findIndex((tool) => tool.id === event.trace.id);
+        if (index < 0) {
+          // A completion whose start was missed — a reconnect that began mid
+          // call. It goes last, as it would have anyway.
+          return {
+            ...turn,
+            tools: [...turn.tools, { after: turn.responses.length - 1, id: event.trace.id, trace: event.trace }],
+          };
+        }
+        return {
+          ...turn,
+          tools: turn.tools.map((tool, position) => position === index
+            ? { ...tool, trace: completeTrace(tool.trace, event.trace) }
+            : tool),
+        };
+      });
+
+    case "permission.required":
+    case "permission.resolved":
+      // Both carry the same `PermissionRequest` snapshot; `permission.resolved`
+      // is the same request with a decision on it.
+      return { ...advanced, permissions: mergePermission(advanced.permissions, event.request) };
+
     case "run.status":
       return {
         ...advanced,
+        ...runTimes(advanced, event.run),
         status: event.status,
         terminal: advanced.terminal || isTerminalRunStatus(event.status),
       };
@@ -148,10 +209,62 @@ export function reduceRunStream(
       return { ...advanced, droppedEvents: advanced.droppedEvents + event.droppedEvents };
 
     default:
-      return DEFERRED_EVENT_TYPES.has(event.type)
-        ? advanced
-        : { ...advanced, unknownEvents: advanced.unknownEvents + 1 };
+      if (DEFERRED_EVENT_TYPES.has(event.type) || STREAMED_ELSEWHERE.has(event.type)) return advanced;
+      return { ...advanced, unknownEvents: advanced.unknownEvents + 1 };
   }
+}
+
+/** The turn a tool event belongs to: the newest one, or turn 1 if the call
+ *  somehow arrived before any model output. */
+function newestTurn(state: RunStreamState): number {
+  return state.turns.at(-1)?.turn ?? 1;
+}
+
+/**
+ * The run's wall-clock span, read off whichever `SessionRun` snapshot arrived.
+ *
+ * Both the queueing event and every status change carry the whole record, so
+ * there is no single event to read this from and no guarantee the one that has
+ * the answer comes first. What is recorded never gets overwritten — a snapshot
+ * that happens not to carry `finishedAt` is not news that the run is unfinished
+ * again — and a run that was cancelled before it ever started reports the wait,
+ * which is the only span it had.
+ */
+function runTimes(
+  state: RunStreamState,
+  run: { createdAt?: string; finishedAt?: string; startedAt?: string } | undefined,
+): { finishedAt?: number; startedAt?: number } {
+  const times: { finishedAt?: number; startedAt?: number } = {};
+  if (run === undefined) return times;
+  const started = state.startedAt ?? timestampOf(run.startedAt ?? run.createdAt);
+  const finished = state.finishedAt ?? timestampOf(run.finishedAt);
+  if (started !== undefined) times.startedAt = started;
+  if (finished !== undefined) times.finishedAt = finished;
+  return times;
+}
+
+function timestampOf(iso: string | undefined): number | undefined {
+  if (iso === undefined) return undefined;
+  const time = Date.parse(iso);
+  return Number.isNaN(time) ? undefined : time;
+}
+
+/**
+ * Fold a completion trace onto the one the start event left behind.
+ *
+ * The completion event no longer repeats the arguments, so `args` and `input`
+ * come from the start. The spread order still lets the incoming trace win:
+ * older records do ship the arguments again, and when they do, that copy is
+ * the authoritative one.
+ */
+function completeTrace(started: ToolTrace, completed: ToolTrace): ToolTrace {
+  return {
+    ...(started.args !== undefined ? { args: started.args } : {}),
+    ...(started.input !== undefined
+      ? { input: started.input, ...(started.inputTruncated ? { inputTruncated: true } : {}) }
+      : {}),
+    ...completed,
+  };
 }
 
 /** The stream ended. Anything still open was cut off rather than settled. */
@@ -201,6 +314,7 @@ function withResponse(
       responses: [update(blankResponse(responseId))],
       thinking: "",
       thinkingTruncated: false,
+      tools: [],
       turn: 1,
     };
     return { ...state, turns: replaceTurn(state.turns, 1, created) };

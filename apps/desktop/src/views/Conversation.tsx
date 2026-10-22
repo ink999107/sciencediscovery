@@ -12,18 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import type { PendingMessage } from "../app/use-workspace.js";
-import type { ChatMessage, SessionDetail } from "../api/types.js";
+import type { ApiClient } from "../api/client.js";
+import type { ChatMessage, PermissionDecision, PermissionRequest, SessionDetail } from "../api/types.js";
 import type { RunStreamState } from "../run-stream/model.js";
+import { placeReplays, type RunReplay } from "../run-stream/replay.js";
 import { TEXT } from "../text.js";
 import { AnswerBlock, AssistantTurns, markOf } from "./AssistantTurn.js";
 
 interface Props {
+  client: ApiClient;
   detail?: SessionDetail;
   loading: boolean;
+  onDecidePermission: (request: PermissionRequest, decision: PermissionDecision) => Promise<void>;
   pending?: PendingMessage;
+  /** Every finished run of this session, each to be rendered in the place of
+   *  the answer it wrote. */
+  replays: readonly RunReplay[];
   /** The run streaming right now, which has no persisted answer to take. */
   run: RunStreamState;
 }
@@ -90,7 +97,10 @@ function MessageRow({ message }: { message: ChatMessage }) {
   // An automatic wake carries no user-authored body — the schema keeps the
   // model-facing prompt out of `content` precisely so a wake is never shown as
   // something the user typed — so a card for it was a blank strip with an
-  // avatar, saying nothing the run below it does not say better.
+  // avatar, saying nothing the run below it does not say better. The message
+  // itself stays in the transcript either way: it is where the run the wake
+  // started is anchored, and dropping it would send that run to the end of the
+  // conversation instead of to the place it happened.
   if (message.kind === "wake_notice") return null;
   if (message.kind && message.kind !== "message") return <NoticeRow message={message} />;
   if (message.role === "user") return <UserRow content={message.content} />;
@@ -103,6 +113,8 @@ function MessageRow({ message }: { message: ChatMessage }) {
         <div className="role">
           <span>{message.modelName ?? TEXT.appName}</span>
         </div>
+        {/* The same element a replayed run renders its answer with, so a stored
+            answer and a reconstructed one cannot drift apart. */}
         <AnswerBlock content={message.content} />
       </div>
     </div>
@@ -135,18 +147,21 @@ function useAfter(flag: boolean, delayMs: number): boolean {
 /**
  * The transcript.
  *
- * Two sources meet here: `SessionDetail.messages` is what the server
- * persisted — the user's turns and the assistant's final answers — while `run`
- * is the event stream for the turn in flight (or the one the app is following
- * after opening a session mid-run). The live turn is appended after the
- * persisted messages; once the run ends, `settle` re-reads the transcript and
- * clears the run, so the answer appears once.
+ * Two sources have to be merged, and the merge is the whole trick here:
+ * `SessionDetail.messages` is what the server persisted — the user's turns and
+ * the assistant's final answers, with no thinking at all — while the events of
+ * each run are what reconstructs how those answers were arrived at. So every
+ * finished run is rendered **in the place of the answer it wrote**, which is
+ * what brings its thinking and its tool calls back after a reload without
+ * printing the answer twice. A session that took several turns has one replay
+ * per turn, and the run still streaming has none yet, so it goes at the end.
  */
-export function Conversation({ detail, loading, pending, run }: Props) {
+export function Conversation({ client, detail, loading, onDecidePermission, pending, replays, run }: Props) {
   const scroller = useRef<HTMLElement>(null);
   const stick = useRef(true);
 
   const messages = detail?.messages ?? [];
+  const { following, replacing, trailing } = placeReplays(replays, messages);
   const reconstructed = run.turns.length > 0 || run.finalContent !== undefined;
   /** A message just sent has no run events yet — the request is still in
    *  flight — but the run exists from the press, and its line is what says so.
@@ -157,13 +172,13 @@ export function Conversation({ detail, loading, pending, run }: Props) {
    *  the stream has actually produced is drawn at once. */
   const placeholder = useAfter(pending !== undefined, RUN_LINE_DELAY_MS);
   const liveRun = reconstructed || placeholder;
-  const empty = messages.length === 0 && !pending && !reconstructed;
+  const empty = messages.length === 0 && !pending && !reconstructed && replays.length === 0;
 
   useEffect(() => {
     const node = scroller.current;
     if (!node || !stick.current) return;
     node.scrollTop = node.scrollHeight;
-  }, [messages, pending, run]);
+  }, [messages, pending, replays, run]);
 
   const onScroll = () => {
     const node = scroller.current;
@@ -182,13 +197,56 @@ export function Conversation({ detail, loading, pending, run }: Props) {
         </div>
       ) : (
         <div className="messages">
-          {messages.map((message) => (
-            <MessageRow key={message.id} message={message} />
+          {messages.map((message) => {
+            const replacement = replacing.get(message.id);
+            return (
+              <Fragment key={message.id}>
+                {replacement === undefined ? (
+                  <MessageRow message={message} />
+                ) : (
+                  <AssistantTurns
+                    client={client}
+                    onDecide={onDecidePermission}
+                    run={replacement}
+                    sessionId={detail?.id}
+                  />
+                )}
+                {/* A run that never wrote an answer still belongs here, after
+                    the message that started it, rather than at the end of a
+                    conversation it did not come last in. */}
+                {(following.get(message.id) ?? []).map((replay) => (
+                  <AssistantTurns
+                    client={client}
+                    key={replay.runId}
+                    onDecide={onDecidePermission}
+                    run={replay.state}
+                    sessionId={detail?.id}
+                  />
+                ))}
+              </Fragment>
+            );
+          })}
+          {trailing.map((replay) => (
+            <AssistantTurns
+              client={client}
+              key={replay.runId}
+              onDecide={onDecidePermission}
+              run={replay.state}
+              sessionId={detail?.id}
+            />
           ))}
           {pending ? <UserRow content={pending.content} /> : null}
-          {/* The run still going, or the one the app resumed following after
-              opening a session mid-run. */}
-          {liveRun ? <AssistantTurns run={run} /> : null}
+          {/* No persisted answer to stand in for yet — the run is still going,
+              or the session was created by sending into it. A replayed run is
+              never here: it is in `replays`, anchored to its own answer. */}
+          {liveRun ? (
+            <AssistantTurns
+              client={client}
+              onDecide={onDecidePermission}
+              run={run}
+              sessionId={detail?.id}
+            />
+          ) : null}
           {loading ? <div className="status-strip">{TEXT.boot.checking}</div> : null}
         </div>
       )}

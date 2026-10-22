@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import type { ApiClient } from "./client.js";
-import type { RunStreamEvent, SendMessageRequest } from "./types.js";
+import type { RunStreamEvent, SendMessageRequest, SessionRunEvent } from "./types.js";
 import { TEXT } from "../text.js";
 
 /**
@@ -163,4 +163,61 @@ export async function subscribeRunEvents(
     },
   );
   await pump(response, onEvent);
+}
+
+/** The same events as JSON, for rebuilding a run that already finished. */
+export function listRunEvents(
+  client: ApiClient,
+  sessionId: string,
+  runId: string,
+  after = 0,
+): Promise<SessionRunEvent[]> {
+  return client.request<SessionRunEvent[]>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/runs/${encodeURIComponent(runId)}/events?after=${after}`,
+  );
+}
+
+/**
+ * Read a tool's output back from its own substream, as text.
+ *
+ * This is the third way into a run's events and the only one that is not SSE.
+ * The reason is that it is a *different* stream: a tool's result is appended to
+ * `tool-<toolCallId>` and the run's own event route never replays it — a
+ * finished run read back with `?after=0` contains no `tool.output` at all, only
+ * the `tool.completed` trace pointing at the substream. The live response does
+ * carry copies of those frames, so a card must prefer whichever it already has
+ * and only come here for what it does not.
+ *
+ * The concatenated `chunk` fields are the whole body: no framing, no per-chunk
+ * metadata survives into the UI.
+ *
+ * A tool that reports progress appends those frames to this same stream, and
+ * the final result normally repeats their text. Joining every chunk would print
+ * the output twice, so progress and result are kept apart — the split
+ * `apps/web` makes — and the rule separator only appears when both exist.
+ */
+export async function readToolOutput(
+  client: ApiClient,
+  sessionId: string,
+  runId: string,
+  streamId: string,
+  after = 0,
+): Promise<string | undefined> {
+  const events = await client.request<SessionRunEvent[]>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/runs/${encodeURIComponent(runId)}`
+    + `/streams/${encodeURIComponent(streamId)}/events?after=${after}`,
+  );
+  const outputs = events
+    .map((record) => record.event)
+    .filter((event): event is Extract<RunStreamEvent, { type: "tool.output" }> => event.type === "tool.output");
+  const progress = outputs
+    .filter((event) => event.progress === true)
+    .map((event) => event.chunk)
+    .join("");
+  const result = outputs
+    .filter((event) => event.progress !== true)
+    .map((event) => event.chunk)
+    .join("");
+  if (progress !== "" && result !== "") return `${progress}\n\n---\n\n${result}`;
+  return progress || result || undefined;
 }

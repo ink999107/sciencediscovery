@@ -133,6 +133,17 @@
   gap: 8px;
   margin-bottom: 8px;
 }
+.back-to-new {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.back-to-new:hover { background: var(--primary-soft); border-color: var(--primary-border-soft); color: var(--primary-strong); }
+
 /* collapsible rows inside assistant message */
 .msg-collapse {
   border: 1px solid var(--border);
@@ -198,9 +209,87 @@
 }
 .thinking-list li { margin-bottom: 4px; }
 
+/* ===== the folded run =====
+   One line for everything a run did between the question and its answer, the
+   way a chat client reports a call: the elapsed time is the summary, and the
+   work is one click away. It is the same fold as the thinking block above,
+   because it is the same gesture — the title is just allowed to matter more,
+   since for a finished run this line is all the transcript shows of it. */
+.msg-collapse.run-fold {
+  margin-top: 2px;
+  border-color: var(--border);
+}
+.msg-collapse.run-fold .collapse-icon {
+  background: var(--surface-sunk);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+/* The only moving icon in the transcript: it turns while the model works and
+   gives the box back to a still glyph as soon as the run is waiting or over.
+   The shared `.spinner` is coloured for the composer's page background, so on
+   the sunk tile it needs a stronger pair of its own. */
+.msg-collapse.run-fold .collapse-icon .spinner {
+  width: 12px;
+  height: 12px;
+  border-color: var(--border-strong);
+  border-top-color: var(--primary-strong);
+}
+.msg-collapse.run-fold .collapse-title {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+/* The turns inside it are the shape the transcript used to have, indented so
+   the fold reads as the thing that swallowed them. The nested folds each carry
+   their own bottom margin, which the body's bottom padding would otherwise sit
+   under — inside a fold that margin buys nothing. */
+.run-fold .collapse-body { padding: 4px 12px 12px 14px; }
+.run-fold .collapse-body > .run-turn:last-child > :last-child { margin-bottom: 0; }
+.run-turn + .run-turn {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-soft);
+}
+.run-turn-head {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
 .collapse-body {
   padding: 6px 12px 12px;
   border-top: 1px solid var(--border-soft);
+}
+.collapse-body .kv {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+  font-size: 11px;
+}
+.collapse-body .kv-label { color: var(--text-faint); font-weight: 700; }
+
+/* label / value pairs, used by tool inputs and by artifact provenance */
+.kv {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.kv-label {
+  flex: 0 0 96px;
+  color: var(--text-faint);
+  font-weight: 700;
+}
+.kv code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  word-break: break-all;
 }
 .collapse-body code {
   font-family: var(--font-mono);
@@ -211,6 +300,7 @@
   word-break: break-all;
 }
 
+.asst-output { margin-top: 8px; }
 .message.user .text {
   max-width: min(100%, 560px);
   background: var(--surface-soft);
@@ -218,8 +308,169 @@
   padding: 10px 14px;
 }
 
+
+
+/* ── tool calls ─────────────────────────────────────────────────────────────
+   A tool call is a fold in the same family as the thinking block: it sits in
+   the message body, closed by default, and says what happened in its summary.
+   The three states are only distinguished by the icon and the title, so the
+   shape of the transcript does not change when a call fails. */
+.msg-collapse.tool-card {
+  margin: 6px 0;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-m);
+}
+.msg-collapse.tool-card .collapse-icon {
+  background: var(--surface-sunk);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.msg-collapse.tool-card.is-running .collapse-icon {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.msg-collapse.tool-card.is-failed .collapse-icon {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.msg-collapse.tool-card.is-completed .collapse-icon {
+  background: var(--success-soft);
+  color: var(--success);
+}
+/* The authorization note names the reason a tool ran, so it belongs beside the
+   title rather than in the body the user has to open. */
+.tool-authorized {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border: 1px solid var(--discovery-soft);
+  border-radius: var(--radius-pill);
+  background: var(--discovery-soft);
+  color: var(--discovery-strong);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* The folds inside the card: one for the input, one per labeled result slice.
+   Both are `<pre>`, so the ceiling has to be a scroll box — truncating in JS
+   would hide text the user asked to see. */
+.tool-io-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 10px;
+}
+.tool-io-sections > pre {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-s);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tool-io-section {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-s);
+}
+.tool-io-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.tool-io-section > summary::-webkit-details-marker { display: none; }
+.tool-io-section[open] > summary { border-bottom: 1px solid var(--border-soft); }
+.tool-io-section .collapse-chev { font-size: 10px; color: var(--text-faint); transition: transform .15s; }
+.tool-io-section[open] .collapse-chev { transform: rotate(90deg); }
+.tool-io-label { flex: 1 1 auto; }
+.tool-io-section > pre {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 240px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tool-io-note {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+/* ── permission requests ────────────────────────────────────────────────────
+   Louder than a tool card on purpose: it is the one block in the transcript
+   that is waiting on the person reading it. */
+.permission-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin: 8px 0;
+  padding: 12px 14px;
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-m);
+}
+.permission-body { flex: 1 1 auto; min-width: 0; }
+.permission-eyebrow {
+  display: block;
+  color: var(--warning-strong);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.permission-card h4 {
+  margin: 4px 0 6px;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+.permission-card code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+.permission-details summary {
+  margin-top: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.permission-details dl {
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: max-content 1fr;
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+.permission-details dt { color: var(--text-faint); font-weight: 700; }
+.permission-details dd { margin: 0; }
+.permission-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
+}
+
 /* Runtime notices ride along in the persisted transcript as a status line
-   rather than a message bubble. */
+   rather than a message bubble. They are also where a run states why it
+   stopped, so both the transcript and the run line read from the same rule. */
 .status-strip {
   padding: 8px 14px 10px;
   border-bottom: 1px solid var(--border-soft);
@@ -230,8 +481,8 @@
   letter-spacing: .03em;
 }
 
-/* A short note where a body would go: a truncated answer, or a panel section
-   with nothing in it yet. */
+/* A short note where a body would go: a truncated answer, or a section with
+   nothing in it yet. */
 .workspace-empty {
   padding: 14px;
   color: var(--muted);

@@ -38,6 +38,9 @@ export type {
   ModelProfile,
   ModelProvider,
   ModelProviderPreset,
+  PermissionDecision,
+  PermissionDecisionResult,
+  PermissionRequest,
   ProviderModelEntry,
   ProviderModelPreview,
   Project,
@@ -48,7 +51,9 @@ export type {
   SessionDetail,
   SessionListState,
   SessionRun,
+  SessionRunEvent,
   SessionRunStatus,
+  ToolTrace,
   UpdateSessionRequest,
 } from "@sciencediscovery/schema";
 

@@ -125,9 +125,12 @@ export function App({ initialToken }: Props) {
         <main className="main-area">
           <SessionBar actions={actions} detail={state.detail} />
           <Conversation
+            client={client}
             detail={state.detail}
             loading={state.loadingSession}
+            onDecidePermission={(request, decision) => actions.decidePermission(request.id, decision)}
             pending={state.pendingMessage}
+            replays={state.replays}
             run={state.run}
           />
           <Composer

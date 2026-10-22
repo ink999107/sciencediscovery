@@ -20,9 +20,15 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import type { ApiClient } from "../src/api/client.js";
 import type { ChatMessage, SessionDetail } from "../src/api/types.js";
 import { emptyRunStream, type RunStreamState } from "../src/run-stream/model.js";
+import type { RunReplay } from "../src/run-stream/replay.js";
 import { Conversation } from "../src/views/Conversation.js";
+
+const client = new Proxy({} as ApiClient, {
+  get: () => () => Promise.reject(new Error("no request is expected from a static render")),
+});
 
 function message(id: string, role: ChatMessage["role"], content: string, kind?: ChatMessage["kind"]): ChatMessage {
   return { content, createdAt: "2026-01-01T00:00:00.000Z", id, kind, role };
@@ -39,6 +45,7 @@ function answered(runId: string, thinking: string, answer: string): RunStreamSta
       responses: [{ content: answer, settled: true, truncated: false }],
       thinking,
       thinkingTruncated: false,
+      tools: [],
       turn: 1,
     }],
   };
@@ -51,8 +58,11 @@ function detail(messages: ChatMessage[]): SessionDetail {
 function render(over: Partial<Parameters<typeof Conversation>[0]> = {}): string {
   return renderToStaticMarkup(
     <Conversation
+      client={client}
       detail={detail([])}
       loading={false}
+      onDecidePermission={() => Promise.resolve()}
+      replays={[]}
       run={emptyRunStream()}
       {...over}
     />,
@@ -67,6 +77,33 @@ const TWO_RUNS = [
   message("wake", "user", "", "wake_notice"),
   message("answer-b", "assistant", "PLAIN-ANSWER-B"),
 ];
+
+const TWO_REPLAYS: RunReplay[] = [
+  { messageId: "answer-a", runId: "run-a", state: answered("run-a", "THOUGHT-A", "REBUILT-ANSWER-A"), userMessageId: "question-a" },
+  { messageId: "answer-b", runId: "run-b", state: answered("run-b", "THOUGHT-B", "REBUILT-ANSWER-B"), userMessageId: "wake" },
+];
+
+test("every finished run is rebuilt in the place of its own answer", () => {
+  const markup = render({ detail: detail(TWO_RUNS), replays: TWO_REPLAYS });
+  // The point of the whole merge: a run's thinking has no persisted form, so a
+  // run that is not replayed leaves a bare answer no one can account for.
+  assert.match(markup, /THOUGHT-A/);
+  assert.match(markup, /THOUGHT-B/);
+  assert.doesNotMatch(markup, /PLAIN-ANSWER-A/);
+  assert.doesNotMatch(markup, /PLAIN-ANSWER-B/);
+  assert.equal(markup.match(/REBUILT-ANSWER-A/gu)?.length, 1);
+});
+
+test("the two runs stay in the order the conversation happened in", () => {
+  const markup = render({ detail: detail(TWO_RUNS), replays: TWO_REPLAYS });
+  const positions = ["QUESTION-A", "THOUGHT-A", "REBUILT-ANSWER-A", "THOUGHT-B", "REBUILT-ANSWER-B"]
+    .map((needle) => {
+      const at = markup.indexOf(needle);
+      assert.notEqual(at, -1, `${needle} is missing from the transcript`);
+      return at;
+    });
+  assert.deepEqual([...positions].sort((left, right) => left - right), positions);
+});
 
 test("the reader's turn carries the default silhouette and keeps its text first", () => {
   const markup = render({ detail: detail([message("question-a", "user", "QUESTION-A")]) });
@@ -84,11 +121,43 @@ test("the reader's turn carries the default silhouette and keeps its text first"
 
 test("an automatic wake leaves no card of its own", () => {
   // A wake carries no user-authored body, so its card was a blank strip. The
-  // run it started is the thing to read.
-  const markup = render({ detail: detail(TWO_RUNS) });
+  // run it started is the thing to read, and it is still drawn where the wake
+  // happened rather than at the end of the conversation.
+  const markup = render({ detail: detail(TWO_RUNS), replays: TWO_REPLAYS });
   assert.doesNotMatch(markup, /唤醒/u);
-  assert.match(markup, /PLAIN-ANSWER-A/);
+  assert.ok(markup.indexOf("REBUILT-ANSWER-A") < markup.indexOf("THOUGHT-B"));
+});
+
+test("the wake's own run is not pushed to the end of the transcript", () => {
+  // The notice is still *in* `messages` even though nothing is drawn for it —
+  // that is what anchors the wake's run between the two answers. Without it the
+  // run would have nowhere to go and would be appended after everything.
+  const wakeRun: RunReplay = {
+    runId: "run-b",
+    state: answered("run-b", "THOUGHT-B", ""),
+    userMessageId: "wake",
+  };
+  const markup = render({ detail: detail(TWO_RUNS), replays: [wakeRun] });
+  assert.doesNotMatch(markup, /唤醒/u);
+  assert.match(markup, /THOUGHT-B/);
+  assert.ok(markup.indexOf("PLAIN-ANSWER-A") < markup.indexOf("THOUGHT-B"));
+  assert.ok(markup.indexOf("THOUGHT-B") < markup.indexOf("PLAIN-ANSWER-B"));
+});
+
+test("a run with no replay to stand for it keeps its persisted answer", () => {
+  // A run recorded before events were persisted replays empty, and is therefore
+  // not held at all. Nothing must go missing because of that.
+  const markup = render({ detail: detail(TWO_RUNS), replays: [TWO_REPLAYS[0]!] });
+  assert.match(markup, /REBUILT-ANSWER-A/);
   assert.match(markup, /PLAIN-ANSWER-B/);
+  assert.doesNotMatch(markup, /THOUGHT-B/);
+});
+
+test("a run that wrote no answer still stays after the message that started it", () => {
+  const orphan: RunReplay = { runId: "run-a", state: answered("run-a", "THOUGHT-A", ""), userMessageId: "answer-a" };
+  const markup = render({ detail: detail([message("answer-a", "assistant", "PLAIN-ANSWER-A")]), replays: [orphan] });
+  assert.match(markup, /PLAIN-ANSWER-A/);
+  assert.ok(markup.indexOf("PLAIN-ANSWER-A") < markup.indexOf("THOUGHT-A"));
 });
 
 test("a message just sent keeps the placeholder back for a beat", () => {
@@ -111,22 +180,76 @@ test("the run still streaming is the last thing in the transcript", () => {
       responses: [{ content: "LIVE-ANSWER", settled: false, truncated: false }],
       thinking: "LIVE-THOUGHT",
       thinkingTruncated: false,
+      tools: [],
       turn: 1,
     }],
   };
-  const markup = render({ detail: detail(TWO_RUNS), run: live });
+  const markup = render({ detail: detail(TWO_RUNS), replays: TWO_REPLAYS, run: live });
   assert.match(markup, /LIVE-THOUGHT/);
-  assert.ok(markup.indexOf("PLAIN-ANSWER-B") < markup.indexOf("LIVE-ANSWER"));
+  assert.ok(markup.indexOf("REBUILT-ANSWER-B") < markup.indexOf("LIVE-ANSWER"));
 });
 
-test("a finished run's answer is drawn from its reconstructed turn", () => {
-  // A session reopened mid-conversation still shows what the last turn did:
-  // the events are the only account of it while the transcript is loading.
-  const markup = render({ detail: detail([message("question-a", "user", "QUESTION-A")]), run: answered("run-a", "THOUGHT-A", "ANSWER-A") });
-  assert.match(markup, /THOUGHT-A/);
-  assert.match(markup, /ANSWER-A/);
+test("a run whose messages are both gone is rendered rather than dropped", () => {
+  // Nothing to anchor to, but its events are still the only account of it.
+  const stray: RunReplay = {
+    messageId: "answer-gone",
+    runId: "run-gone",
+    state: answered("run-gone", "THOUGHT-GONE", "REBUILT-ANSWER-GONE"),
+    userMessageId: "question-gone",
+  };
+  const markup = render({ detail: detail([message("question-a", "user", "QUESTION-A")]), replays: [stray] });
+  assert.match(markup, /THOUGHT-GONE/);
+  assert.ok(markup.indexOf("QUESTION-A") < markup.indexOf("THOUGHT-GONE"));
 });
 
-test("an empty transcript keeps the welcome line", () => {
+test("each run of a session folds into its own line, timed from its own span", () => {
+  // Two runs in one transcript, each with its own elapsed time: the line
+  // belongs to the run, not to the session, and a session that took two turns
+  // has to be able to say how long each took.
+  const timed = (runId: string, tail: string, seconds: number): RunStreamState => ({
+    ...answered(runId, `THOUGHT-${tail}`, `REPLY-${tail}`),
+    finishedAt: Date.parse("2026-01-01T01:00:00.000Z") + seconds * 1000,
+    startedAt: Date.parse("2026-01-01T01:00:00.000Z"),
+  });
+  const markup = render({
+    detail: detail(TWO_RUNS),
+    replays: [
+      { messageId: "answer-a", runId: "run-a", state: timed("run-a", "A", 32 * 60 + 32), userMessageId: "question-a" },
+      { messageId: "answer-b", runId: "run-b", state: timed("run-b", "B", 72), userMessageId: "wake" },
+    ],
+  });
+  assert.match(markup, /用时 32 分 32 秒/u);
+  assert.match(markup, /用时 1 分 12 秒/u);
+  assert.equal(markup.match(/class="msg-collapse run-fold"/gu)?.length, 2);
+  // Each line is followed by its own answer, not by the other run's.
+  const line = markup.indexOf("用时 32 分 32 秒");
+  assert.ok(line < markup.indexOf("REPLY-A"));
+  assert.ok(markup.indexOf("REPLY-A") < markup.indexOf("用时 1 分 12 秒"));
+});
+
+test("a replayed run's unanswered authorization is history, not a live question", () => {
+  // The run ended still waiting on this one, so the card is the only record of
+  // what it was blocked on — but nothing is left to unblock, and its buttons
+  // must not pretend otherwise.
+  const blocked: RunStreamState = {
+    ...answered("run-a", "THOUGHT-A", ""),
+    permissions: [{
+      request: {
+        action: "shell",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        id: "perm-1",
+        resource: "shell:echo",
+        state: "pending",
+        summary: "PERMISSION-SUMMARY",
+      },
+    }],
+  };
+  const replay: RunReplay = { runId: "run-a", state: blocked, userMessageId: "question-a" };
+  const markup = render({ detail: detail([message("question-a", "user", "QUESTION-A")]), replays: [replay] });
+  assert.equal(markup.match(/PERMISSION-SUMMARY/gu)?.length, 1, "the card is rendered once, not once per path");
+  assert.match(markup, /<button[^>]*disabled/u);
+});
+
+test("an empty transcript with nothing to replay keeps the welcome line", () => {
   assert.match(render(), /让科研发现更简单/);
 });

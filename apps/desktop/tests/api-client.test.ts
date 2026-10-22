@@ -17,7 +17,8 @@ const { test } = createTest(import.meta.url, { tags: ["category:ut", "os:linux",
 import assert from "node:assert/strict";
 
 import { ApiClient, ApiRequestError, isAbortError, isAuthFailure } from "../src/api/client.js";
-import { SseFrameDecoder } from "../src/api/stream.js";
+import { SseFrameDecoder, readToolOutput } from "../src/api/stream.js";
+import type { RunStreamEvent, SessionRunEvent } from "../src/api/types.js";
 
 /** Replace `globalThis.fetch` for one test, restore it afterwards, and hand
  *  back what the client actually sent. */
@@ -204,4 +205,53 @@ test("abort detection is by name, which is all fetch guarantees", () => {
   assert.equal(isAbortError(abort), true);
   assert.equal(isAbortError(new Error("boom")), false);
   assert.equal(isAbortError(undefined), false);
+});
+
+/** One substream record. The substream is where a tool's progress and result
+ *  frames land, in the order the run wrote them. */
+const outputRecord = (event: RunStreamEvent, sequence: number): SessionRunEvent => ({
+  createdAt: "2026-10-23T00:00:00Z",
+  event,
+  runId: "run-1",
+  sequence,
+  sessionId: "session-1",
+});
+
+async function readOutput(events: SessionRunEvent[]): Promise<string | undefined> {
+  const client = new ApiClient("t");
+  let text: string | undefined;
+  await withFetch(
+    () => Promise.resolve(jsonResponse(events)),
+    async () => {
+      text = await readToolOutput(client, "session-1", "run-1", "tool-1");
+    },
+  );
+  return text;
+}
+
+test("progress frames are not repeated on top of the tool's result", async () => {
+  // The server writes `progress: true` frames to the same substream as the
+  // result, and the result repeats their text. Joining everything would show
+  // the same output twice.
+  const text = await readOutput([
+    outputRecord({ chunk: "line1\n", progress: true, toolCallId: "c1", type: "tool.output" }, 1),
+    outputRecord({ chunk: "line2\n", progress: true, toolCallId: "c1", type: "tool.output" }, 2),
+    outputRecord({ chunk: "line1\nline2\n", toolCallId: "c1", type: "tool.output" }, 3),
+  ]);
+  assert.equal(text, "line1\nline2\n\n\n---\n\nline1\nline2\n");
+});
+
+test("a result-only substream reads as its own body", async () => {
+  const text = await readOutput([
+    outputRecord({ chunk: "the answer\n", toolCallId: "c1", type: "tool.output" }, 1),
+  ]);
+  assert.equal(text, "the answer\n");
+});
+
+test("progress without a result is still shown, and an empty substream is undefined", async () => {
+  const progressOnly = await readOutput([
+    outputRecord({ chunk: "working\n", progress: true, toolCallId: "c1", type: "tool.output" }, 1),
+  ]);
+  assert.equal(progressOnly, "working\n");
+  assert.equal(await readOutput([]), undefined);
 });

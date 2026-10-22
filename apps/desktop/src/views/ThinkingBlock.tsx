@@ -14,6 +14,7 @@
 
 import { thinkingSteps } from "../run-stream/model.js";
 import { TEXT } from "../text.js";
+import { collapseHint } from "./collapse-hint.js";
 
 /**
  * The model's reasoning, folded away.
@@ -46,7 +47,7 @@ export function ThinkingBlock({
           {TEXT.conversation.thinking}
           {steps.length > 0 ? ` · ${TEXT.conversation.thinkingSteps(steps.length)}` : ""}
         </span>
-        <span className={`collapse-meta${live ? " is-live" : ""}`}>
+        <span className={`collapse-meta${live ? " is-live" : ""}`} {...collapseHint()}>
           {live ? TEXT.conversation.running : ""}
         </span>
         <span className="collapse-chev">▸</span>

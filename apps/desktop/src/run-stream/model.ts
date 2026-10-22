@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import type { SessionRunStatus } from "../api/types.js";
+import type { PermissionRequest, SessionRunStatus, ToolTrace } from "../api/types.js";
 
 /** One model invoke attempt's visible text. A turn can hold several: the model
  *  may be re-invoked after a tool call, and each attempt gets its own
@@ -25,12 +25,44 @@ export interface AssistantResponse {
   truncated: boolean;
 }
 
+/**
+ * One tool the model called, and where it happened in the answer.
+ *
+ * `after` is the index of the `responses` entry this call follows, with `-1`
+ * for "before the first one". It is recorded at `tool.started` time as
+ * `responses.length - 1`, which is exactly "between the model's i-th output and
+ * its (i+1)-th" — the shape of an agent loop. Keeping the tools beside the
+ * responses rather than merging both into one `steps` list avoids rewriting
+ * every text path, which is the only reason the two are separate arrays.
+ *
+ * The tool's *output* is deliberately not here: it lives in a per-call
+ * substream and is fetched by the card when it is opened, so the run state
+ * never holds a result that only one card will ever show.
+ */
+export interface AssistantTool {
+  after: number;
+  id: string;
+  trace: ToolTrace;
+}
+
 /** Everything produced between two user messages. */
 export interface AssistantTurn {
   turn: number;
   thinking: string;
   thinkingTruncated: boolean;
   responses: AssistantResponse[];
+  tools: AssistantTool[];
+}
+
+/**
+ * An authorization request the run raised, keyed by `request.id`.
+ *
+ * Keyed rather than appended because the same request arrives twice — once as
+ * `permission.required` and again, decided, as `permission.resolved` — and a
+ * reconnect can redeliver either.
+ */
+export interface PermissionEntry {
+  request: PermissionRequest;
 }
 
 /**
@@ -50,10 +82,21 @@ export interface RunStreamState {
   /** `run.completed.message.content` — the persisted answer, which outranks
    *  anything assembled from deltas. */
   finalContent?: string;
+  /**
+   * When the run ended, and when it began — epoch milliseconds, taken from the
+   * `SessionRun` snapshots the `run.queued` and `run.status` events carry. Their
+   * difference is the "用时 …" the folded transcript line reports. Absent while
+   * a run is still going, and absent for records old enough to predate the
+   * fields.
+   */
+  finishedAt?: number;
   /** Largest replay cursor seen, for `?after=` on a reconnect. */
   lastSequence?: number;
   modelName?: string;
+  /** Every authorization request this run raised, oldest first. */
+  permissions: PermissionEntry[];
   runId?: string;
+  startedAt?: number;
   status?: SessionRunStatus;
   /** True once a terminal `run.status` arrived, or the stream ended. */
   terminal: boolean;
@@ -63,7 +106,7 @@ export interface RunStreamState {
 }
 
 export function emptyRunStream(): RunStreamState {
-  return { droppedEvents: 0, terminal: false, turns: [], unknownEvents: 0 };
+  return { droppedEvents: 0, permissions: [], terminal: false, turns: [], unknownEvents: 0 };
 }
 
 const TERMINAL_STATUSES: readonly SessionRunStatus[] = [
@@ -112,7 +155,7 @@ export function hasVisibleAnswer(state: RunStreamState): boolean {
 export function turnFor(state: RunStreamState, turn: number): AssistantTurn {
   const existing = state.turns.find((candidate) => candidate.turn === turn);
   if (existing) return existing;
-  return { responses: [], thinking: "", thinkingTruncated: false, turn };
+  return { responses: [], thinking: "", thinkingTruncated: false, tools: [], turn };
 }
 
 /**

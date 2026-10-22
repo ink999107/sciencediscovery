@@ -29,21 +29,26 @@ import {
   listSessions,
   updateSession,
 } from "../api/sessions.js";
-import { streamMessage, subscribeRunEvents, type RunEventHandler } from "../api/stream.js";
+import { decidePermissionRequest } from "../api/permissions.js";
+import { listRunEvents, streamMessage, subscribeRunEvents, type RunEventHandler } from "../api/stream.js";
 import type {
   ModelProfile,
   ModelProvider,
   ModelProviderPreset,
+  PermissionDecision,
   Session,
   SessionDetail,
+  SessionRun,
   SessionRunStatus,
 } from "../api/types.js";
 import { closeRunStream, reduceRunStream } from "../run-stream/reducer.js";
-import { emptyRunStream, type RunStreamState } from "../run-stream/model.js";
+import { emptyRunStream, isTerminalRunStatus, type RunStreamState } from "../run-stream/model.js";
+import { foldRunRecords, replayRun, type RunReplay } from "../run-stream/replay.js";
 import { TEXT } from "../text.js";
 
-/** A run in one of these states has not finished. */
-const ACTIVE_RUN_STATUSES: readonly SessionRunStatus[] = ["queued", "running"];
+/** A run in one of these states has not finished. `blocked` counts: the model
+ *  is waiting on a permission decision, so the turn is still open. */
+const ACTIVE_RUN_STATUSES: readonly SessionRunStatus[] = ["blocked", "queued", "running"];
 
 export type BootState = "auth" | "loading" | "offline" | "ready" | "setup";
 export type Connection = "degraded" | "offline" | "online";
@@ -77,6 +82,11 @@ export interface WorkspaceState {
   confirm: ConfirmRequest | undefined;
   defaultModelId?: string;
   detail?: SessionDetail;
+  /** Every finished run of the open session, rebuilt from its events, oldest
+   *  first. The transcript renders each in the place of the answer it wrote —
+   *  the persisted transcript has no thinking, so a run that is not replayed
+   *  shows a bare answer with none of the work that produced it behind it. */
+  replays: RunReplay[];
   loadingSession: boolean;
   models: ModelProfile[];
   pendingMessage?: PendingMessage;
@@ -88,7 +98,8 @@ export interface WorkspaceState {
   /** Every session this app knows about, newest first. */
   recent: Session[];
   /** The run that is streaming right now, or the one that was still going when
-   *  the session was opened. */
+   *  the session was opened. Finished runs are not here — they are in
+   *  `replays`, which is what puts each of them back in its own place. */
   run: RunStreamState;
   running: boolean;
   selectedModelId?: string;
@@ -100,6 +111,8 @@ export interface WorkspaceActions {
   /** Opens the confirmation dialog. Exposed so a settings row can route its own
    *  destructive action through the same dialog instead of growing a second one. */
   confirmAction: (request: ConfirmRequest) => void;
+  /** Answer one authorization request raised by the running turn. */
+  decidePermission: (requestId: string, decision: PermissionDecision) => Promise<void>;
   /** Opens the confirmation dialog; the deletion itself happens on accept. */
   deleteSession: (session: Session) => void;
   dismissConfirm: () => void;
@@ -136,6 +149,13 @@ function errorMessage(reason: unknown): string {
   return TEXT.errors.generic;
 }
 
+/** A rebuilt set of run replays, stamped with the session epoch it was read in
+ *  so a batch that outlived its session cannot be committed. */
+interface ReplayBatch {
+  epoch: number;
+  replays: RunReplay[];
+}
+
 /**
  * All of this app's state, in one place.
  *
@@ -168,6 +188,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   const [run, setRun] = useState<RunStreamState>(emptyRunStream);
   const [running, setRunning] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<PendingMessage>();
+  const [replays, setReplays] = useState<RunReplay[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [confirm, setConfirm] = useState<ConfirmRequest>();
 
@@ -180,6 +201,11 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   const runningRef = useRef(false);
   const abortRef = useRef<AbortController | undefined>(undefined);
   const runRef = useRef<RunStreamState>(emptyRunStream());
+  const replaysRef = useRef<RunReplay[]>([]);
+  /** Bumped every time the open session goes away. Reading a session's runs is
+   *  a batch of requests, and one can still be in flight when another session
+   *  is opened; only the batch belonging to the current epoch may be committed. */
+  const replayEpoch = useRef(0);
   const toastSeq = useRef(0);
   /** The Session the app is creating right now. A second click, or a send that
    *  races the click, joins that write instead of making a second Session. */
@@ -226,6 +252,53 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   }, []);
 
   const resetRun = useCallback(() => updateRun(() => emptyRunStream()), [updateRun]);
+
+  /**
+   * Rebuild every finished run of the open session, in the order the server
+   *  listed them (`listRuns` orders by `queueOrder`, oldest first, which is also
+   *  the order the transcript needs).
+   *
+   * A session holds one run per turn taken, and each is replayed into a state
+   * of its own rather than folded into a single one — see `RunReplay`. The
+   * reading is deliberately incremental: a run already held is reused instead
+   * of re-read, because a finished run's events never change and `settle` runs
+   * after every message.
+   *
+   * Which runs are worth holding, and which of them may take a message's place,
+   * is `replayRun`'s call — see it. The case it guards is a run recorded before
+   * events were persisted: its replay is empty, so its stored answer is the only
+   * account of it, and a reconstruction with nothing in it must not hide it.
+   */
+  const buildReplays = useCallback(
+    async (target: string, runs: SessionRun[]): Promise<ReplayBatch> => {
+      const epoch = replayEpoch.current;
+      const held = new Map(replaysRef.current.map((replay) => [replay.runId, replay]));
+      const missing = runs.filter((entry) => isTerminalRunStatus(entry.status) && !held.has(entry.id));
+      if (missing.length > 0) {
+        const rebuilt = await Promise.all(
+          missing.map(async (entry): Promise<RunReplay | undefined> => {
+            try {
+              return replayRun(entry, foldRunRecords(await listRunEvents(client, target, entry.id, 0)));
+            } catch {
+              // A run the server kept no events for. Its stored answer stands.
+              return undefined;
+            }
+          }),
+        );
+        for (const replay of rebuilt) if (replay) held.set(replay.runId, replay);
+      }
+      return { epoch, replays: runs.flatMap((entry) => held.get(entry.id) ?? []) };
+    },
+    [client],
+  );
+
+  /** Land a rebuilt batch — unless the session it was read for is already gone,
+   *  in which case the reads were wasted but harmless. */
+  const commitReplays = useCallback((target: string, batch: ReplayBatch) => {
+    if (batch.epoch !== replayEpoch.current || sessionRef.current !== target) return;
+    replaysRef.current = batch.replays;
+    setReplays(batch.replays);
+  }, []);
 
   // ── bootstrap ────────────────────────────────────────────────────────────
   // Health first: it is the one route ahead of the token gate, so it separates
@@ -424,20 +497,27 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   );
 
   /**
-   * Re-read what a finished run could have changed: the persisted messages,
-   * including the server-generated title. The live run is cleared alongside
-   * them, so the answer does not blink through both its streamed and persisted
-   * forms.
+   * Re-read everything a finished run could have changed: the persisted
+   * messages (including the server-generated title) and the run list — the
+   * only place an assistant message id can be found after the fact.
+   *
+   * The rebuilt batch and the transcript land in one commit, with the live run
+   * cleared alongside them: the run that just ended is in both, and splitting
+   * the three would print it twice or leave the answer blinking through its
+   * persisted form.
    */
   const settle = useCallback(
     async (target: string) => {
       try {
-        const fresh = await getSession(client, target);
-        // The read belongs to the Session the run was in. The user may have
-        // left it while the request was in flight — the run keeps going on the
+        const [fresh, runs] = await Promise.all([getSession(client, target), listRuns(client, target)]);
+        const batch = await buildReplays(target, runs);
+        // `commitReplays` drops a batch read for a Session that is no longer
+        // open; the transcript and the live run need the same gate. The reads
+        // belong to the Session the run was in — the run keeps going on the
         // server, and coming back resumes it — so writing here would put that
-        // transcript and that run over the Session now on screen. The list
-        // below is shared and stays worth refreshing either way.
+        // Session over the one now on screen. The list below is shared and
+        // stays worth refreshing either way.
+        commitReplays(target, batch);
         if (sessionRef.current === target) {
           setDetail(fresh);
           resetRun();
@@ -448,7 +528,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       if (sessionRef.current === target) setPendingMessage(undefined);
       await refreshSessionLists();
     },
-    [client, refreshSessionLists, report, resetRun],
+    [buildReplays, client, commitReplays, refreshSessionLists, report, resetRun],
   );
 
   /** Follow an already-existing run. `live` marks it as unfinished, which is
@@ -538,6 +618,34 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     [applyEvent, client, ensureSession, onAuthRejected, report, resetRun, settle, updateRun],
   );
 
+  /**
+   * Answer one authorization request.
+   *
+   * The reply is folded back in through the same reducer as the stream's own
+   * `permission.resolved`, so a card settles the same way whether the
+   * resolution came over the wire or was made here — the event for a decision
+   * made in this window does still arrive, and the merge is idempotent, so
+   * folding it twice costs nothing.
+   *
+   * `allow_matching` decides its siblings server-side, and `resolvedRequests`
+   * is what says which. Folding only the clicked request would leave the
+   * siblings' buttons live until their own events landed, which is exactly the
+   * window in which a second click sends a second decision.
+   */
+  const decidePermission = useCallback(
+    async (requestId: string, decision: PermissionDecision) => {
+      try {
+        const result = await decidePermissionRequest(client, requestId, decision);
+        for (const request of [...result.resolvedRequests, result.request]) {
+          updateRun((current) => reduceRunStream(current, { request, type: "permission.resolved" }));
+        }
+      } catch (reason) {
+        report(reason);
+      }
+    },
+    [client, report, updateRun],
+  );
+
   const stop = useCallback(async () => {
     const target = sessionRef.current;
     if (!target) return;
@@ -562,6 +670,10 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     setRunning(false);
     setDetail(undefined);
     setPendingMessage(undefined);
+    // Any batch still being read belongs to the session being left behind.
+    replayEpoch.current += 1;
+    replaysRef.current = [];
+    setReplays([]);
     resetRun();
   }, [resetRun]);
 
@@ -614,10 +726,18 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         setDetail(fresh);
         setSelectedModelId(fresh.modelId ?? defaultModelRef.current);
         setLoadingSession(false);
-        // A session may be left mid-run: the run keeps going on the server, and
-        // coming back to it resumes the follow.
+        // Replaying a run is the only way its thinking block comes back — the
+        // persisted transcript has no thinking field at all — so every finished
+        // run is rebuilt, and the one still going (if any) streams into `run`.
+        // Both start together: `follow` does not return until the run it is
+        // watching ends, and awaiting it first would hold the whole transcript
+        // back for as long as that run takes. A session may be left mid-run —
+        // the run keeps going on the server, and coming back to it resumes the
+        // follow below.
         const live = runs.filter((entry) => isActiveRun(entry.status)).at(-1);
+        const rebuilt = buildReplays(id, runs).then((batch) => commitReplays(id, batch));
         if (live !== undefined) await follow(id, live.id, true);
+        await rebuilt;
       } catch (reason) {
         // A failure for a Session the user has already left is not theirs to
         // see: the one they are on reports its own.
@@ -626,7 +746,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         report(reason);
       }
     },
-    [clearSession, client, follow, report],
+    [buildReplays, clearSession, client, commitReplays, follow, report],
   );
 
   const selectModel = useCallback(
@@ -750,6 +870,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
             mutate({ dropIfCurrent: true, id: session.id, operation: () => deleteSession(client, session.id) }),
           title: session.title,
         }),
+      decidePermission,
       dismissConfirm,
       dismissToast,
       finishSetup,
@@ -767,6 +888,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     }),
     [
       confirmAction,
+      decidePermission,
       dismissConfirm,
       dismissToast,
       finishSetup,
@@ -795,6 +917,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     presets,
     providers,
     recent,
+    replays,
     run,
     running,
     selectedModelId,
