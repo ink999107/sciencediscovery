@@ -1,0 +1,197 @@
+// Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import { useEffect, useRef, useState } from "react";
+
+import type { PendingMessage } from "../app/use-workspace.js";
+import type { ChatMessage, SessionDetail } from "../api/types.js";
+import type { RunStreamState } from "../run-stream/model.js";
+import { TEXT } from "../text.js";
+import { AnswerBlock, AssistantTurns, markOf } from "./AssistantTurn.js";
+
+interface Props {
+  detail?: SessionDetail;
+  loading: boolean;
+  pending?: PendingMessage;
+  /** The run streaming right now, which has no persisted answer to take. */
+  run: RunStreamState;
+}
+
+/**
+ * Runtime notices that ride along in the persisted transcript. They are not
+ * something either side typed, so they render as a status line rather than as
+ * a message bubble. The labels live in `TEXT` and are read per render, since
+ * this row can survive a language switch.
+ */
+function NoticeRow({ message }: { message: ChatMessage }) {
+  const label = message.kind ? (TEXT.conversation.notices[message.kind] ?? message.kind) : "";
+  return (
+    <div className="message assistant">
+      <div aria-hidden="true" className="avatar-mini">
+        ⌁
+      </div>
+      <div className="body">
+        <div className="role">
+          <span>{label}</span>
+        </div>
+        <div className="status-strip">{message.content}</div>
+      </div>
+    </div>
+  );
+}
+
+/** The default user picture: the grey silhouette a chat app draws for an
+ *  account that never set one. It is a shape, not a letter, because the letter
+ *  was this app's word for the reader and read as a role badge. */
+function UserAvatar() {
+  return (
+    <div aria-hidden="true" className="avatar-mini">
+      <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
+        <circle cx="12" cy="8.5" r="4" />
+        <path d="M12 14c-4.4 0-7.5 2.5-7.5 5.6V21h15v-1.4c0-3.1-3.1-5.6-7.5-5.6Z" />
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * One of the reader's turns.
+ *
+ * The body comes before the avatar in the DOM so the text a person came to read
+ * is reached first; the grid puts the content against the right edge and the
+ * avatar outside it, mirroring the assistant's rows.
+ */
+function UserRow({ content }: { content: string }) {
+  return (
+    <div className="message user">
+      <div className="body">
+        <div className="role">
+          <span>{TEXT.conversation.you}</span>
+        </div>
+        <div className="text">{content}</div>
+      </div>
+      <UserAvatar />
+    </div>
+  );
+}
+
+function MessageRow({ message }: { message: ChatMessage }) {
+  // An automatic wake carries no user-authored body — the schema keeps the
+  // model-facing prompt out of `content` precisely so a wake is never shown as
+  // something the user typed — so a card for it was a blank strip with an
+  // avatar, saying nothing the run below it does not say better.
+  if (message.kind === "wake_notice") return null;
+  if (message.kind && message.kind !== "message") return <NoticeRow message={message} />;
+  if (message.role === "user") return <UserRow content={message.content} />;
+  return (
+    <div className="message assistant">
+      <div aria-hidden="true" className="avatar-mini">
+        {markOf(message.modelName ?? "")}
+      </div>
+      <div className="body">
+        <div className="role">
+          <span>{message.modelName ?? TEXT.appName}</span>
+        </div>
+        <AnswerBlock content={message.content} />
+      </div>
+    </div>
+  );
+}
+
+/** How long the run line waits before it is drawn for a message that has just
+ *  been sent. A line that lands in the same frame as the press reads as a
+ *  canned animation rather than as a receipt; a beat of silence is what asking
+ *  something looks like. Only the placeholder waits — real events are drawn at
+ *  once. */
+const RUN_LINE_DELAY_MS = 1000;
+
+/** True once `flag` has been true for `delayMs`, and false again as soon as it
+ *  is not. The timer belongs to the flag, so a second message gets its own
+ *  beat rather than inheriting the first one's. */
+function useAfter(flag: boolean, delayMs: number): boolean {
+  const [elapsed, setElapsed] = useState(false);
+  useEffect(() => {
+    if (!flag) {
+      setElapsed(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setElapsed(true), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [flag, delayMs]);
+  return flag && elapsed;
+}
+
+/**
+ * The transcript.
+ *
+ * Two sources meet here: `SessionDetail.messages` is what the server
+ * persisted — the user's turns and the assistant's final answers — while `run`
+ * is the event stream for the turn in flight (or the one the app is following
+ * after opening a session mid-run). The live turn is appended after the
+ * persisted messages; once the run ends, `settle` re-reads the transcript and
+ * clears the run, so the answer appears once.
+ */
+export function Conversation({ detail, loading, pending, run }: Props) {
+  const scroller = useRef<HTMLElement>(null);
+  const stick = useRef(true);
+
+  const messages = detail?.messages ?? [];
+  const reconstructed = run.turns.length > 0 || run.finalContent !== undefined;
+  /** A message just sent has no run events yet — the request is still in
+   *  flight — but the run exists from the press, and its line is what says so.
+   *  Waiting for the first event would leave the user's message alone in the
+   *  transcript for as long as the round trip takes; drawing the placeholder in
+   *  the same frame as the press would claim the run started before the server
+   *  has said anything. So the placeholder is drawn a beat late, and anything
+   *  the stream has actually produced is drawn at once. */
+  const placeholder = useAfter(pending !== undefined, RUN_LINE_DELAY_MS);
+  const liveRun = reconstructed || placeholder;
+  const empty = messages.length === 0 && !pending && !reconstructed;
+
+  useEffect(() => {
+    const node = scroller.current;
+    if (!node || !stick.current) return;
+    node.scrollTop = node.scrollHeight;
+  }, [messages, pending, run]);
+
+  const onScroll = () => {
+    const node = scroller.current;
+    if (!node) return;
+    // Follow only while the user is already at the bottom: pulling someone
+    // back down while they read an earlier turn is worse than not following.
+    stick.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+  };
+
+  return (
+    <section className="conversation" onScroll={onScroll} ref={scroller}>
+      {empty ? (
+        <div className="empty-state">
+          <h1 className="home-slogan">{TEXT.conversation.slogan}</h1>
+          <p className="home-sub">{TEXT.conversation.subSlogan}</p>
+        </div>
+      ) : (
+        <div className="messages">
+          {messages.map((message) => (
+            <MessageRow key={message.id} message={message} />
+          ))}
+          {pending ? <UserRow content={pending.content} /> : null}
+          {/* The run still going, or the one the app resumed following after
+              opening a session mid-run. */}
+          {liveRun ? <AssistantTurns run={run} /> : null}
+          {loading ? <div className="status-strip">{TEXT.boot.checking}</div> : null}
+        </div>
+      )}
+    </section>
+  );
+}

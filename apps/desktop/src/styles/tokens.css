@@ -1,0 +1,104 @@
+/* Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* 1:99 */
+/* ===== design tokens ===== */
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-subtle: #f8fafc;
+  --surface-soft: #f3f5f7;
+  --surface-hover: #eef0f3;
+  --surface-sunk: #eef1f5;
+
+  --border: #e2e6ec;
+  --border-strong: #cbd2da;
+  --border-soft: #eaedf1;
+
+  --text-strong: #0b1220;
+  --text: #1c2531;
+  --text-heading: #2d3a4d;
+  --text-secondary: #475467;
+  --muted: #667085;
+  --muted-light: #a3acba;
+  --text-faint: #8893a4;
+
+  --primary: #2563eb;
+  --primary-strong: #1d4ed8;
+  --primary-soft: #eff6ff;
+  --primary-softer: #eaf2ff;
+  --primary-tint: #dbeafe;
+  --primary-border-soft: #c8d8f2;
+
+  --discovery: #0d9488;
+  --discovery-strong: #0f766e;
+  --discovery-soft: #d1faf0;
+
+  --insight: #d97706;
+  --insight-strong: #b45309;
+  --insight-soft: #fef3c7;
+
+  --success: #14734f;
+  --success-bright: #22a06b;
+  --success-soft: #e8f7ef;
+
+  --warning: #745612;
+  --warning-strong: #8a5a00;
+  --warning-border: #e6cf9a;
+  --warning-soft: #fff8e7;
+
+  --danger: #a4262c;
+  --danger-deep: #7f1d1d;
+  --danger-bright: #d64545;
+  --danger-soft: #fff1f2;
+  --danger-border: #e1a7a7;
+
+  --radius-xs: 6px;
+  --radius-s: 8px;
+  --radius-m: 10px;
+  --radius-l: 16px;
+  --radius-pill: 999px;
+
+  --shadow-1: 0 1px 2px rgba(15, 23, 42, .06);
+  --shadow-2: 0 4px 14px rgba(15, 23, 42, .08);
+  --shadow-3: 0 12px 30px rgba(15, 23, 42, .14);
+  --shadow-glow: 0 0 0 4px rgba(37, 99, 235, .12);
+
+  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --font-display: "Inter", "PingFang SC", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: transparent; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 0;
+  box-shadow: var(--shadow-glow);
+}
+::selection { background: var(--primary-tint); color: #172554; }
+h1, h2, h3, h4, p { margin: 0; }
+
+

@@ -91,6 +91,7 @@ export const slices = Object.freeze({
  */
 export const nodeSources = Object.freeze([
   '.ci/*.test.mjs',
+  'apps/desktop/tests/**/*.test.*',
   'apps/web/tests/**/*.test.*',
   'config/test/*.test.mjs',
   'packages/*/src/**/*.test.ts',
