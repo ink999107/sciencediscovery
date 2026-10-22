@@ -13,10 +13,10 @@
 // limitations under the License.
 
 /**
- * Which Session the sidebar puts first.
+ * Which Session the sidebar puts first, and which one the app opens on its own.
  *
- * Kept out of `use-workspace` because the answer is pure: it depends only on
- * what the server listed, so it can be tested without a browser.
+ * Kept out of `use-workspace` because both answers are pure: they depend only
+ * on what the server listed, so they can be tested without a browser.
  */
 
 /**
@@ -29,4 +29,69 @@
  */
 export function byRecency<T extends { updatedAt: string }>(sessions: readonly T[]): T[] {
   return [...sessions].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+/**
+ * The Session to open once the first listing arrives, if any.
+ *
+ * The sidebar lists what the server has, but the composer starts life in a
+ * draft with no Session behind it. Left that way, the first message creates a
+ * Session beside the one already on screen — the list grows by one rather than
+ * the message landing in the conversation the user was looking at. Opening the
+ * most recent Session makes the two agree from the start, and is exactly what
+ * clicking that row would have done.
+ *
+ * A Session already open wins, and yields nothing: on a re-run of the bootstrap
+ * effect the user's choice (or the app's earlier resume) must not be replaced.
+ *
+ * The whole Session is returned rather than its id because the listing spans
+ * every Project. Resuming the newest Session without also adopting the Project
+ * it belongs to would leave the app pointing at one Project while showing a
+ * conversation from another, and the next 新增会话 or upload would be filed
+ * under the wrong one.
+ */
+export function resumeSession<T extends { id: string; updatedAt: string }>(
+  open: string | undefined,
+  sessions: readonly T[],
+): T | undefined {
+  if (open !== undefined) return undefined;
+  return byRecency(sessions)[0];
+}
+
+/**
+ * Carries out the boot-time resume against the first listing that arrives.
+ *
+ * The effect in `use-workspace` is only the caller: everything that can go
+ * wrong — running twice, acting on a failed read, opening the Session without
+ * its Project — is decided here, where it can be tested without a browser.
+ *
+ * A failed listing (`undefined`) is not an empty one, so it neither opens
+ * anything nor counts as tried; the next bootstrap run gets to try again.
+ */
+export function resumeOnBoot<T extends { id: string; projectId: string; updatedAt: string }>({
+  adoptProject,
+  listed,
+  open,
+  opened,
+  openSession,
+}: {
+  /** Files later writes under the Project the resumed Session belongs to. */
+  adoptProject: (projectId: string) => void;
+  /** The listing as `refreshSessionLists` returned it. */
+  listed: readonly T[] | undefined;
+  /** The Session already open, if the user (or an earlier boot) chose one. */
+  open: string | undefined;
+  /** Set once a listing has been acted on, so a later bootstrap run — the
+   *  setup wizard finishing, or a re-render — keeps the user's choice. */
+  opened: { current: boolean };
+  openSession: (id: string) => void;
+}): void {
+  if (opened.current || listed === undefined) return;
+  opened.current = true;
+  const target = resumeSession(open, listed);
+  if (target === undefined) return;
+  // The Project goes first: `openSession` is asynchronous, and anything the
+  // user starts while it loads should already be filed under the right one.
+  adoptProject(target.projectId);
+  openSession(target.id);
 }

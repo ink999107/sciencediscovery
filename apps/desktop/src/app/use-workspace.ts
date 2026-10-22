@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { resolveCatalog, resolveConnection } from "./bootstrap.js";
 import { fileName } from "./paths.js";
-import { byRecency } from "./session-order.js";
+import { byRecency, resumeOnBoot } from "./session-order.js";
 import { formatByteLimit, splitBySize } from "./upload.js";
 import {
   addTab,
@@ -259,6 +259,10 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   /** The Session the app is creating right now. A second click, or a send that
    *  races the click, joins that write instead of making a second Session. */
   const sessionCreation = useRef<Promise<string | undefined> | undefined>(undefined);
+  /** Whether startup has already opened the Session it resumes. Resuming is a
+   *  one-time event: a later listing must not pull the user out of a draft they
+   *  went back to on purpose (a deletion, 新增会话 before its creation lands). */
+  const resumed = useRef(false);
   /** Bumped whenever the open Session is replaced — opened or started fresh.
    *  A create still in flight may only adopt its Session while this matches, so
    *  a slow write cannot pull the view back from one the user has since opened. */
@@ -1022,12 +1026,29 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         }
         setActiveProjectId((current) => current ?? known[0]!.id);
         projectRef.current = projectRef.current ?? known[0]!.id;
-        await refreshSessionLists();
+        const listed = await refreshSessionLists();
+        // The sidebar now shows Sessions while the composer is still a draft
+        // with none behind it. Sending from there would create a second
+        // Session beside the one on screen, so the listing opens the most
+        // recent one — the same Session a click on that row would open.
+        resumeOnBoot({
+          // The listing spans every Project, so the Session being resumed need
+          // not belong to the one adopted above. Following it there keeps
+          // 新增会话 and uploads in the Project the user is looking at.
+          adoptProject: (projectId) => {
+            setActiveProjectId(projectId);
+            projectRef.current = projectId;
+          },
+          listed,
+          open: sessionRef.current,
+          opened: resumed,
+          openSession: (id) => void openSession(id),
+        });
       } catch (reason) {
         report(reason);
       }
     })();
-  }, [client, refreshSessionLists, report, usable]);
+  }, [client, openSession, refreshSessionLists, report, usable]);
 
   useEffect(() => {
     if (!usable) return;
