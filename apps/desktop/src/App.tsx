@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 
 import { ApiClient } from "./api/client.js";
 import { useFileDrop } from "./app/use-file-drop.js";
+import { useLanguage } from "./app/use-language.js";
 import { usePanelWidth } from "./app/use-panel-width.js";
 import { useWorkspace } from "./app/use-workspace.js";
 import { formatByteLimit } from "./app/upload.js";
@@ -25,7 +26,7 @@ import {
   readStoredFlag,
   writeStoredFlag,
 } from "./state/storage.js";
-import { TEXT } from "./text.js";
+import { applyDocumentLanguage, TEXT } from "./text.js";
 import { AuthScreen } from "./views/AuthScreen.js";
 import { Composer } from "./views/Composer.js";
 import { ConfirmDialog } from "./views/ConfirmDialog.js";
@@ -52,6 +53,13 @@ export function App({ initialToken }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(() =>
     readStoredFlag(localStorage, RIGHT_PANEL_STORAGE_KEY),
   );
+
+  // The language lives in a module store rather than in state, because
+  // `TEXT` is read from components the tree passes no props to. Reading it
+  // here is what turns a switch in 设置 › 通用 into a re-render of the whole
+  // app; `TEXT` itself then resolves against the new dictionary.
+  const language = useLanguage();
+  useEffect(applyDocumentLanguage, [language]);
 
   const onAuthRejected = useCallback(() => {
     setRejected(true);

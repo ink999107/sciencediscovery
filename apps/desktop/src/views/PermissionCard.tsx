@@ -15,11 +15,16 @@
 import type { PermissionDecision, PermissionRequest } from "../api/types.js";
 import { TEXT } from "../text.js";
 
-/** The three answers, in the order the server ranks them: least to most. */
-const DECISIONS: Array<{ decision: PermissionDecision; label: string; tone: "danger" | "secondary" }> = [
-  { decision: "allow_once", label: TEXT.permission.allowOnce, tone: "secondary" },
-  { decision: "allow_matching", label: TEXT.permission.allowMatching, tone: "secondary" },
-  { decision: "deny", label: TEXT.permission.deny, tone: "danger" },
+/** The three answers, in the order the server ranks them: least to most.
+ *
+ * The label is read when a card renders, not when this module loads. `TEXT` is
+ * a proxy over the language store, so a string captured here at import time
+ * would stay in the language the app started in — the buttons would keep
+ * saying 仅允许一次 after the interface had been switched to English. */
+const DECISIONS: Array<{ decision: PermissionDecision; label: () => string; tone: "danger" | "secondary" }> = [
+  { decision: "allow_once", label: () => TEXT.permission.allowOnce, tone: "secondary" },
+  { decision: "allow_matching", label: () => TEXT.permission.allowMatching, tone: "secondary" },
+  { decision: "deny", label: () => TEXT.permission.deny, tone: "danger" },
 ];
 
 /**
@@ -85,7 +90,7 @@ export function PermissionCard({
             onClick={() => onDecision(request, entry.decision)}
             type="button"
           >
-            {entry.label}
+            {entry.label()}
           </button>
         ))}
       </div>

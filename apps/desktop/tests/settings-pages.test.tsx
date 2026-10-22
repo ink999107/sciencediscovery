@@ -85,11 +85,11 @@ describe("the settings nav", () => {
     <SettingsDialog actions={actions} client={client} onClose={noConfirm} state={state} />,
   );
 
-  it("carries the four server-backed pages this app keeps", () => {
-    for (const label of ["模型", "技能", "网络", "远程"]) {
+  it("carries the five pages this app keeps", () => {
+    for (const label of ["通用", "模型", "技能", "网络", "远程"]) {
       assert.ok(markup.includes(`>${label}</button>`), `nav is missing ${label}`);
     }
-    assert.equal(markup.match(/settings-nav-item/g)?.length, 4);
+    assert.equal(markup.match(/settings-nav-item/g)?.length, 5);
   });
 
   it("leaves out 专家, 连接器, 权限 and 反馈, which this app does not offer", () => {
@@ -99,13 +99,13 @@ describe("the settings nav", () => {
   });
 
   it("groups them under the headings that still have a page", () => {
-    for (const heading of ["智能", "连接"]) {
+    for (const heading of ["系统", "智能", "连接"]) {
       assert.ok(
         markup.includes(`settings-nav-heading">${heading}<`),
         `nav is missing the ${heading} group`,
       );
     }
-    for (const gone of ["系统", "工作区", "反馈"]) {
+    for (const gone of ["工作区", "反馈"]) {
       assert.ok(!markup.includes(`settings-nav-heading">${gone}<`), `the ${gone} group is still there`);
     }
   });
@@ -121,13 +121,13 @@ describe("the settings nav", () => {
   it("gives every entry its own colour square, keyed by the section id", () => {
     // The ::before square is selected by `[data-section=...]`, so a nav item
     // without that attribute is an uncoloured square rather than an error.
-    for (const id of ["model", "skills", "network", "runtime"]) {
+    for (const id of ["general", "model", "skills", "network", "runtime"]) {
       assert.ok(markup.includes(`data-section="${id}"`), `no data-section for ${id}`);
     }
   });
 
-  it("opens on 模型, the first page", () => {
-    assert.ok(markup.includes('class="settings-nav-item active" data-section="model"'));
+  it("opens on 通用, the first page", () => {
+    assert.ok(markup.includes('class="settings-nav-item active" data-section="general"'));
   });
 });
 

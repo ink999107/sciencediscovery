@@ -18,6 +18,7 @@ import type { ApiClient } from "../api/client.js";
 import type { WorkspaceActions, WorkspaceState } from "../app/use-workspace.js";
 import { TEXT } from "../text.js";
 import { claimsEscape } from "./dialog-escape.js";
+import { GeneralSettings } from "./settings/GeneralSettings.js";
 import { ModelSettings } from "./settings/ModelSettings.js";
 import { NetworkSettings } from "./settings/NetworkSettings.js";
 import { RuntimeSettings } from "./settings/RuntimeSettings.js";
@@ -30,21 +31,23 @@ interface Props {
   state: WorkspaceState;
 }
 
-export type Section = "model" | "network" | "runtime" | "skills";
+export type Section = "general" | "model" | "network" | "runtime" | "skills";
 
 type Group = keyof typeof TEXT.settings.navHeadings;
 
 /** The nav is the design's pages in their groups. `data-section` is what
  *  colours the ::before square, which is why the key and the section id are
- *  the same string. Every page here is server-backed. */
+ *  the same string. 通用 is this browser's own page — the interface language —
+ *  so it sits alone under 系统 rather than among the server-backed pages. */
 const SECTIONS: { group: Group; id: Section }[] = [
+  { group: "system", id: "general" },
   { group: "intelligence", id: "model" },
   { group: "intelligence", id: "skills" },
   { group: "connection", id: "network" },
   { group: "connection", id: "runtime" },
 ];
 
-const GROUPS = ["intelligence", "connection"] as const;
+const GROUPS = ["system", "intelligence", "connection"] as const;
 
 /**
  * 设置.
@@ -58,7 +61,7 @@ const GROUPS = ["intelligence", "connection"] as const;
  * server owns these settings, and this app never pretends to.
  */
 export function SettingsDialog({ actions, client, onClose, state }: Props) {
-  const [section, setSection] = useState<Section>("model");
+  const [section, setSection] = useState<Section>("general");
 
   // Escape closes this dialog only if no dialog stacked above it has claimed
   // the key — a confirmation opened from a page here is rendered outside this
@@ -73,6 +76,8 @@ export function SettingsDialog({ actions, client, onClose, state }: Props) {
 
   const body = () => {
     switch (section) {
+      case "general":
+        return <GeneralSettings />;
       case "model":
         return <ModelSettings actions={actions} client={client} state={state} />;
       case "skills":
