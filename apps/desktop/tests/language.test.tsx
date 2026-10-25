@@ -53,7 +53,8 @@ test("switching to English changes every top-level section of TEXT", () => {
   assert.equal(TEXT.composer.send, "Send");
   assert.equal(TEXT.sidebar.project, "Projects");
   assert.equal(TEXT.conversation.copyAnswer, "Copy answer");
-  assert.equal(TEXT.settings.nav.general, "General");
+  assert.equal(TEXT.settings.system.groups.general.label, "General");
+  assert.equal(TEXT.settings.system.groups.timeouts.label, "Timeouts");
   assert.equal(TEXT.workspace.root, "Workspace root");
   assert.equal(TEXT.status.localOnline, "Local runtime · Online");
   // Functions are translated too, not just literals.

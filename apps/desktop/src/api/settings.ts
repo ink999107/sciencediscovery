@@ -22,11 +22,18 @@
 
 import type { ApiClient } from "./client.js";
 import type {
+  ConnectorManifest,
+  CreateSpecialistRequest,
+  CustomMcpServerDetails,
+  CustomMcpServerInput,
   EnvironmentPackageSourceId,
   EnvironmentSourceSettings,
+  IdeaTreeSettingsDetails,
   McpProxyPolicies,
   McpSource,
+  MemoryGraphSettingsDetails,
   NpuRunnerSelectionsResponse,
+  ProxyDefaultPolicy,
   ProxyPolicy,
   ProxyServer,
   ProxySettingsDetails,
@@ -35,11 +42,40 @@ import type {
   RuntimeStatus,
   SandboxNetworkSettings,
   SkillDescriptor,
+  Specialist,
   SystemQuotaSettings,
   SystemTimeoutSettings,
+  UpdateIdeaTreeSettingsRequest,
+  UpdateMemoryGraphSettingsRequest,
+  UpdateSpecialistRequest,
+  UpdateWebSettingsRequest,
+  WebSettingsDetails,
 } from "./types.js";
 
 /* -- 通用 ---------------------------------------------------------------- */
+
+/** The global layer, including the connectors a run may call. */
+export function listConnectors(client: ApiClient): Promise<ConnectorManifest[]> {
+  return client.request<ConnectorManifest[]>("/api/connectors");
+}
+
+export function getGlobalSettings(
+  client: ApiClient,
+): Promise<{ effective: unknown; overrides: RuntimeSettingsOverrides; sources: Record<string, string> }> {
+  return client.request("/api/settings");
+}
+
+/** Whole-object replace, like `putProjectSettings`. Read first, then send the
+ *  overrides back with only the field that changed. */
+export function putGlobalSettings(
+  client: ApiClient,
+  overrides: RuntimeSettingsOverrides,
+): Promise<unknown> {
+  return client.request("/api/settings", {
+    body: JSON.stringify(overrides),
+    method: "PUT",
+  });
+}
 
 /**
  * The project layer of the runtime settings.
@@ -287,5 +323,133 @@ export function setRunnerNpuDevices(
   return client.request(`/api/runners/${encodeURIComponent(runnerId)}/npu-devices`, {
     body: JSON.stringify({ devices }),
     method: "PUT",
+  });
+}
+
+/* -- 网络与访问 ---------------------------------------------------------- */
+
+export function getProxySettings(client: ApiClient): Promise<ProxySettingsDetails> {
+  return client.request<ProxySettingsDetails>("/api/proxy/settings");
+}
+
+/** Only the default moves; the registry entries have their own routes. */
+export function updateProxyDefaultPolicy(
+  client: ApiClient,
+  defaultPolicy: ProxyDefaultPolicy,
+): Promise<ProxySettingsDetails> {
+  return client.request<ProxySettingsDetails>("/api/proxy/settings", {
+    body: JSON.stringify({ defaultPolicy }),
+    method: "PUT",
+  });
+}
+
+/* -- MCP ----------------------------------------------------------------- */
+
+export function listMcpServers(client: ApiClient): Promise<CustomMcpServerDetails[]> {
+  return client.request<CustomMcpServerDetails[]>("/api/mcp/servers");
+}
+
+export function saveMcpServer(
+  client: ApiClient,
+  body: CustomMcpServerInput,
+  id?: string,
+): Promise<CustomMcpServerDetails> {
+  return client.request<CustomMcpServerDetails>(
+    `/api/mcp/servers${id === undefined ? "" : `/${encodeURIComponent(id)}`}`,
+    { body: JSON.stringify(body), method: id === undefined ? "POST" : "PUT" },
+  );
+}
+
+export function testMcpServer(client: ApiClient, id: string): Promise<CustomMcpServerDetails> {
+  return client.request<CustomMcpServerDetails>(`/api/mcp/servers/${encodeURIComponent(id)}/test`, {
+    method: "POST",
+  });
+}
+
+export function deleteMcpServer(client: ApiClient, id: string): Promise<{ deleted: boolean }> {
+  return client.request<{ deleted: boolean }>(`/api/mcp/servers/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+/* -- Web ----------------------------------------------------------------- */
+
+export function getWebSettings(client: ApiClient): Promise<WebSettingsDetails> {
+  return client.request<WebSettingsDetails>("/api/web/settings");
+}
+
+export function updateWebSettings(
+  client: ApiClient,
+  body: UpdateWebSettingsRequest,
+): Promise<WebSettingsDetails> {
+  return client.request<WebSettingsDetails>("/api/web/settings", {
+    body: JSON.stringify(body),
+    method: "PUT",
+  });
+}
+
+/* -- 记忆与 Idea Tree ---------------------------------------------------- */
+
+export function getMemoryGraphSettings(client: ApiClient): Promise<MemoryGraphSettingsDetails> {
+  return client.request<MemoryGraphSettingsDetails>("/api/memory/settings");
+}
+
+export function updateMemoryGraphSettings(
+  client: ApiClient,
+  body: UpdateMemoryGraphSettingsRequest,
+): Promise<MemoryGraphSettingsDetails> {
+  return client.request<MemoryGraphSettingsDetails>("/api/memory/settings", {
+    body: JSON.stringify(body),
+    method: "PUT",
+  });
+}
+
+export function getIdeaTreeSettings(client: ApiClient): Promise<IdeaTreeSettingsDetails> {
+  return client.request<IdeaTreeSettingsDetails>("/api/settings/idea-tree");
+}
+
+export function updateIdeaTreeSettings(
+  client: ApiClient,
+  body: UpdateIdeaTreeSettingsRequest,
+): Promise<IdeaTreeSettingsDetails> {
+  return client.request<IdeaTreeSettingsDetails>("/api/settings/idea-tree", {
+    body: JSON.stringify(body),
+    method: "PUT",
+  });
+}
+
+/* -- 专家 ---------------------------------------------------------------- */
+
+export function listSpecialists(client: ApiClient): Promise<Specialist[]> {
+  return client.request<Specialist[]>("/api/specialists");
+}
+
+export function createSpecialist(
+  client: ApiClient,
+  body: CreateSpecialistRequest,
+): Promise<Specialist> {
+  return client.request<Specialist>("/api/specialists", {
+    body: JSON.stringify(body),
+    method: "POST",
+  });
+}
+
+export function updateSpecialist(
+  client: ApiClient,
+  specialistId: string,
+  body: UpdateSpecialistRequest,
+): Promise<Specialist> {
+  return client.request<Specialist>(`/api/specialists/${encodeURIComponent(specialistId)}`, {
+    body: JSON.stringify(body),
+    method: "PUT",
+  });
+}
+
+export function deleteSpecialist(
+  client: ApiClient,
+  specialistId: string,
+): Promise<{ deleted: string }> {
+  return client.request<{ deleted: string }>(`/api/specialists/${encodeURIComponent(specialistId)}`, {
+    method: "DELETE",
   });
 }

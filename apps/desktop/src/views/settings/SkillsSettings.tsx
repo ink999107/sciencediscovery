@@ -76,7 +76,7 @@ export function SkillsSettings({ activeProjectId, client }: Props) {
   };
 
   return (
-    <Group heading={TEXT.settings.skills.heading}>
+    <Group>
       <LoadGate loaded={loaded}>
         {(page) => {
           if (page.skills.length === 0) {

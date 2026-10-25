@@ -35,7 +35,7 @@ import { OfflineScreen } from "./views/OfflineScreen.js";
 import { Rail } from "./views/Rail.js";
 import { SessionBar } from "./views/SessionBar.js";
 import { SetupWizard } from "./views/SetupWizard.js";
-import { SettingsDialog } from "./views/SettingsDialog.js";
+import { SystemSettingsDialog, type SettingsGroup } from "./views/SystemSettingsDialog.js";
 import { Sidebar } from "./views/Sidebar.js";
 import { sessionTitle } from "./views/session-title.js";
 import { Toasts } from "./views/Toasts.js";
@@ -51,7 +51,10 @@ export function App({ initialToken }: Props) {
   /** Set when the server answered 401, so the gate can say "this one was
    *  refused" instead of the generic "we have no credential". */
   const [rejected, setRejected] = useState(false);
+  /** 设置 opens over the task surface and holds which pane it last showed, so
+   *  reopening lands where the user left off. */
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsGroup, setSettingsGroup] = useState<SettingsGroup>("general");
   /** The task sidebar folds away; the conversation's does too when the panel
    *  needs the room. */
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -196,6 +199,11 @@ export function App({ initialToken }: Props) {
   // once on the shell reaches both, and neither has to be told twice.
   const shellStyle = { "--panel-width": `${resize.width}px` } as CSSProperties;
 
+  const openSettings = (group: SettingsGroup) => {
+    setSettingsGroup(group);
+    setSettingsOpen(true);
+  };
+
   // The panel takes the sidebar's place rather than sharing the window with
   // it: the handoff's open-panel frames show the conversation wider by exactly
   // the 296px the task column gives back.
@@ -219,7 +227,7 @@ export function App({ initialToken }: Props) {
     <>
       <div className={shellClass} style={shellStyle}>
         <Rail
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => openSettings(settingsGroup)}
           onSelectTask={() => setSettingsOpen(false)}
           settingsOpen={settingsOpen}
         />
@@ -259,7 +267,7 @@ export function App({ initialToken }: Props) {
             attachBlocked={canUpload ? undefined : TEXT.composer.attachArchived}
             attachLimit={attachLimit}
             models={state.models}
-            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenSettings={() => openSettings("models")}
             onSelectModel={(modelId) => void actions.selectModel(modelId)}
             onSend={(content) => void actions.send(content)}
             onStop={() => void actions.stop()}
@@ -282,6 +290,17 @@ export function App({ initialToken }: Props) {
         />
       </div>
 
+      {settingsOpen ? (
+        <SystemSettingsDialog
+          actions={actions}
+          client={client}
+          group={settingsGroup}
+          onClose={() => setSettingsOpen(false)}
+          onGroupChange={setSettingsGroup}
+          state={state}
+        />
+      ) : null}
+
       {/* The whole window is the drop target, so the whole window is what has
           to say so. It is drawn only while a file is actually over the app,
           and it repeats the reason when there is no session — a drop that does
@@ -299,15 +318,6 @@ export function App({ initialToken }: Props) {
       ) : null}
 
       <Toasts onDismiss={actions.dismissToast} toasts={state.toasts} />
-
-      {settingsOpen ? (
-        <SettingsDialog
-          actions={actions}
-          client={client}
-          onClose={() => setSettingsOpen(false)}
-          state={state}
-        />
-      ) : null}
 
       {state.confirm ? (
         <ConfirmDialog onDismiss={actions.dismissConfirm} request={state.confirm} />

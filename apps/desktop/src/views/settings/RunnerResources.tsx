@@ -161,7 +161,7 @@ export function RunnerResourcePanel({ host }: { host: RemoteHostTarget }) {
       </div>
       {host.capabilities?.gpu ? <small className="row-note">{text.gpu(host.capabilities.gpu)}</small> : null}
       <small className="resource-captured">
-        {text.updated} <time dateTime={resources.capturedAt}>{new Date(resources.capturedAt).toLocaleString()}</time>
+        {text.updated} <time dateTime={resources.capturedAt}>{new Date(resources.capturedAt).toLocaleString(TEXT.languageTag)}</time>
       </small>
       {status.resourcesError ? (
         <small className="row-note is-error">{status.resourcesError}</small>

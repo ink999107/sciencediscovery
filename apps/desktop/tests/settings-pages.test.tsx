@@ -23,7 +23,6 @@ import type { ApiClient } from "../src/api/client.js";
 import type { RunnerTarget } from "../src/api/types.js";
 import { TEXT } from "../src/text.js";
 import { ModelForm } from "../src/views/ModelForm.js";
-import { SettingsDialog } from "../src/views/SettingsDialog.js";
 import { RunnerSection } from "../src/views/settings/RemoteHosts.js";
 import { NetworkSettings } from "../src/views/settings/NetworkSettings.js";
 import { RuntimeSettings } from "../src/views/settings/RuntimeSettings.js";
@@ -54,80 +53,15 @@ const store = new Map<string, string>();
 const client = { request: () => new Promise(() => {}) } as unknown as ApiClient;
 const noConfirm = () => {};
 
-const state = {
-  connection: "ready",
-  confirm: undefined,
-  loadingSession: false,
-  models: [],
-  outputs: [],
-  panelFiles: [],
-  presets: [],
-  projects: [],
-  providers: [],
-  recent: [],
-  run: {},
-  running: false,
-  sessionsByProject: {},
-  tabs: { activeTabId: "home", tabs: [] },
-  toasts: [],
-} as never;
-
-const actions = {
-  confirmAction: noConfirm,
-  refreshCatalog: () => Promise.resolve(),
-  setDefaultModel: () => Promise.resolve(),
-} as never;
-
 const loading = "正在读取…";
 
-describe("the settings nav", () => {
-  const markup = renderToStaticMarkup(
-    <SettingsDialog actions={actions} client={client} onClose={noConfirm} state={state} />,
-  );
-
-  it("carries the five pages this app keeps", () => {
-    for (const label of ["通用", "模型", "技能", "网络", "远程"]) {
-      assert.ok(markup.includes(`>${label}</button>`), `nav is missing ${label}`);
-    }
-    assert.equal(markup.match(/settings-nav-item/g)?.length, 5);
-  });
-
-  it("leaves out 专家, 连接器, 权限 and 反馈, which this app does not offer", () => {
-    for (const label of ["专家", "连接器", "权限", "反馈"]) {
-      assert.ok(!markup.includes(`>${label}</button>`), `nav still offers ${label}`);
-    }
-  });
-
-  it("groups them under the headings that still have a page", () => {
-    for (const heading of ["系统", "智能", "连接"]) {
-      assert.ok(
-        markup.includes(`settings-nav-heading">${heading}<`),
-        `nav is missing the ${heading} group`,
-      );
-    }
-    for (const gone of ["工作区", "反馈"]) {
-      assert.ok(!markup.includes(`settings-nav-heading">${gone}<`), `the ${gone} group is still there`);
-    }
-  });
-
-  it("puts 远程 under 连接, where the machines it names belong", () => {
-    const connection = markup.slice(markup.indexOf('settings-nav-heading">连接<'));
-    const nextHeading = connection.indexOf("settings-nav-heading", 1);
-    const group = nextHeading === -1 ? connection : connection.slice(0, nextHeading);
-    assert.ok(group.includes(">远程</button>"), "远程 is not in the 连接 group");
-    assert.ok(group.includes(">网络</button>"), "网络 left the 连接 group");
-  });
-
-  it("gives every entry its own colour square, keyed by the section id", () => {
-    // The ::before square is selected by `[data-section=...]`, so a nav item
-    // without that attribute is an uncoloured square rather than an error.
-    for (const id of ["general", "model", "skills", "network", "runtime"]) {
-      assert.ok(markup.includes(`data-section="${id}"`), `no data-section for ${id}`);
-    }
-  });
-
-  it("opens on 通用, the first page", () => {
-    assert.ok(markup.includes('class="settings-nav-item active" data-section="general"'));
+describe("the settings tree", () => {
+  it("keeps the original desktop groups, plus MCP, 专家 and 超时", () => {
+    assert.deepEqual(Object.values(TEXT.settings.system.categories), ["系统", "智能", "连接", "工作区"]);
+    assert.deepEqual(
+      Object.values(TEXT.settings.system.groups).map((group) => group.label),
+      ["通用", "模型", "技能", "MCP 服务器", "专家", "网络", "远程", "超时"],
+    );
   });
 });
 
@@ -193,12 +127,12 @@ describe("the add-model form", () => {
     assert.ok(!markup.includes("预设覆盖常见的国内外提供方"), "the preset hint is back");
   });
 
-  it("puts 测试, 保存 and 取消 side by side, in that order", () => {
+  it("puts 测试连接, 保存 and 取消 side by side, in that order", () => {
     const markup = form(noConfirm);
-    const test = markup.indexOf(">测试</button>");
+    const test = markup.indexOf(`>${TEXT.settings.model.test}</button>`);
     const save = markup.indexOf(`>${TEXT.settings.model.save}</button>`);
     const cancel = markup.indexOf(`>${TEXT.menu.cancel}</button>`);
-    assert.ok(test >= 0, "no 测试 button");
+    assert.ok(test >= 0, "no 测试连接 button");
     assert.ok(save >= 0, "no 保存 button");
     assert.ok(cancel >= 0, "no 取消 button");
     assert.ok(test < save && save < cancel, "the buttons are out of order");
@@ -210,7 +144,7 @@ describe("the add-model form", () => {
 
   it("keeps the model page's wording in step with the layout", () => {
     const model = JSON.stringify(TEXT.settings.model);
-    assert.ok(model.includes("已配置的模型"));
+    assert.ok(model.includes("主模型"));
     for (const gone of ["已配置的提供方", "尚未指定", "保存并设为默认"]) {
       assert.ok(!model.includes(gone), `模型 still has a ${gone} label`);
     }

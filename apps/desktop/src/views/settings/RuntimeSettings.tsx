@@ -67,7 +67,7 @@ export function RuntimeSettings({ activeProjectId, client, onConfirm }: Props) {
 
   return (
     <>
-      <Group heading={TEXT.settings.runtime.heading}>
+      <Group>
         <LoadGate loaded={loaded}>
           {(page) => (
             <RunnerSection client={client} hosts={page.remote} onConfirm={onConfirm} onReload={loaded.reload} />
