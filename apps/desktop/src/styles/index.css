@@ -15,14 +15,16 @@
 
 /**
  * The design's own cascade, in load order: tokens first, then the surfaces
+/**
+ * The design's own cascade, in load order: tokens first, then the surfaces
  * that consume them. The older partials — shell, conversation, composer,
  * workspace — still own the pieces the handoff's sheet does not redraw (the
  * context menu, the tool cards, the transcript's long-answer fold, the
- * structure viewer's chrome), so they load first and `design.css`, which
- * carries the handoff's shell, task column, conversation and composer, comes
- * after them and wins wherever the two describe the same element. The rest
- * are the other older surfaces with their own vocabulary (dialogs, the
- * wizard, the settings form controls).
+ * structure viewer's chrome, the panel's file tree), so they load first and
+ * `design.css`, which carries the handoff's shell, task column, conversation,
+ * panel and composer, comes after them and wins wherever the two describe the
+ * same element. The rest are the other older surfaces with their own
+ * vocabulary (dialogs, the wizard, the settings form controls).
  */
 @import "./tokens.css";
 @import "./boot.css";

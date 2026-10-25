@@ -21,7 +21,7 @@
  */
 
 /** The panel's starting width, and the width a fresh install gets. */
-export const PANEL_DEFAULT_WIDTH = 360;
+export const PANEL_DEFAULT_WIDTH = 720;
 
 /**
  * Neither bound is a taste decision. Below the minimum the file tree's names,
@@ -29,8 +29,8 @@ export const PANEL_DEFAULT_WIDTH = 360;
  * be a side column has become the main column, and the transcript it was opened
  * to comment on is the thing being squeezed.
  */
-export const PANEL_MIN_WIDTH = 280;
-export const PANEL_MAX_WIDTH = 720;
+export const PANEL_MIN_WIDTH = 480;
+export const PANEL_MAX_WIDTH = 1100;
 
 /**
  * The two columns the panel shares the window with, mirrored from the grid in
@@ -39,9 +39,9 @@ export const PANEL_MAX_WIDTH = 720;
  * render, before anything is laid out — the panel must not open wider than the
  * window can afford and then snap back on the next frame.
  */
-export const PANEL_SIDEBAR_WIDTH = 256;
+export const PANEL_SIDEBAR_WIDTH = 360;
 /** The narrowest the conversation column may be squeezed to by a drag. */
-export const PANEL_MIN_CHAT_WIDTH = 420;
+export const PANEL_MIN_CHAT_WIDTH = 512;
 
 /** How far one arrow key moves the splitter; four times that with `Shift`. */
 export const PANEL_NUDGE_STEP = 16;

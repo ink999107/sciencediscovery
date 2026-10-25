@@ -46,9 +46,11 @@ test("a drag that runs past a bound comes back where the pointer is", () => {
 });
 
 test("the width stays between the two bounds", () => {
-  assert.equal(clampPanelWidth(120, 1600), PANEL_MIN_WIDTH);
-  assert.equal(clampPanelWidth(2000, 1600), PANEL_MAX_WIDTH);
-  assert.equal(clampPanelWidth(500, 1600), 500);
+  // A window wide enough for the panel's own maximum, so the ceiling being
+  // tested is the panel's rather than the window's.
+  assert.equal(clampPanelWidth(120, 2400), PANEL_MIN_WIDTH);
+  assert.equal(clampPanelWidth(2000, 2400), PANEL_MAX_WIDTH);
+  assert.equal(clampPanelWidth(500, 2400), 500);
 });
 
 test("a window too narrow to hold both columns keeps the panel usable", () => {
@@ -62,7 +64,9 @@ test("a window too narrow to hold both columns keeps the panel usable", () => {
 });
 
 test("the ceiling leaves the transcript its minimum", () => {
-  const viewport = 1300;
+  // Wide enough that the window's ceiling is above the panel's floor, so the
+  // arithmetic below is the one the panel actually receives.
+  const viewport = 1600;
   const ceiling = clampPanelWidth(PANEL_MAX_WIDTH, viewport);
   assert.equal(ceiling, viewport - PANEL_SIDEBAR_WIDTH - PANEL_MIN_CHAT_WIDTH);
   // The sidebar is not reflowed, so the panel is the column that gives way.

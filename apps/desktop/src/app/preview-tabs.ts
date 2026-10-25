@@ -24,8 +24,15 @@
  * reachable rather than destructive.
  */
 
+/** Which panel group opened a document. The artifact and file lists are two
+ *  views of the same workspace, and a tab belongs to the one it came from:
+ *  switching groups must not show an artifact under 文件 or a source file
+ *  under 产物. */
+export type DocumentSource = "artifact" | "file";
+
 /** One slot in the panel's tab bar. */
 export interface PreviewSlot {
+  artifactId?: string;
   content?: string;
   error?: string;
   /** The initial tab — still holding the artifacts section and the tree. */
@@ -35,6 +42,7 @@ export interface PreviewSlot {
   loading: boolean;
   /** The workspace path, when the document has one. Artifacts may not. */
   path: string;
+  source?: DocumentSource;
 }
 
 export interface TabState {
@@ -44,8 +52,10 @@ export interface TabState {
 
 /** A document the user asked to look at, before it has been read. */
 export interface DocumentRequest {
+  artifactId?: string;
   label: string;
   path: string;
+  source?: DocumentSource;
 }
 
 export const HOME_TAB_ID = "home";
@@ -87,6 +97,7 @@ export function placeDocument(
     // Replaced in place: the id survives, so the tab bar does not flicker
     // between two entries while the read is in flight.
     const replaced: PreviewSlot = {
+      artifactId: request.artifactId,
       content: undefined,
       error: undefined,
       home: false,
@@ -94,17 +105,20 @@ export function placeDocument(
       label: request.label,
       loading: true,
       path: request.path,
+      source: request.source,
     };
     const next = [...tabs];
     next[index] = replaced;
     return { activeTabId: replaced.id, tabs: next };
   }
   const created: PreviewSlot = {
+    artifactId: request.artifactId,
     home: false,
     id: nextTabId(tabs),
     label: request.label,
     loading: true,
     path: request.path,
+    source: request.source,
   };
   return { activeTabId: created.id, tabs: [...tabs, created] };
 }

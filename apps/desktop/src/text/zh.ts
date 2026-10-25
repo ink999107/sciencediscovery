@@ -523,6 +523,11 @@ export const ZH = {
     newTab: "新标签页",
     artifacts: "产物",
     collapsible: "工作区",
+    groups: {
+      team: "团队",
+      artifacts: "产物",
+      files: "工作区",
+    },
     empty: "这次会话还没有产物。",
     filesEmpty: "工作区里还没有文件。",
     filesTitle: (count: number) => `工作区 · ${count} 个文件`,
@@ -543,6 +548,15 @@ export const ZH = {
     closeTab: "关闭页签",
     /** The draggable left edge of the panel. */
     resize: "调整面板宽度",
+    collapsePanel: "收起面板",
+    allArtifacts: "所有产物",
+    download: "下载",
+    searchArtifacts: "搜索产物",
+    searchFiles: "搜索文件",
+    teamActive: (count: number) => `当前活跃 ${count}`,
+    teamEmpty: "还没有团队",
+    teamEmptyHint: "这个版本没有接入多智能体团队，任务由当前模型单独完成。",
+    teamTitle: "当前活跃",
   },
 
   /** The 三维 structure view that opens for structure files. */

@@ -971,7 +971,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   const openFile = useCallback(
     (file: WorkspaceFile) =>
       openPreview(
-        { label: fileName(file.path), path: file.path },
+        { label: fileName(file.path), path: file.path, source: "file" },
         (target) => readWorkspaceFile(client, target, file.path),
       ),
     [client, openPreview],
@@ -980,7 +980,12 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   const openArtifact = useCallback(
     (output: SessionArtifactOutput) =>
       openPreview(
-        { label: fileName(output.artifact.name), path: output.version.sourcePath ?? "" },
+        {
+          artifactId: output.version.id,
+          label: output.artifact.title ?? fileName(output.artifact.name),
+          path: output.version.sourcePath ?? "",
+          source: "artifact",
+        },
         (target) => readArtifactVersion(client, target, output.version.id),
       ),
     [client, openPreview],

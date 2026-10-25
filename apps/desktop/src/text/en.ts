@@ -516,6 +516,11 @@ export const EN: Text = {
     newTab: "New tab",
     artifacts: "Artifacts",
     collapsible: "Workspace",
+    groups: {
+      team: "Team",
+      artifacts: "Artifacts",
+      files: "Workspace",
+    },
     empty: "This session has no artifacts yet.",
     filesEmpty: "No files in the workspace yet.",
     filesTitle: (count: number) => `Workspace · ${count} ${count === 1 ? "file" : "files"}`,
@@ -532,6 +537,15 @@ export const EN: Text = {
     addTab: "Add tab",
     closeTab: "Close tab",
     resize: "Resize panel",
+    collapsePanel: "Collapse panel",
+    allArtifacts: "All artifacts",
+    download: "Download",
+    searchArtifacts: "Search artifacts",
+    searchFiles: "Search files",
+    teamActive: (count: number) => `Active ${count}`,
+    teamEmpty: "No team yet",
+    teamEmptyHint: "This build has no multi-agent team; the current model completes the task alone.",
+    teamTitle: "Active",
   },
 
   molstar: {

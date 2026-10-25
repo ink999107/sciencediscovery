@@ -39,7 +39,7 @@ import { SettingsDialog } from "./views/SettingsDialog.js";
 import { Sidebar } from "./views/Sidebar.js";
 import { sessionTitle } from "./views/session-title.js";
 import { Toasts } from "./views/Toasts.js";
-import { WorkspacePanel } from "./views/WorkspacePanel.js";
+import { WorkspacePanel, type PanelGroup } from "./views/WorkspacePanel.js";
 
 interface Props {
   /** Read once in `main.tsx`, before the tree mounts. */
@@ -58,6 +58,9 @@ export function App({ initialToken }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(() =>
     readStoredFlag(localStorage, RIGHT_PANEL_STORAGE_KEY),
   );
+  /** Which of the panel's three groups is showing. Opening an artifact or a
+   *  file from elsewhere in the app lands on the group that lists it. */
+  const [panelGroup, setPanelGroup] = useState<PanelGroup>("files");
 
   // The language lives in a module store rather than in state, because
   // `TEXT` is read from components the tree passes no props to. Reading it
@@ -100,11 +103,10 @@ export function App({ initialToken }: Props) {
   const upload = useCallback(
     async (files: File[]) => {
       if (!(await actions.uploadFiles(files))) return;
-      const home = state.tabs.tabs.find((slot) => slot.home);
-      if (home) actions.selectPanelTab(home.id);
+      setPanelGroup("files");
       setWorkspaceOpen(true);
     },
-    [actions, state.tabs.tabs],
+    [actions],
   );
 
   // Uploading needs a session, and opens one if there is none — so the only
@@ -270,8 +272,10 @@ export function App({ initialToken }: Props) {
 
         <WorkspacePanel
           actions={actions}
+          activeGroup={panelGroup}
           files={state.panelFiles}
           onCollapse={collapsePanel}
+          onSelectGroup={setPanelGroup}
           outputs={state.outputs}
           resize={resize}
           tabs={state.tabs}
