@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Markdown } from "../Markdown.js";
 import type { ApiClient } from "../api/client.js";
@@ -25,11 +25,82 @@ import { PermissionCard } from "./PermissionCard.js";
 import { ThinkingBlock } from "./ThinkingBlock.js";
 import { ToolCard } from "./ToolCard.js";
 
-/** The model's initial, which is what the avatar shows. Also used by the
- *  persisted transcript, so a replayed answer and a stored one wear the same
- *  mark. */
+/** The model's initial. Kept because the persisted transcript still has a
+ *  model name to fall back on where no avatar is drawn. */
 export function markOf(name: string): string {
   return name.trim().slice(0, 1).toUpperCase() || "◈";
+}
+
+/** The blue round mark every assistant row wears in the handoff. One product,
+ *  one mark — the model's initial made the avatar look like a person. */
+export function AssistantAvatar() {
+  return (
+    <div aria-hidden="true" className="avatar-mini">
+      <svg aria-hidden="true" fill="none" height="20" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" viewBox="0 0 24 24" width="20">
+        <path d="M9.5 3.5h5M10 3.5v6.2L5.6 17a2.4 2.4 0 0 0 2.1 3.5h8.6a2.4 2.4 0 0 0 2.1-3.5L14 9.7V3.5" />
+        <path d="M7.6 14.5h8.8" />
+      </svg>
+    </div>
+  );
+}
+
+/** Copy the answer, and say the press landed. Feedback is kept in this window
+ *  only: the service has no endpoint for a rating, and a button that silently
+ *  wrote nowhere would be the one thing a feedback control must not be. */
+function AnswerTools({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+  const [vote, setVote] = useState<"down" | "up">();
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  return (
+    <div className="answer-tools">
+      <button
+        aria-label={TEXT.conversation.copyAnswer}
+        className="answer-tool"
+        onClick={() => {
+          void navigator.clipboard?.writeText(content).then(() => setCopied(true));
+        }}
+        title={copied ? TEXT.conversation.copied : TEXT.conversation.copyAnswer}
+        type="button"
+      >
+        {copied ? "✓" : (
+          <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="15">
+            <rect height="12" rx="2.4" width="12" x="8" y="8" />
+            <path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" />
+          </svg>
+        )}
+      </button>
+      <button
+        aria-label={TEXT.conversation.feedbackHelpful}
+        aria-pressed={vote === "up"}
+        className="answer-tool"
+        onClick={() => setVote(vote === "up" ? undefined : "up")}
+        title={TEXT.conversation.feedbackHelpful}
+        type="button"
+      >
+        <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="15">
+          <path d="M7 10v10H4.5V10zM7 10l4-6.5a2 2 0 0 1 3.6 1.5L14 9h4.6a2 2 0 0 1 2 2.4l-1.3 6.6a2 2 0 0 1-2 1.6H7" />
+        </svg>
+      </button>
+      <button
+        aria-label={TEXT.conversation.feedbackUnhelpful}
+        aria-pressed={vote === "down"}
+        className="answer-tool"
+        onClick={() => setVote(vote === "down" ? undefined : "down")}
+        title={TEXT.conversation.feedbackUnhelpful}
+        type="button"
+      >
+        <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="15">
+          <path d="M17 14V4h2.5v10zM17 14l-4 6.5a2 2 0 0 1-3.6-1.5L10 15H5.4a2 2 0 0 1-2-2.4l1.3-6.6a2 2 0 0 1 2-1.6H17" />
+        </svg>
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -41,10 +112,14 @@ export function markOf(name: string): string {
  * keeps them from drifting apart.
  */
 export function AnswerBlock({
+  actions,
   content,
   live,
   truncated,
 }: {
+  /** The copy/feedback row belongs under a finished answer, not under the
+   *  prose a folded run wrote on its way to one. */
+  actions?: boolean;
   content: string;
   /** Text still arriving: a cursor follows it and the next frame will be longer. */
   live?: boolean;
@@ -57,6 +132,7 @@ export function AnswerBlock({
         <div className="workspace-empty">{TEXT.conversation.truncatedBody}</div>
       ) : null}
       {live ? <span className="spinner" /> : null}
+      {actions === true && !live ? <AnswerTools content={content} /> : null}
     </div>
   );
 }
@@ -310,7 +386,7 @@ function foldLabel(run: RunStreamState): { icon: string; title: string; working:
  *
  * Everything the run did between the question and its answer — the reasoning,
  * the tool calls, the prose the model produced on the way — is folded into a
- * single line: "正在思考" while it works, "用时 12 分 3 秒" once it is done.
+ * single line: "正在规划下一步" while it works, "用时 12 分 3 秒" once it is done.
  * Only the answer stays out, which is the point of the shape: a hundred-turn
  * run costs one line of transcript instead of a hundred.
  *
@@ -393,9 +469,7 @@ export function AssistantTurns({
   return (
     <>
       <div className="message assistant">
-        <div aria-hidden="true" className="avatar-mini">
-          {markOf(run.modelName ?? "")}
-        </div>
+        <AssistantAvatar />
         <div className="body">
           <div className="role">
             <span>{run.modelName ?? TEXT.appName}</span>
@@ -431,12 +505,13 @@ export function AssistantTurns({
           ) : null}
           {shown === undefined ? null : (
             <AnswerBlock
+              actions={!live}
               content={shown.content}
               live={live && !shown.settled}
               truncated={shown.truncated}
             />
           )}
-          {showFinal ? <AnswerBlock content={finalBody} /> : null}
+          {showFinal ? <AnswerBlock actions content={finalBody} /> : null}
         </div>
       </div>
       <RunStatusLine run={run} />

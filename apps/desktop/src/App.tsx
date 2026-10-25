@@ -32,10 +32,12 @@ import { Composer } from "./views/Composer.js";
 import { ConfirmDialog } from "./views/ConfirmDialog.js";
 import { Conversation } from "./views/Conversation.js";
 import { OfflineScreen } from "./views/OfflineScreen.js";
+import { Rail } from "./views/Rail.js";
 import { SessionBar } from "./views/SessionBar.js";
-import { SettingsDialog } from "./views/SettingsDialog.js";
 import { SetupWizard } from "./views/SetupWizard.js";
+import { SettingsDialog } from "./views/SettingsDialog.js";
 import { Sidebar } from "./views/Sidebar.js";
+import { sessionTitle } from "./views/session-title.js";
 import { Toasts } from "./views/Toasts.js";
 import { WorkspacePanel } from "./views/WorkspacePanel.js";
 
@@ -50,6 +52,9 @@ export function App({ initialToken }: Props) {
    *  refused" instead of the generic "we have no credential". */
   const [rejected, setRejected] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** The task sidebar folds away; the conversation's does too when the panel
+   *  needs the room. */
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [workspaceOpen, setWorkspaceOpen] = useState(() =>
     readStoredFlag(localStorage, RIGHT_PANEL_STORAGE_KEY),
   );
@@ -189,25 +194,54 @@ export function App({ initialToken }: Props) {
   // once on the shell reaches both, and neither has to be told twice.
   const shellStyle = { "--panel-width": `${resize.width}px` } as CSSProperties;
 
+  // The panel takes the sidebar's place rather than sharing the window with
+  // it: the handoff's open-panel frames show the conversation wider by exactly
+  // the 296px the task column gives back.
+  const taskSidebar = sidebarOpen && !panelOpen;
+  const showExpand = !taskSidebar;
+  const expandSidebar = () => {
+    // The task surface gives the column to the right panel; asking for the
+    // sidebar back is also asking for the panel to step aside.
+    if (workspaceOpen) collapsePanel();
+    setSidebarOpen(true);
+  };
+
+  const shellClass = [
+    "app-shell",
+    "page-task",
+    taskSidebar ? "" : "sidebar-hidden",
+    panelOpen ? "panel-open" : "workspace-hidden",
+  ].filter(Boolean).join(" ");
+
   return (
     <>
-      <div className={`app-shell${panelOpen ? "" : " workspace-hidden"}`} style={shellStyle}>
-        <Sidebar
-          actions={actions}
-          activeSessionId={state.sessionId}
-          connection={state.connection}
+      <div className={shellClass} style={shellStyle}>
+        <Rail
           onOpenSettings={() => setSettingsOpen(true)}
-          recent={state.recent}
+          onSelectTask={() => setSettingsOpen(false)}
+          settingsOpen={settingsOpen}
         />
+
+        {taskSidebar ? (
+          <Sidebar
+            actions={actions}
+            activeSessionId={state.sessionId}
+            onToggleSidebar={() => setSidebarOpen(false)}
+            projectName={state.activeProjectName ?? TEXT.project.defaultName}
+            recent={state.recent}
+            running={state.running}
+            taskTitle={state.detail ? sessionTitle(state.detail.title) : undefined}
+          />
+        ) : null}
 
         <main className="main-area">
           <SessionBar
             actions={actions}
             detail={state.detail}
-            onToggleWorkspace={() => {
-              if (workspaceOpen) collapsePanel();
-              else setWorkspaceOpen(true);
-            }}
+            onExpandSidebar={expandSidebar}
+            onToggleWorkspace={() => setWorkspaceOpen(true)}
+            projectName={state.activeProjectName}
+            sidebarCollapsed={showExpand}
             workspaceOpen={workspaceOpen}
           />
           <Conversation

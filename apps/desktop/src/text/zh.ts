@@ -38,11 +38,22 @@ export const ZH = {
     rejectedBody: "本地服务拒绝了这份凭据。请从启动输出里重新复制完整的访问链接。",
   },
 
-  sidebar: {
-    newSession: "新增会话",
-    recent: "最近",
+  /** The narrow icon rail down the left edge. */
+  rail: {
+    task: "任务",
     settings: "设置",
-    noRecent: "还没有会话",
+  },
+  sidebar: {
+    title: "科研任务",
+    newTask: "新建任务",
+    searchPlaceholder: "搜索",
+    project: "项目",
+    tasks: "任务",
+    noTasks: "暂无任务",
+    noMatch: "没有匹配的任务",
+    showMore: "显示更多",
+    collapseSidebar: "收起侧栏",
+    expandSidebar: "显示侧栏",
     /** Shown as the tooltip on a session name, for the gesture nothing else
      *  announces. The same rename is in the row's `⋯` menu. */
     renameHint: "双击改名",
@@ -66,7 +77,7 @@ export const ZH = {
   },
 
   composer: {
-    placeholder: "输入任何内容…",
+    placeholder: "需要帮你做些什么？输入“/”快速引用技能及指令",
     send: "发送",
     stop: "停止",
     modelSelect: "选择模型",
@@ -74,7 +85,7 @@ export const ZH = {
     configuredModels: "已配置模型",
     pillLocked: "这一轮跑完才能切换模型",
     stopHint: "关闭页面或刷新不会停止运行，必须在这里显式停止。",
-    attach: "上传文件",
+    uploadFile: "上传文件",
     attachHint: (limit?: string) => limit === undefined
       ? "放进本次会话的工作区，智能体就能读到。也可以直接把文件拖进界面。"
       : `放进本次会话的工作区，智能体就能读到。单个文件最大 ${limit}。也可以直接把文件拖进界面。`,
@@ -100,8 +111,10 @@ export const ZH = {
   conversation: {
     slogan: "让科研发现更简单",
     subSlogan: "附上数据或论文，然后说明您想了解的问题。",
-    /** The reader's own role, above their messages. */
-    you: "你",
+    feedbackHelpful: "这个回答有帮助",
+    feedbackUnhelpful: "这个回答没有帮助",
+    copyAnswer: "复制回答",
+    copied: "已复制",
     /** The header of one request/answer turn inside a run. */
     turn: (turn: number) => `第 ${turn} 轮`,
     /** The system-notice kinds the transcript can carry. */
@@ -118,7 +131,7 @@ export const ZH = {
     thinking: "思考过程",
     thinkingSteps: (count: number) => `${count} 步`,
     /** The folded line standing in for a run that has not finished yet. */
-    thinkingNow: "正在思考",
+    thinkingNow: "正在规划下一步",
     /**
      * The same line once the run is over. Minutes and seconds are the units a
      * wait is actually felt in; an hour is where "72 分" stops being readable,
@@ -522,6 +535,8 @@ export const ZH = {
     justNow: "刚刚",
     minutesAgo: (minutes: number) => `${minutes} 分钟前`,
     hoursAgo: (hours: number) => `${hours} 小时前`,
+    daysAgo: (days: number) => `${days}天前`,
+    weeksAgo: (weeks: number) => `${weeks}周前`,
     open: "打开",
     unsupported: "这个类型暂时没有预览。",
     addTab: "新增页签",

@@ -113,12 +113,12 @@ describe("a run folds into one line", () => {
     turn: 1,
   };
 
-  it("says 正在思考 while it is still going, and keeps the answer in view", () => {
+  it("says 正在规划下一步 while it is still going, and keeps the answer in view", () => {
     const html = render({ turns: [turn(answered)] });
-    assert.match(html, /正在思考/);
+    assert.match(html, /正在规划下一步/);
     // The line stands in for the run; the answer it produced is beside it, not
     // inside it. Both matter: one is the summary, the other is the point.
-    assert.ok(html.indexOf("正在思考") < html.indexOf("the answer"));
+    assert.ok(html.indexOf("正在规划下一步") < html.indexOf("the answer"));
     assert.equal(html.match(/class="msg-collapse run-fold"/gu)?.length, 1);
   });
 
@@ -142,7 +142,7 @@ describe("a run folds into one line", () => {
       turns: [turn(answered)],
     });
     assert.match(html, /用时 32 分 32 秒/);
-    assert.doesNotMatch(html, /正在思考/);
+    assert.doesNotMatch(html, /正在规划下一步/);
   });
 
   it("falls back to the status word when the run has no measured span", () => {
@@ -203,10 +203,10 @@ describe("a run folds into one line", () => {
     // them is about them.
     const queued = render({ status: "queued", turns: [turn({ thinking: "queued thought" })] });
     assert.match(queued, /排队中/);
-    assert.doesNotMatch(queued, /正在思考/);
+    assert.doesNotMatch(queued, /正在规划下一步/);
     const blocked = render({ status: "blocked", turns: [turn({ thinking: "blocked thought" })] });
     assert.match(blocked, /等待授权/);
-    assert.doesNotMatch(blocked, /正在思考/);
+    assert.doesNotMatch(blocked, /正在规划下一步/);
   });
 
   it("folds the previous turn's sentence away while the next turn is only thinking", () => {
@@ -228,7 +228,7 @@ describe("a run folds into one line", () => {
     assert.ok(fold !== -1 && sentence !== -1);
     assert.ok(fold < sentence && sentence < closesAt(html, fold), "the sentence is inside the fold");
     assert.equal(html.match(/let me check the file/gu)?.length, 1, "and not also outside it");
-    assert.match(html, /正在思考/);
+    assert.match(html, /正在规划下一步/);
   });
 
   it("leaves an outstanding authorization outside the fold", () => {

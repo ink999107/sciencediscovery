@@ -31,17 +31,25 @@ function session(id: string, title: string) {
 
 function render(over: Partial<Parameters<typeof Sidebar>[0]> = {}): string {
   return renderToStaticMarkup(
-    <Sidebar actions={actions} connection="online" onOpenSettings={() => {}} recent={[]} {...over} />,
+    <Sidebar actions={actions} projectName="我的工作区" recent={[]} {...over} />,
   );
 }
 
-test("the sidebar lists sessions flat, with no 项目 block above them", () => {
-  const markup = render({ recent: [session("s1", "结构比对"), session("s2", "文献综述")] });
+test("the sidebar puts the sessions under the one project, above the task section", () => {
+  const markup = render({
+    projectName: "脓毒症研究",
+    recent: [session("s1", "结构比对"), session("s2", "文献综述")],
+  });
   assert.match(markup, /结构比对/);
   assert.match(markup, /文献综述/);
-  // The ownership the API requires is not something this UI asks about, so no
-  // project name, icon or row appears anywhere in the column.
-  assert.doesNotMatch(markup, /项目|project-/);
+  // The handoff groups them: 项目 label, the project fold with its name, the
+  // two rows, and then the 任务 section this build never fills.
+  const project = markup.indexOf("side-row side-project");
+  const first = markup.indexOf("结构比对");
+  const tasks = markup.indexOf("side-label side-label-spaced");
+  assert.ok(project >= 0, "the project fold is missing");
+  assert.ok(markup.indexOf("脓毒症研究") < first, "the project name is not above its rows");
+  assert.ok(project < first && first < tasks, "the rows are not grouped as designed");
 });
 
 test("a session row carries the double-click rename as its own tooltip", () => {
@@ -49,8 +57,14 @@ test("a session row carries the double-click rename as its own tooltip", () => {
   assert.match(markup, /title="结构比对 · 双击改名"/);
 });
 
-test("an empty list says so instead of rendering a bare column", () => {
-  assert.match(render(), /还没有会话/);
+test("an empty list leaves the project quiet and says 暂无任务 once", () => {
+  const markup = render();
+  // The project exists and has no sessions, which is simply an empty section —
+  // the one sentence belongs to 任务, and it appears once.
+  assert.equal(markup.split("暂无任务").length - 1, 1);
+  const empty = markup.indexOf("暂无任务");
+  assert.ok(markup.indexOf("side-label side-label-spaced") < empty, "the empty state is not under 任务");
+  assert.doesNotMatch(markup, /暂无会话/);
 });
 
 test("a session the service still calls untitled reads in the interface language", () => {
@@ -64,5 +78,5 @@ test("the active session is the only row marked active", () => {
     activeSessionId: "s2",
     recent: [session("s1", "结构比对"), session("s2", "文献综述")],
   });
-  assert.equal(markup.split("side-session active").length - 1, 1);
+  assert.equal(markup.split('class="side-row side-sub is-active"').length - 1, 1);
 });

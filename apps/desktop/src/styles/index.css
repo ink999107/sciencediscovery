@@ -15,15 +15,14 @@
 
 /**
  * The design's own cascade, in load order: tokens first, then the surfaces
- * that consume them. The partials are the prototype's stylesheet split at its
- * own section markers, so a visual review can diff a rule here against the
- * prototype rather than guess which layer overrode it.
- *
- * The `Inter` / `JetBrains Mono` families named in `tokens.css` are not bundled
- * — the prototype loaded them from Google Fonts and this app ships no font
- * files. The declared stacks fall back to `PingFang SC` / `Microsoft YaHei` /
- * `system-ui` and the platform monospace, which is what a desktop shell with
- * no network would resolve anyway.
+ * that consume them. The older partials — shell, conversation, composer,
+ * workspace — still own the pieces the handoff's sheet does not redraw (the
+ * context menu, the tool cards, the transcript's long-answer fold, the
+ * structure viewer's chrome), so they load first and `design.css`, which
+ * carries the handoff's shell, task column, conversation and composer, comes
+ * after them and wins wherever the two describe the same element. The rest
+ * are the other older surfaces with their own vocabulary (dialogs, the
+ * wizard, the settings form controls).
  */
 @import "./tokens.css";
 @import "./boot.css";
@@ -34,3 +33,4 @@
 @import "./overlays.css";
 @import "./wizard.css";
 @import "./settings.css";
+@import "./design.css";

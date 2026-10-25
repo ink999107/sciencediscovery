@@ -20,7 +20,7 @@ import type { ChatMessage, PermissionDecision, PermissionRequest, SessionDetail 
 import type { RunStreamState } from "../run-stream/model.js";
 import { placeReplays, type RunReplay } from "../run-stream/replay.js";
 import { TEXT } from "../text.js";
-import { AnswerBlock, AssistantTurns, markOf } from "./AssistantTurn.js";
+import { AnswerBlock, AssistantAvatar, AssistantTurns } from "./AssistantTurn.js";
 
 interface Props {
   client: ApiClient;
@@ -58,37 +58,17 @@ function NoticeRow({ message }: { message: ChatMessage }) {
   );
 }
 
-/** The default user picture: the grey silhouette a chat app draws for an
- *  account that never set one. It is a shape, not a letter, because the letter
- *  was this app's word for the reader and read as a role badge. */
-function UserAvatar() {
-  return (
-    <div aria-hidden="true" className="avatar-mini">
-      <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
-        <circle cx="12" cy="8.5" r="4" />
-        <path d="M12 14c-4.4 0-7.5 2.5-7.5 5.6V21h15v-1.4c0-3.1-3.1-5.6-7.5-5.6Z" />
-      </svg>
-    </div>
-  );
-}
-
 /**
- * One of the reader's turns.
- *
- * The body comes before the avatar in the DOM so the text a person came to read
- * is reached first; the grid puts the content against the right edge and the
- * avatar outside it, mirroring the assistant's rows.
+ * One of the reader's turns: the text alone, in the handoff's grey bubble
+ * against the right edge. There is no avatar and no role line — the bubble's
+ * side is the role, and a label saying 你 over every question was furniture.
  */
 function UserRow({ content }: { content: string }) {
   return (
     <div className="message user">
       <div className="body">
-        <div className="role">
-          <span>{TEXT.conversation.you}</span>
-        </div>
         <div className="text">{content}</div>
       </div>
-      <UserAvatar />
     </div>
   );
 }
@@ -106,16 +86,14 @@ function MessageRow({ message }: { message: ChatMessage }) {
   if (message.role === "user") return <UserRow content={message.content} />;
   return (
     <div className="message assistant">
-      <div aria-hidden="true" className="avatar-mini">
-        {markOf(message.modelName ?? "")}
-      </div>
+      <AssistantAvatar />
       <div className="body">
         <div className="role">
           <span>{message.modelName ?? TEXT.appName}</span>
         </div>
         {/* The same element a replayed run renders its answer with, so a stored
             answer and a reconstructed one cannot drift apart. */}
-        <AnswerBlock content={message.content} />
+        <AnswerBlock actions content={message.content} />
       </div>
     </div>
   );

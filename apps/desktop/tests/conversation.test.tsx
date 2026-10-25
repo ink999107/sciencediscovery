@@ -105,18 +105,14 @@ test("the two runs stay in the order the conversation happened in", () => {
   assert.deepEqual([...positions].sort((left, right) => left - right), positions);
 });
 
-test("the reader's turn carries the default silhouette and keeps its text first", () => {
+test("the reader's turn is its text alone, in the grey bubble", () => {
   const markup = render({ detail: detail([message("question-a", "user", "QUESTION-A")]) });
-  // The letter that used to stand in for the reader is gone: the avatar is a
-  // grey shape, so no initial should be printed inside it.
+  // The handoff draws the question as a grey bubble against the right edge:
+  // the bubble's side is the role, so there is no avatar and no 我 line.
+  assert.match(markup, /class="message user"><div class="body"><div class="text">QUESTION-A<\/div><\/div>/);
+  assert.doesNotMatch(markup, /avatar-mini/);
+  assert.doesNotMatch(markup, /class="role"/);
   assert.doesNotMatch(markup, />我</);
-  assert.match(markup, /class="message user"/);
-  assert.match(markup, /<svg aria-hidden="true" fill="currentColor"/);
-  // The body comes before the avatar in the DOM, so the text a reader came for
-  // is reached before the decoration even though the grid draws it on the left
-  // of the avatar.
-  const row = markup.slice(markup.indexOf('class="message user"'));
-  assert.ok(row.indexOf("QUESTION-A") < row.indexOf("<svg"), "the avatar moved ahead of the text");
 });
 
 test("an automatic wake leaves no card of its own", () => {

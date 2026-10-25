@@ -99,6 +99,8 @@ export type { PreviewSlot, TabState } from "./preview-tabs.js";
 export interface WorkspaceState {
   /** The project new sessions land in. */
   activeProjectId?: string;
+  /** Its name, which the sidebar shows under 科研任务. */
+  activeProjectName?: string;
   connection: Connection;
   confirm: ConfirmRequest | undefined;
   defaultModelId?: string;
@@ -218,6 +220,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   const [attempt, setAttempt] = useState(0);
   const [connection, setConnection] = useState<Connection>("online");
   const [activeProjectId, setActiveProjectId] = useState<string>();
+  const [activeProjectName, setActiveProjectName] = useState<string>();
   const [sessionsByProject, setSessionsByProject] = useState<Record<string, Session[]>>({});
   const [sessionId, setSessionId] = useState<string>();
   const [detail, setDetail] = useState<SessionDetail>();
@@ -1026,6 +1029,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         }
         setActiveProjectId((current) => current ?? known[0]!.id);
         projectRef.current = projectRef.current ?? known[0]!.id;
+        setActiveProjectName((current) => current ?? known[0]!.name);
         const listed = await refreshSessionLists();
         // The sidebar now shows Sessions while the composer is still a draft
         // with none behind it. Sending from there would create a second
@@ -1038,6 +1042,8 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
           adoptProject: (projectId) => {
             setActiveProjectId(projectId);
             projectRef.current = projectId;
+            const project = known.find((entry) => entry.id === projectId);
+            if (project) setActiveProjectName(project.name);
           },
           listed,
           open: sessionRef.current,
@@ -1141,6 +1147,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
 
   const state: WorkspaceState = {
     activeProjectId,
+    activeProjectName,
     connection,
     confirm,
     defaultModelId,

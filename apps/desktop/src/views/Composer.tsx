@@ -20,8 +20,7 @@ import { providerName } from "./provider-name.js";
 
 interface Props {
   /** Why uploading is not on offer, or `undefined` when it is. A reason rather
-   *  than a flag because the button's tooltip has to say what is missing — a
-   *  disabled paperclip with no explanation is a dead end. */
+   *  than a flag because the button's tooltip has to say what is missing. */
   attachBlocked?: string;
   /** The per-file ceiling to state in that tooltip, already formatted. */
   attachLimit?: string;
@@ -36,16 +35,41 @@ interface Props {
   uploading: boolean;
 }
 
+type Menu = "model";
+
+function PlusGlyph() {
+  return (
+    <svg aria-hidden="true" fill="none" height="17" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24" width="17">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function Chevron({ down = true }: { down?: boolean }) {
+  return (
+    <svg
+      className="model-chev"
+      fill="none"
+      height="12"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2.2"
+      style={down ? undefined : { transform: "rotate(180deg)" }}
+      viewBox="0 0 24 24"
+      width="12"
+    >
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
 /**
- * The input, the model pill, and the one button that switches between 发送 and
- * 停止.
+ * The composer, as the handoff draws it: one rounded card, the input over a
+ * footer of 上传, the model and 发送.
  *
- * Sending is refused while a run is going rather than queued. The API would
- * accept it, but the response to a second `POST /messages` streams the *second*
- * run's events, and this view has one timeline — showing them merged would be a
- * lie about which turn each delta belongs to. So the button that sends becomes
- * the button that stops — and that switch is the whole indication: a note
- * beside it would only repeat what the transcript's run line already says.
+ * The plus does one thing — it opens the file picker, because uploading is the
+ * only way of giving the turn more than text this service carries.
  */
 export function Composer({
   attachBlocked,
@@ -61,7 +85,7 @@ export function Composer({
   uploading,
 }: Props) {
   const [text, setText] = useState("");
-  const [picking, setPicking] = useState(false);
+  const [menu, setMenu] = useState<Menu>();
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
 
@@ -81,17 +105,25 @@ export function Composer({
   }, [text]);
 
   useEffect(() => {
-    if (!picking) return;
-    const dismiss = () => setPicking(false);
+    if (!menu) return;
+    const dismiss = () => setMenu(undefined);
     document.addEventListener("pointerdown", dismiss);
     return () => document.removeEventListener("pointerdown", dismiss);
-  }, [picking]);
+  }, [menu]);
 
   const submit = () => {
     if (!canSend) return;
     onSend(text);
     setText("");
   };
+
+  const chooseFiles = () => {
+    if (attachBlocked !== undefined || uploading) return;
+    setMenu(undefined);
+    picker.current?.click();
+  };
+
+  const stop = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
   return (
     <div className="composer">
@@ -114,68 +146,16 @@ export function Composer({
       </div>
       <div className="composer-footer">
         <button
-          aria-expanded={picking}
-          aria-label={TEXT.composer.modelSelect}
-          className="composer-model-pill"
-          onClick={(event) => {
-            event.stopPropagation();
-            if (running) return;
-            setPicking((current) => !current);
-          }}
-          title={running ? TEXT.composer.pillLocked : TEXT.composer.modelSelect}
-          type="button"
-        >
-          <span className="model-mark">
-            {(selectedName ?? "◈").trim().slice(0, 1).toUpperCase()}
-          </span>
-          <span className="model-name">
-            {selectedName ?? TEXT.errors.modelRequired}
-          </span>
-          <svg
-            className="model-chev"
-            fill="none"
-            height="12"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2.2"
-            viewBox="0 0 24 24"
-            width="12"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
-
-        {/* The paperclip follows the model pill: a file is a different kind of
-            thing from it — it is what the turn is given, not how the turn is
-            run. */}
-        <button
-          aria-label={TEXT.composer.attach}
-          className="composer-attach"
+          aria-label={TEXT.composer.uploadFile}
+          className="composer-plus"
           disabled={attachBlocked !== undefined || uploading}
-          onClick={() => picker.current?.click()}
+          onClick={chooseFiles}
           title={attachBlocked ?? TEXT.composer.attachHint(attachLimit)}
           type="button"
         >
-          {uploading ? (
-            <span className="spinner" />
-          ) : (
-            <svg
-              fill="none"
-              height="16"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1.8"
-              viewBox="0 0 24 24"
-              width="16"
-            >
-              {/* A paperclip, which is what the gesture is: it sends nothing on
-                  its own, it puts the file within reach of what does. */}
-              <path d="M20.5 11.5 12 20a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5L10 18a2 2 0 0 1-3-3l7.5-7.5" />
-            </svg>
-          )}
+          {uploading ? <span className="spinner" /> : <PlusGlyph />}
         </button>
+
         <input
           className="composer-file-input"
           multiple
@@ -190,6 +170,26 @@ export function Composer({
           ref={picker}
           type="file"
         />
+
+        <span className="composer-spacer" />
+
+        <button
+          aria-expanded={menu === "model"}
+          aria-label={TEXT.composer.modelSelect}
+          className="composer-model-pill"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (running) return;
+            setMenu(menu === "model" ? undefined : "model");
+          }}
+          title={running ? TEXT.composer.pillLocked : TEXT.composer.modelSelect}
+          type="button"
+        >
+          <span className="model-name">
+            {selectedName ?? TEXT.errors.modelRequired}
+          </span>
+          <Chevron down={menu !== "model"} />
+        </button>
 
         {running ? (
           <button
@@ -209,6 +209,7 @@ export function Composer({
             className="send-button-icon"
             disabled={!canSend}
             onClick={submit}
+            title={TEXT.composer.send}
             type="button"
           >
             <svg
@@ -228,8 +229,8 @@ export function Composer({
         )}
       </div>
 
-      {picking ? (
-        <div className="composer-dropdown" onPointerDown={(event) => event.stopPropagation()}>
+      {menu === "model" ? (
+        <div className="composer-dropdown is-models" onPointerDown={stop}>
           <div className="dropdown-section">
             <div className="dropdown-label">{TEXT.composer.configuredModels}</div>
             {models.map((model) => {
@@ -239,7 +240,7 @@ export function Composer({
                   className="dropdown-row model-row"
                   key={model.id}
                   onClick={() => {
-                    setPicking(false);
+                    setMenu(undefined);
                     onSelectModel(model.id);
                   }}
                   type="button"
@@ -254,7 +255,7 @@ export function Composer({
             <button
               className="dropdown-row dropdown-row-sub"
               onClick={() => {
-                setPicking(false);
+                setMenu(undefined);
                 onOpenSettings();
               }}
               type="button"
@@ -265,6 +266,7 @@ export function Composer({
           </div>
         </div>
       ) : null}
+
     </div>
   );
 }

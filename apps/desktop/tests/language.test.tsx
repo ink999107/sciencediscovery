@@ -51,8 +51,8 @@ test("switching to English changes every top-level section of TEXT", () => {
   // One read per section: the proxy must not serve a dictionary captured at
   // import time, which is the bug a plain `const TEXT = ...` would have.
   assert.equal(TEXT.composer.send, "Send");
-  assert.equal(TEXT.sidebar.settings, "Settings");
-  assert.equal(TEXT.conversation.you, "You");
+  assert.equal(TEXT.sidebar.project, "Projects");
+  assert.equal(TEXT.conversation.copyAnswer, "Copy answer");
   assert.equal(TEXT.settings.nav.general, "General");
   assert.equal(TEXT.workspace.root, "Workspace root");
   assert.equal(TEXT.status.localOnline, "Local runtime · Online");

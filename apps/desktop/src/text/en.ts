@@ -43,11 +43,22 @@ export const EN: Text = {
       "The local service rejected this credential. Copy the full access link from the startup output again.",
   },
 
-  sidebar: {
-    newSession: "New session",
-    recent: "Recent",
+  /** The narrow icon rail down the left edge. */
+  rail: {
+    task: "Tasks",
     settings: "Settings",
-    noRecent: "No sessions yet",
+  },
+  sidebar: {
+    title: "Research tasks",
+    newTask: "New task",
+    searchPlaceholder: "Search",
+    project: "Projects",
+    tasks: "Tasks",
+    noTasks: "No tasks yet",
+    noMatch: "No matching tasks",
+    showMore: "Show more",
+    collapseSidebar: "Collapse sidebar",
+    expandSidebar: "Show sidebar",
     renameHint: "Double-click to rename",
   },
 
@@ -68,7 +79,7 @@ export const EN: Text = {
   },
 
   composer: {
-    placeholder: "Type anything…",
+    placeholder: "What can I help you with? Type “/” to reference a skill or instruction",
     send: "Send",
     stop: "Stop",
     modelSelect: "Choose a model",
@@ -76,7 +87,7 @@ export const EN: Text = {
     configuredModels: "Configured models",
     pillLocked: "You can switch models when this run finishes",
     stopHint: "Closing the page or reloading will not stop the run. Stop it here explicitly.",
-    attach: "Upload files",
+    uploadFile: "Upload files",
     attachHint: (limit?: string) => limit === undefined
       ? "Files go into this session's workspace, where the agent can read them. You can also drag files onto the window."
       : `Files go into this session's workspace, where the agent can read them. A single file may be up to ${limit}. You can also drag files onto the window.`,
@@ -99,7 +110,10 @@ export const EN: Text = {
   conversation: {
     slogan: "Make scientific discovery simpler",
     subSlogan: "Attach data or a paper, then describe what you want to know.",
-    you: "You",
+    feedbackHelpful: "This answer was helpful",
+    feedbackUnhelpful: "This answer was not helpful",
+    copyAnswer: "Copy answer",
+    copied: "Copied",
     turn: (turn: number) => `Turn ${turn}`,
     notices: {
       review_notice: "Review notice",
@@ -111,7 +125,7 @@ export const EN: Text = {
     errorWithCode: (code: string, message: string) => `Run failed (${code}): ${message}`,
     thinking: "Reasoning",
     thinkingSteps: (count: number) => `${count} ${count === 1 ? "step" : "steps"}`,
-    thinkingNow: "Thinking",
+    thinkingNow: "Planning the next step",
     elapsed: (ms: number) => {
       const seconds = Math.max(1, Math.round(ms / 1000));
       if (seconds < 60) return `Worked for ${seconds}s`;
@@ -511,6 +525,8 @@ export const EN: Text = {
     justNow: "just now",
     minutesAgo: (minutes: number) => `${minutes} min ago`,
     hoursAgo: (hours: number) => `${hours} h ago`,
+    daysAgo: (days: number) => `${days} d ago`,
+    weeksAgo: (weeks: number) => `${weeks} w ago`,
     open: "Open",
     unsupported: "No preview for this type yet.",
     addTab: "Add tab",
