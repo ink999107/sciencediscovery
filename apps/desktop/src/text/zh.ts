@@ -86,6 +86,15 @@ export const ZH = {
     pillLocked: "这一轮跑完才能切换模型",
     stopHint: "关闭页面或刷新不会停止运行，必须在这里显式停止。",
     uploadFile: "上传文件",
+    sessionSettings: "会话设置",
+    experts: "专家",
+    expertsNone: "无",
+    permission: "请求批准",
+    permissionMode: "权限模式",
+    permissionAskDesc: "编辑外部文件和使用互联网时始终询问",
+    permissionFull: "完全访问",
+    permissionFullDesc: "可不受限制地访问互联网和您电脑上的任何文件",
+    permissionLocked: "这一轮跑完才能切换权限",
     attachHint: (limit?: string) => limit === undefined
       ? "放进本次会话的工作区，智能体就能读到。也可以直接把文件拖进界面。"
       : `放进本次会话的工作区，智能体就能读到。单个文件最大 ${limit}。也可以直接把文件拖进界面。`,

@@ -88,6 +88,15 @@ export const EN: Text = {
     pillLocked: "You can switch models when this run finishes",
     stopHint: "Closing the page or reloading will not stop the run. Stop it here explicitly.",
     uploadFile: "Upload files",
+    sessionSettings: "Session settings",
+    experts: "Experts",
+    expertsNone: "None",
+    permission: "Ask for approval",
+    permissionMode: "Permission mode",
+    permissionAskDesc: "Always ask before editing external files or using the internet",
+    permissionFull: "Full access",
+    permissionFullDesc: "Access the internet and any file on your computer without restriction",
+    permissionLocked: "You can change permissions when this run finishes",
     attachHint: (limit?: string) => limit === undefined
       ? "Files go into this session's workspace, where the agent can read them. You can also drag files onto the window."
       : `Files go into this session's workspace, where the agent can read them. A single file may be up to ${limit}. You can also drag files onto the window.`,

@@ -14,18 +14,21 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { ModelProfile } from "../api/types.js";
+import type { ApprovalMode, ModelProfile } from "../api/types.js";
 import { TEXT } from "../text.js";
 import { providerName } from "./provider-name.js";
 
 interface Props {
+  approvalMode?: ApprovalMode;
   /** Why uploading is not on offer, or `undefined` when it is. A reason rather
    *  than a flag because the button's tooltip has to say what is missing. */
   attachBlocked?: string;
   /** The per-file ceiling to state in that tooltip, already formatted. */
   attachLimit?: string;
   models: ModelProfile[];
+  onApprovalMode: (mode: ApprovalMode) => void;
   onOpenSettings: () => void;
+  onOpenSpecialists: () => void;
   onSelectModel: (modelId: string) => void;
   onSend: (content: string) => void;
   onStop: () => void;
@@ -35,13 +38,131 @@ interface Props {
   uploading: boolean;
 }
 
-type Menu = "model";
+type Menu = "model" | "settings";
 
 function PlusGlyph() {
   return (
     <svg aria-hidden="true" fill="none" height="17" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24" width="17">
       <path d="M12 5v14M5 12h14" />
     </svg>
+  );
+}
+
+/** The sliders beside the plus: the session's own settings, not the app's. */
+function SlidersGlyph() {
+  return (
+    <svg aria-hidden="true" fill="none" height="17" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" viewBox="0 0 24 24" width="17">
+      <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+      <circle cx="15" cy="7" r="2.1" />
+      <circle cx="9" cy="17" r="2.1" />
+    </svg>
+  );
+}
+
+/**
+ * 会话设置, behind the sliders beside the plus: the permission mode, with its
+ * options in the panel to the right, and the way into 专家.
+ *
+ * Exported because it is only mounted while open, and a static render of the
+ * composer never gets there.
+ */
+export function SessionSettingsMenu({
+  approvalMode,
+  onApprovalMode,
+  onClose,
+  onOpenSpecialists,
+  running,
+}: {
+  approvalMode?: ApprovalMode;
+  onApprovalMode: (mode: ApprovalMode) => void;
+  onClose: () => void;
+  onOpenSpecialists: () => void;
+  running: boolean;
+}) {
+  const [permissionOpen, setPermissionOpen] = useState(false);
+  const fullAccess = approvalMode === "always_allow";
+
+  return (
+    <div className="composer-dropdown is-settings" onPointerDown={(event) => event.stopPropagation()}>
+      <div className="dropdown-section">
+        <button
+          aria-expanded={permissionOpen}
+          className={`dropdown-row settings-row${permissionOpen ? " is-open" : ""}`}
+          disabled={running}
+          onClick={() => setPermissionOpen((current) => !current)}
+          title={running ? TEXT.composer.permissionLocked : undefined}
+          type="button"
+        >
+          <span className="row-icon">
+            <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" viewBox="0 0 24 24" width="16">
+              <path d="M12 3.5 5 6.5v5.2c0 4.3 2.9 7.2 7 8.8 4.1-1.6 7-4.5 7-8.8V6.5z" />
+              <path d="M9.4 12l1.9 1.9 3.5-3.7" />
+            </svg>
+          </span>
+          <span className="row-label">{TEXT.composer.permissionMode}</span>
+          <span className="row-value">
+            {fullAccess ? TEXT.composer.permissionFull : TEXT.composer.permission}
+          </span>
+          <span className="chev-right">›</span>
+        </button>
+        <div className="dropdown-divider" />
+        <button
+          className="dropdown-row settings-row"
+          onClick={() => {
+            onClose();
+            onOpenSpecialists();
+          }}
+          type="button"
+        >
+          <span className="row-icon">
+            <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" viewBox="0 0 24 24" width="16">
+              <path d="M12 3.5l1.9 4.8 4.9 1.9-4.9 1.9L12 17l-1.9-4.9-4.9-1.9 4.9-1.9z" />
+              <path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />
+            </svg>
+          </span>
+          <span className="row-label">{TEXT.composer.experts}</span>
+          <span className="row-value">{TEXT.composer.expertsNone}</span>
+          <span className="chev-right">›</span>
+        </button>
+      </div>
+
+      {permissionOpen ? (
+        <div className="dropdown-submenu" onPointerDown={(event) => event.stopPropagation()}>
+          <div className="dropdown-section">
+            <button
+              className={`dropdown-row permission-option${fullAccess ? "" : " is-active"}`}
+              onClick={() => {
+                onApprovalMode("ask_for_dangerous");
+                onClose();
+              }}
+              type="button"
+            >
+              <span className="row-icon">◷</span>
+              <span className="row-label">
+                <strong>{TEXT.composer.permission}</strong>
+                <small>{TEXT.composer.permissionAskDesc}</small>
+              </span>
+              {fullAccess ? null : <span className="row-check">✓</span>}
+            </button>
+            <button
+              className={`dropdown-row permission-option${fullAccess ? " is-active" : ""}`}
+              onClick={() => {
+                onApprovalMode("always_allow");
+                onClose();
+              }}
+              type="button"
+            >
+              <span className="row-icon">◉</span>
+              <span className="row-label">
+                <strong>{TEXT.composer.permissionFull}</strong>
+                <small>{TEXT.composer.permissionFullDesc}</small>
+              </span>
+              {fullAccess ? <span className="row-check">✓</span> : null}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -66,16 +187,21 @@ function Chevron({ down = true }: { down?: boolean }) {
 
 /**
  * The composer, as the handoff draws it: one rounded card, the input over a
- * footer of 上传, the model and 发送.
+ * footer of 上传, 会话设置, the model and 发送.
  *
  * The plus does one thing — it opens the file picker, because uploading is the
- * only way of giving the turn more than text this service carries.
+ * only way of giving the turn more than text this service carries. Permission
+ * and 专家 live behind the sliders beside it, the way the reference groups a
+ * session's own settings.
  */
 export function Composer({
+  approvalMode,
   attachBlocked,
   attachLimit,
   models,
+  onApprovalMode,
   onOpenSettings,
+  onOpenSpecialists,
   onSelectModel,
   onSend,
   onStop,
@@ -154,6 +280,20 @@ export function Composer({
           type="button"
         >
           {uploading ? <span className="spinner" /> : <PlusGlyph />}
+        </button>
+
+        <button
+          aria-expanded={menu === "settings"}
+          aria-label={TEXT.composer.sessionSettings}
+          className="composer-plus composer-settings"
+          onClick={(event) => {
+            event.stopPropagation();
+            setMenu(menu === "settings" ? undefined : "settings");
+          }}
+          title={TEXT.composer.sessionSettings}
+          type="button"
+        >
+          <SlidersGlyph />
         </button>
 
         <input
@@ -267,6 +407,15 @@ export function Composer({
         </div>
       ) : null}
 
+      {menu === "settings" ? (
+        <SessionSettingsMenu
+          approvalMode={approvalMode}
+          onApprovalMode={onApprovalMode}
+          onClose={() => setMenu(undefined)}
+          onOpenSpecialists={onOpenSpecialists}
+          running={running}
+        />
+      ) : null}
     </div>
   );
 }

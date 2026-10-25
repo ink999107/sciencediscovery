@@ -264,10 +264,13 @@ export function App({ initialToken }: Props) {
             run={state.run}
           />
           <Composer
+            approvalMode={state.detail?.approvalMode}
             attachBlocked={canUpload ? undefined : TEXT.composer.attachArchived}
             attachLimit={attachLimit}
             models={state.models}
+            onApprovalMode={(mode) => void actions.setApprovalMode(mode)}
             onOpenSettings={() => openSettings("models")}
+            onOpenSpecialists={() => openSettings("specialists")}
             onSelectModel={(modelId) => void actions.selectModel(modelId)}
             onSend={(content) => void actions.send(content)}
             onStop={() => void actions.stop()}

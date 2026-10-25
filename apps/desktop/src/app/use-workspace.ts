@@ -49,6 +49,7 @@ import {
 import { decidePermissionRequest } from "../api/permissions.js";
 import { listRunEvents, streamMessage, subscribeRunEvents, type RunEventHandler } from "../api/stream.js";
 import type {
+  ApprovalMode,
   ModelProfile,
   ModelProvider,
   ModelProviderPreset,
@@ -165,6 +166,10 @@ export interface WorkspaceActions {
   retryBoot: () => void;
   selectModel: (modelId: string) => Promise<void>;
   send: (content: string) => Promise<void>;
+  /** Set how the open session handles approvals. The server accepts this on its
+   *  own, so the composer's permission picker does not have to resend anything
+   *  else about the session. */
+  setApprovalMode: (mode: ApprovalMode) => Promise<void>;
   /** Change the global default from 设置 › 模型. Distinct from `selectModel`,
    *  which points the *open* session at a profile without touching the default
    *  that future sessions inherit. */
@@ -904,6 +909,29 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     [client, report],
   );
 
+  /**
+   * Change the open session's approval mode.
+   *
+   * With no session open there is nothing to write: the choice applies to the
+   * session that exists, and a draft inherits the server's default. The reply
+   * is read back rather than assumed — the detail is what the composer's
+   * picker shows, and a failed write must not leave it claiming a mode the
+   * session does not have.
+   */
+  const setApprovalMode = useCallback(
+    async (mode: ApprovalMode) => {
+      const target = sessionRef.current;
+      if (!target) return;
+      try {
+        const updated = await updateSession(client, target, { approvalMode: mode });
+        setDetail((current) => (current ? { ...current, approvalMode: updated.approvalMode } : current));
+      } catch (reason) {
+        report(reason);
+      }
+    },
+    [client, report],
+  );
+
   const setDefaultModel = useCallback(
     async (modelId: string) => {
       try {
@@ -1120,6 +1148,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       selectModel,
       selectPanelTab,
       send,
+      setApprovalMode,
       setDefaultModel,
       stop,
       toast,
@@ -1143,6 +1172,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       selectModel,
       selectPanelTab,
       send,
+      setApprovalMode,
       setDefaultModel,
       stop,
       toast,
