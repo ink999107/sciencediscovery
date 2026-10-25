@@ -42,8 +42,8 @@ function IoFold({
       open={open}
     >
       <summary>
-        <span className="collapse-chev">▸</span>
         <span className="tool-io-label">{label}</span>
+        <span aria-hidden="true" className="collapse-chev">›</span>
       </summary>
       <pre>{content}</pre>
     </details>
@@ -143,7 +143,7 @@ export function ToolCard({
         <span className="collapse-title">{statusLabel(trace)}</span>
         <span className="collapse-meta" {...collapseHint()}>{TEXT.conversation.toolCall}</span>
         {authorized ? <span className="tool-authorized">{TEXT.conversation.authorized}</span> : null}
-        <span className="collapse-chev">▸</span>
+        <span aria-hidden="true" className="collapse-chev">›</span>
       </summary>
       <div className="collapse-body tool-io-sections">
         {inputText !== undefined && inputText !== "" ? renderFold("input", TEXT.conversation.toolInput, inputText) : null}

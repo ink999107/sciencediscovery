@@ -124,8 +124,6 @@ export const ZH = {
   conversation: {
     slogan: "让科研发现更简单",
     subSlogan: "附上数据或论文，然后说明您想了解的问题。",
-    feedbackHelpful: "这个回答有帮助",
-    feedbackUnhelpful: "这个回答没有帮助",
     copyAnswer: "复制回答",
     copied: "已复制",
     /** The header of one request/answer turn inside a run. */

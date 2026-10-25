@@ -123,8 +123,6 @@ export const EN: Text = {
   conversation: {
     slogan: "Make scientific discovery simpler",
     subSlogan: "Attach data or a paper, then describe what you want to know.",
-    feedbackHelpful: "This answer was helpful",
-    feedbackUnhelpful: "This answer was not helpful",
     copyAnswer: "Copy answer",
     copied: "Copied",
     turn: (turn: number) => `Turn ${turn}`,

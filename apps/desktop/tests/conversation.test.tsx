@@ -115,6 +115,17 @@ test("the reader's turn is its text alone, in the grey bubble", () => {
   assert.doesNotMatch(markup, />我</);
 });
 
+test("an answer's name is a header above the prose, not a column beside it", () => {
+  // The handoff puts the mark and the name on their own line and starts the
+  // answer below them at the column's left edge. Nesting the body inside a row
+  // beside the avatar is what used to indent every answer by 48px.
+  const markup = render({ detail: detail([message("answer-a", "assistant", "PLAIN-ANSWER-A")]) });
+  assert.match(
+    markup,
+    /<div class="assistant-head"><div aria-hidden="true" class="avatar-mini">.*?<\/div><div class="role"><span>[^<]*<\/span><\/div><\/div><div class="body">.*?PLAIN-ANSWER-A/u,
+  );
+});
+
 test("an automatic wake leaves no card of its own", () => {
   // A wake carries no user-authored body, so its card was a blank strip. The
   // run it started is the thing to read, and it is still drawn where the wake

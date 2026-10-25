@@ -44,7 +44,7 @@ interface Props {
 function NoticeRow({ message }: { message: ChatMessage }) {
   const label = message.kind ? (TEXT.conversation.notices[message.kind] ?? message.kind) : "";
   return (
-    <div className="message assistant">
+    <div className="message assistant is-notice">
       <div aria-hidden="true" className="avatar-mini">
         ⌁
       </div>
@@ -86,11 +86,18 @@ function MessageRow({ message }: { message: ChatMessage }) {
   if (message.role === "user") return <UserRow content={message.content} />;
   return (
     <div className="message assistant">
-      <AssistantAvatar />
-      <div className="body">
+      {/* The handoff puts the mark and the name on their own line, with the
+          answer starting below them at the column's left edge. Keeping the
+          header out of the body is what lets the two line up: content that
+          started after the avatar would be indented by a column the answer
+          text has no reason to lose. */}
+      <div className="assistant-head">
+        <AssistantAvatar />
         <div className="role">
           <span>{message.modelName ?? TEXT.appName}</span>
         </div>
+      </div>
+      <div className="body">
         {/* The same element a replayed run renders its answer with, so a stored
             answer and a reconstructed one cannot drift apart. */}
         <AnswerBlock actions content={message.content} />

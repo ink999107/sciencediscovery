@@ -50,7 +50,7 @@ export function ThinkingBlock({
         <span className={`collapse-meta${live ? " is-live" : ""}`} {...collapseHint()}>
           {live ? TEXT.conversation.running : ""}
         </span>
-        <span className="collapse-chev">▸</span>
+        <span aria-hidden="true" className="collapse-chev">›</span>
       </summary>
       {truncated ? <div className="collapse-body">{TEXT.conversation.truncatedThinking}</div> : null}
       <ol className="thinking-list">

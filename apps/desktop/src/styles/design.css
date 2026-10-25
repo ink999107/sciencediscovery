@@ -569,7 +569,7 @@ body.is-resizing {
   padding: 8px 0 28px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 26px;
 }
 
 .empty-state {
@@ -606,16 +606,34 @@ body.is-resizing {
   padding-left: 96px;
 }
 
-.message.user .body {
+/* The bubble is as wide as what was typed. `fit-content` on a flex item that
+ *  no longer grows is what keeps a two-word question from being drawn as a
+ *  560px block; the ceiling still wraps a long one before it reaches the
+ *  assistant's avatar below. */
+.message.user > .body {
+  flex: 0 1 auto;
+  width: fit-content;
   max-width: 560px;
-  padding: 14px 20px;
-  border-radius: 24px 0 24px 24px;
-  background: #f3f3f3;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: #f2f2f2;
   color: #191919;
-  font-size: 14px;
-  line-height: 22px;
+  font-size: 15px;
+  line-height: 23px;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* The bubble is the body itself; an older rule also painted and padded the
+ *  text inside it, which drew a box within a box and left a line of empty
+ *  bubble under every question. */
+.message.user .text {
+  max-width: none;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 15px;
+  line-height: 23px;
 }
 
 .message.user .role,
@@ -623,27 +641,52 @@ body.is-resizing {
   display: none;
 }
 
+/* The mark and the name sit on a line of their own; the answer starts below
+ *  them at the column's left edge, not indented past the avatar. */
 .message.assistant {
-  align-items: flex-start;
+  display: block;
 }
 
-.avatar-mini {
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+.message.assistant.is-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.assistant-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+}
+
+.assistant-head .role {
+  margin: 0;
+  color: #191919;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 20px;
+  text-transform: none;
+}
+
+.message .avatar-mini {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #e8f2ff;
-  color: #1476ff;
+  background: linear-gradient(180deg, #47a6ff, #1273ff);
+  color: #fff;
   font-size: 12px;
   font-weight: 600;
   overflow: hidden;
 }
 
-.avatar-mini svg {
-  width: 20px;
-  height: 20px;
+.message .avatar-mini svg {
+  width: 17px;
+  height: 17px;
 }
 
 .message .body {
@@ -671,6 +714,13 @@ body.is-resizing {
   font-size: 14px;
   line-height: 22px;
   word-break: break-word;
+}
+
+/* The transcript's prose is a step larger than a document preview's: it is
+ *  read at arm's length, in a column, rather than scanned in a panel. */
+.message .text {
+  font-size: 15px;
+  line-height: 24px;
 }
 
 .text > :first-child {
@@ -742,6 +792,19 @@ body.is-resizing {
   line-height: 1.6;
 }
 
+/* In the transcript, code is a passage with a rule beside it rather than a
+ *  card: the handoff draws the block flush with the prose it belongs to. */
+.message .text pre {
+  margin: 10px 0;
+  padding: 8px 0 8px 14px;
+  border-left: 2px solid #e6e6e6;
+  border-radius: 0;
+  background: transparent;
+  color: #4d4d4d;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
 .text pre code {
   padding: 0;
   background: transparent;
@@ -773,21 +836,27 @@ body.is-resizing {
   color: #777;
 }
 
-/* Run summary line: "正在规划下一步 · 运行 1min50s ›" */
+/* Run summary line: "正在规划下一步 · 运行 1min50s ›" — a line of quiet text,
+ *  not a pill. The border, the background and the 展开/收起 hint all belonged
+ *  to the old card; the handoff asks for the sentence alone. */
 .msg-collapse {
-  width: fit-content;
-  max-width: 100%;
-  margin: 2px 0 8px;
+  width: 100%;
+  max-width: none;
+  margin: 8px 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .msg-collapse > summary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 22px;
-  color: #777;
-  font-size: 13px;
-  line-height: 20px;
+  min-height: 24px;
+  padding: 0;
+  color: #9a9a9a;
+  font-size: 14.5px;
+  line-height: 22px;
   cursor: pointer;
   list-style: none;
   user-select: none;
@@ -801,83 +870,130 @@ body.is-resizing {
   color: #191919;
 }
 
-.collapse-icon {
+.msg-collapse .collapse-icon {
   display: inline-grid;
   place-items: center;
-  width: 15px;
-  height: 15px;
-  font-size: 11px;
-  color: #8c8c8c;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: transparent;
+  color: #b3b3b3;
+  font-size: 12px;
 }
 
-.collapse-title {
+/* The run line has no glyph of its own — the sentence is the whole line — but
+ *  a live run keeps its ring, which is the only thing on screen saying the
+ *  model is still working. */
+.msg-collapse.run-fold .collapse-icon {
+  display: none;
+}
+
+.msg-collapse.run-fold .collapse-icon:has(.run-spinner) {
+  display: inline-grid;
+}
+
+.msg-collapse .collapse-title {
+  color: inherit;
+  font-size: inherit;
+  font-weight: 400;
   white-space: nowrap;
 }
 
-.collapse-meta {
-  color: #a6a6a6;
+.msg-collapse.run-fold .collapse-title {
+  font-size: inherit;
 }
 
-.collapse-chev {
-  color: #a6a6a6;
-  font-size: 10px;
+/* The hint is still in the markup for the language switch, but the handoff's
+ *  line says it with the chevron instead of printing 展开 beside it. */
+.msg-collapse .collapse-meta {
+  display: none;
+}
+
+.msg-collapse .collapse-chev {
+  color: #b3b3b3;
+  font-size: 15px;
+  line-height: 1;
   transition: transform 0.15s ease;
 }
 
 .msg-collapse[open] > summary .collapse-chev {
-  transform: rotate(90deg);
+  transform: rotate(-90deg);
 }
 
-.collapse-body {
-  margin: 6px 0 10px;
-  padding: 2px 0 2px 21px;
-  border-left: 1px solid #ececec;
+/* The fold's contents are the transcript continued, not an indented card:
+ *  they start at the same left edge as the answer below them. */
+.collapse-body,
+.run-fold .collapse-body {
+  margin: 2px 0 10px;
+  padding: 0;
+  border: 0;
+  border-left: 0;
 }
 
 .run-turn-head {
-  margin: 8px 0 4px;
-  color: #a6a6a6;
-  font-size: 11px;
+  margin: 10px 0 4px;
+  color: #b3b3b3;
+  font-size: 11.5px;
 }
 
 /* A tool call reads as 查看技能 name ›, the handoff's row. */
-.tool-card {
+.tool-card,
+.msg-collapse.tool-card {
   width: 100%;
+  margin: 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
-.tool-card > summary {
+.msg-collapse.tool-card > summary {
   display: flex;
   align-items: center;
   gap: 7px;
   width: fit-content;
   max-width: 100%;
-  min-height: 22px;
-  color: #777;
+  min-height: 24px;
+  padding: 0;
+  color: #4d4d4d;
+  font-size: 14.5px;
+}
+
+.msg-collapse.tool-card > summary .collapse-title {
+  color: #4d4d4d;
+  font-size: 14.5px;
+  font-weight: 400;
+}
+
+.msg-collapse.tool-card > summary .collapse-icon {
+  color: #b3b3b3;
   font-size: 13px;
 }
 
-.tool-card > summary .collapse-title {
-  color: #4d4d4d;
-}
-
 .tool-authorized {
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #eef5ff;
   color: #1476ff;
-  font-size: 10.5px;
-  line-height: 16px;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .tool-io-sections {
-  padding-left: 20px;
+  padding: 0;
+}
+
+.tool-io-section {
+  margin-top: 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .tool-io-section > summary {
   display: inline-flex;
+  align-items: center;
   gap: 6px;
-  color: #8c8c8c;
-  font-size: 12px;
+  padding: 2px 0;
+  color: #9a9a9a;
+  font-size: 13px;
+  font-weight: 400;
   cursor: pointer;
   list-style: none;
 }
@@ -886,18 +1002,44 @@ body.is-resizing {
   display: none;
 }
 
-.tool-io-section pre {
-  margin: 8px 0 12px;
-  padding: 12px 14px;
+.tool-io-section[open] > summary {
+  border-bottom: 0;
+}
+
+.tool-io-section .collapse-chev {
+  font-size: 14px;
+  color: #b3b3b3;
+}
+
+.tool-io-section[open] .collapse-chev {
+  transform: rotate(-90deg);
+}
+
+.tool-io-section > pre {
+  margin: 4px 0 10px;
+  padding: 2px 0 2px 14px;
   overflow-x: auto;
-  border-left: 2px solid #e6e6e6;
-  background: #fafafa;
-  color: #4d4d4d;
+  border: 0;
+  border-left: 1px solid #e6e6e6;
+  background: transparent;
+  color: #666;
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.75;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.tool-io-sections > pre {
+  margin: 4px 0 10px;
+  padding: 2px 0 2px 14px;
+  border: 0;
+  border-left: 1px solid #e6e6e6;
+  border-radius: 0;
+  background: transparent;
+  color: #8c8c8c;
+  font-size: 13px;
+  line-height: 1.75;
 }
 
 .thinking-block,
@@ -921,9 +1063,12 @@ body.is-resizing {
 /* Run notices keep the handoff's quiet gray strip. */
 .status-strip {
   margin: 4px 0;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
   color: #8c8c8c;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .message.assistant > .avatar-mini + .body > .status-strip {

@@ -44,12 +44,10 @@ export function AssistantAvatar() {
   );
 }
 
-/** Copy the answer, and say the press landed. Feedback is kept in this window
- *  only: the service has no endpoint for a rating, and a button that silently
- *  wrote nowhere would be the one thing a feedback control must not be. */
+/** Copy the answer, and say the press landed. It is the only tool under an
+ *  answer: the thumbs had nowhere to write a rating to. */
 function AnswerTools({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
-  const [vote, setVote] = useState<"down" | "up">();
 
   useEffect(() => {
     if (!copied) return;
@@ -74,30 +72,6 @@ function AnswerTools({ content }: { content: string }) {
             <path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" />
           </svg>
         )}
-      </button>
-      <button
-        aria-label={TEXT.conversation.feedbackHelpful}
-        aria-pressed={vote === "up"}
-        className="answer-tool"
-        onClick={() => setVote(vote === "up" ? undefined : "up")}
-        title={TEXT.conversation.feedbackHelpful}
-        type="button"
-      >
-        <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="15">
-          <path d="M7 10v10H4.5V10zM7 10l4-6.5a2 2 0 0 1 3.6 1.5L14 9h4.6a2 2 0 0 1 2 2.4l-1.3 6.6a2 2 0 0 1-2 1.6H7" />
-        </svg>
-      </button>
-      <button
-        aria-label={TEXT.conversation.feedbackUnhelpful}
-        aria-pressed={vote === "down"}
-        className="answer-tool"
-        onClick={() => setVote(vote === "down" ? undefined : "down")}
-        title={TEXT.conversation.feedbackUnhelpful}
-        type="button"
-      >
-        <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="15">
-          <path d="M17 14V4h2.5v10zM17 14l-4 6.5a2 2 0 0 1-3.6-1.5L10 15H5.4a2 2 0 0 1-2-2.4l1.3-6.6a2 2 0 0 1 2-1.6H17" />
-        </svg>
       </button>
     </div>
   );
@@ -278,7 +252,7 @@ function RunStatusLine({ run }: { run: RunStreamState }) {
   }
   if (lines.length === 0) return null;
   return (
-    <div className="message assistant">
+    <div className="message assistant is-notice">
       <div aria-hidden="true" className="avatar-mini">
         !
       </div>
@@ -469,11 +443,13 @@ export function AssistantTurns({
   return (
     <>
       <div className="message assistant">
-        <AssistantAvatar />
-        <div className="body">
+        <div className="assistant-head">
+          <AssistantAvatar />
           <div className="role">
             <span>{run.modelName ?? TEXT.appName}</span>
           </div>
+        </div>
+        <div className="body">
           {fold ? (
             <details className="msg-collapse run-fold">
               <summary>
@@ -487,7 +463,7 @@ export function AssistantTurns({
                 </span>
                 <span className="collapse-title">{label.title}</span>
                 <span className="collapse-meta" {...collapseHint()} />
-                <span className="collapse-chev">▸</span>
+                <span aria-hidden="true" className="collapse-chev">›</span>
               </summary>
               <div className="collapse-body">
                 {run.turns.map((turn) => (
