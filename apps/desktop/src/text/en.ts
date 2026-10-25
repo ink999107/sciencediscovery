@@ -45,18 +45,16 @@ export const EN: Text = {
 
   /** The narrow icon rail down the left edge. */
   rail: {
-    task: "Tasks",
+    task: "Sessions",
     settings: "Settings",
   },
   sidebar: {
-    title: "Research tasks",
+    title: "Research sessions",
     githubStar: "Star this project on GitHub",
-    newTask: "New task",
-    searchPlaceholder: "Search",
+    newTask: "New session",
     project: "Projects",
-    tasks: "Tasks",
-    noTasks: "No tasks yet",
-    noMatch: "No matching tasks",
+    tasks: "Sessions",
+    noTasks: "No sessions yet",
     showMore: "Show more",
     collapseSidebar: "Collapse sidebar",
     expandSidebar: "Show sidebar",
@@ -770,7 +768,6 @@ export const EN: Text = {
     artifacts: "Artifacts",
     collapsible: "Workspace",
     groups: {
-      team: "Team",
       artifacts: "Artifacts",
       files: "Workspace",
     },
@@ -795,10 +792,6 @@ export const EN: Text = {
     download: "Download",
     searchArtifacts: "Search artifacts",
     searchFiles: "Search files",
-    teamActive: (count: number) => `Active ${count}`,
-    teamEmpty: "No team yet",
-    teamEmptyHint: "This build has no multi-agent team; the current model completes the task alone.",
-    teamTitle: "Active",
   },
 
   molstar: {

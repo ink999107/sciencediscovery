@@ -76,26 +76,22 @@ function count(markup: string, needle: string): number {
   return markup.split(needle).length - 1;
 }
 
-test("a fresh panel offers three group tabs and opens on 工作区", () => {
+test("a fresh panel offers two group tabs and opens on 工作区", () => {
   const markup = render(initialTabState());
-  assert.equal(count(markup, 'role="tab"'), 3);
-  for (const label of ["团队", "产物", "工作区"]) {
+  assert.equal(count(markup, 'role="tab"'), 2);
+  for (const label of ["产物", "工作区"]) {
     assert.ok(markup.includes(`<span>${label}</span>`), `${label} is missing from the group tabs`);
   }
-  // 任务 is not a tab: the run's steps live in the transcript.
-  assert.doesNotMatch(markup, /<span>任务<\/span>/);
+  // 团队 is gone: this build has no team for the tab to show. 会话 is not a tab
+  // either — the run's steps live in the transcript.
+  assert.doesNotMatch(markup, /<span>团队<\/span>/);
+  assert.doesNotMatch(markup, /<span>会话<\/span>/);
   assert.doesNotMatch(markup, /<span>文件<\/span>/);
   assert.equal(count(markup, "panel-group-tab is-active"), 1);
   // The panel's own controls live in its header, not in a tab bar. Only the
   // collapse control is left; the expand affordance is gone.
   assert.doesNotMatch(markup, /aria-label="放大面板"/);
   assert.match(markup, /aria-label="收起面板"/);
-});
-
-test("团队 says this build has no team rather than inventing agents", () => {
-  const markup = render(initialTabState(), { activeGroup: "team" });
-  assert.match(markup, /还没有团队/);
-  assert.match(markup, /这个版本没有接入多智能体团队/);
 });
 
 test("工作区 lists every file and folder of the workspace", () => {
@@ -190,8 +186,8 @@ test("a document opened from 产物 becomes its own tab and the body is the docu
     version: { id: "v1", version: 3 },
   }] as never;
   const markup = render(tabs, { activeGroup: "artifacts", outputs });
-  // Three group tabs plus the document.
-  assert.equal(count(markup, 'role="tab"'), 4);
+  // Two group tabs plus the document.
+  assert.equal(count(markup, 'role="tab"'), 3);
   assert.equal(count(markup, "doc-tab-close"), 1);
   assert.match(markup, /aria-label="新增页签"/);
   assert.match(markup, /class="doc-tab is-active"/);

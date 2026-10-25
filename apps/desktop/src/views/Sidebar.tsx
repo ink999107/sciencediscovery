@@ -59,13 +59,14 @@ function stamp(session: Session): string {
 const PAGE_SIZE = 6;
 
 /**
- * The task column: 科研任务, the two ways in, and the sessions under the one
+ * The session column: 科研会话, one way in, and the sessions under the one
  * Project this app creates for itself.
  *
  * Two sections, as the handoff draws them: the project's sessions, then the
- * tasks those sessions queued. This product has no separate task queue, so the
- * second section says 暂无任务 unless a run is going — a task is the run, and
- * pretending otherwise would invent a second object to keep in step.
+ * session whose run is going. This product has no separate queue, so the
+ * second section says 暂无会话 unless a run is in flight — the row there is the
+ * running session, and pretending otherwise would invent a second object to
+ * keep in step.
  */
 export function Sidebar({
   actions,
@@ -79,7 +80,6 @@ export function Sidebar({
   const [menu, setMenu] = useState<MenuState>();
   const [renaming, setRenaming] = useState<Renaming>();
   const [projectOpen, setProjectOpen] = useState(true);
-  const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(false);
   const stars = useGithubStars();
 
@@ -109,11 +109,7 @@ export function Sidebar({
     />
   );
 
-  const needle = query.trim().toLowerCase();
-  const visible = needle === ""
-    ? recent
-    : recent.filter((session) => basename(session).toLowerCase().includes(needle));
-  const shown = expanded || needle !== "" ? visible : visible.slice(0, PAGE_SIZE);
+  const shown = expanded ? recent : recent.slice(0, PAGE_SIZE);
 
   const sessionRow = (session: Session) => {
     const active = session.id === activeSessionId;
@@ -176,19 +172,6 @@ export function Sidebar({
         </svg>
         <span>{TEXT.sidebar.newTask}</span>
       </button>
-      <label className="side-search">
-        <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24" width="16">
-          <circle cx="11" cy="11" r="6.2" />
-          <path d="M16 16l4 4" />
-        </svg>
-        <input
-          aria-label={TEXT.sidebar.searchPlaceholder}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={TEXT.sidebar.searchPlaceholder}
-          type="search"
-          value={query}
-        />
-      </label>
 
       <div className="side-label">{TEXT.sidebar.project}</div>
       <div className="side-scroll">
@@ -208,14 +191,8 @@ export function Sidebar({
             </svg>
           </button>
         </div>
-        {projectOpen ? (
-          shown.length === 0 && needle !== "" ? (
-            <div className="side-empty">{TEXT.sidebar.noMatch}</div>
-          ) : (
-            shown.map((session) => sessionRow(session))
-          )
-        ) : null}
-        {!expanded && needle === "" && visible.length > PAGE_SIZE ? (
+        {projectOpen ? shown.map((session) => sessionRow(session)) : null}
+        {!expanded && recent.length > PAGE_SIZE ? (
           <button className="side-more" onClick={() => setExpanded(true)} type="button">
             {TEXT.sidebar.showMore}
           </button>

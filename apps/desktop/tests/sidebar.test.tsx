@@ -43,7 +43,7 @@ test("the sidebar puts the sessions under the one project, above the task sectio
   assert.match(markup, /结构比对/);
   assert.match(markup, /文献综述/);
   // The handoff groups them: 项目 label, the project fold with its name, the
-  // two rows, and then the 任务 section this build never fills.
+  // two rows, and then the 会话 section this build never fills.
   const project = markup.indexOf("side-row side-project");
   const first = markup.indexOf("结构比对");
   const tasks = markup.indexOf("side-label side-label-spaced");
@@ -52,19 +52,25 @@ test("the sidebar puts the sessions under the one project, above the task sectio
   assert.ok(project < first && first < tasks, "the rows are not grouped as designed");
 });
 
+test("the task column has no search field under 新建会话", () => {
+  const markup = render({ recent: [session("s1", "结构比对")] });
+  assert.doesNotMatch(markup, /side-search/);
+  assert.doesNotMatch(markup, /type="search"/);
+});
+
 test("a session row carries the double-click rename as its own tooltip", () => {
   const markup = render({ recent: [session("s1", "结构比对")] });
   assert.match(markup, /title="结构比对 · 双击改名"/);
 });
 
-test("an empty list leaves the project quiet and says 暂无任务 once", () => {
+test("an empty list leaves the project quiet and says 暂无会话 once", () => {
   const markup = render();
   // The project exists and has no sessions, which is simply an empty section —
-  // the one sentence belongs to 任务, and it appears once.
-  assert.equal(markup.split("暂无任务").length - 1, 1);
-  const empty = markup.indexOf("暂无任务");
-  assert.ok(markup.indexOf("side-label side-label-spaced") < empty, "the empty state is not under 任务");
-  assert.doesNotMatch(markup, /暂无会话/);
+  // the one sentence belongs to 会话, and it appears once.
+  assert.equal(markup.split("暂无会话").length - 1, 1);
+  const empty = markup.indexOf("暂无会话");
+  assert.ok(markup.indexOf("side-label side-label-spaced") < empty, "the empty state is not under 会话");
+  assert.doesNotMatch(markup, /暂无任务/);
 });
 
 test("a session the service still calls untitled reads in the interface language", () => {

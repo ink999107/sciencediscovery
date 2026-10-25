@@ -28,7 +28,7 @@ import { TEXT } from "../text.js";
  *  larger than the rest of the app together, and most sessions never show one. */
 const StructureViewer = lazy(() => import("./StructureViewer.js"));
 
-export type PanelGroup = "team" | "artifacts" | "files";
+export type PanelGroup = "artifacts" | "files";
 
 interface Props {
   actions: WorkspaceActions;
@@ -42,15 +42,6 @@ interface Props {
 }
 
 function GroupIcon({ group }: { group: PanelGroup }) {
-  if (group === "team") {
-    return (
-      <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="16">
-        <circle cx="9" cy="8" r="3" />
-        <path d="M3.5 19c0-2.8 2.5-5 5.5-5s5.5 2.2 5.5 5" />
-        <path d="M16 5.5a3 3 0 0 1 0 5.8M17.5 14.4c1.8.7 3 2.4 3 4.6" />
-      </svg>
-    );
-  }
   if (group === "artifacts") {
     return (
       <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="16">
@@ -132,28 +123,6 @@ function Document({ expanded, onExpand, slot }: Expandable & { slot: PreviewSlot
   if (slot.loading) return <div className="doc-placeholder"><span className="spinner" /></div>;
   if (slot.error !== undefined) return <div className="panel-empty">{slot.error}</div>;
   return <Preview content={slot.content ?? ""} expanded={expanded} label={slot.label} onExpand={onExpand} path={slot.path} />;
-}
-
-/** The team view is honest about its absence: this build runs one model, and a
- *  row of invented agents would be a claim the service cannot back. */
-function TeamView() {
-  return (
-    <div className="team-view">
-      <div className="team-list">
-        <div className="team-list-title">{TEXT.workspace.teamTitle}</div>
-        <div className="side-empty">{TEXT.workspace.teamActive(0)}</div>
-      </div>
-      <div className="team-empty">
-        <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.3" viewBox="0 0 24 24">
-          <circle cx="9" cy="8" r="3" />
-          <path d="M3.5 19c0-2.8 2.5-5 5.5-5s5.5 2.2 5.5 5" />
-          <path d="M16 5.5a3 3 0 0 1 0 5.8M17.5 14.4c1.8.7 3 2.4 3 4.6" />
-        </svg>
-        <strong>{TEXT.workspace.teamEmpty}</strong>
-        <span>{TEXT.workspace.teamEmptyHint}</span>
-      </div>
-    </div>
-  );
 }
 
 /* ── artifact and file lists ────────────────────────────────────────────── */
@@ -278,14 +247,13 @@ function PanelSearch({ label, onChange, placeholder, value }: {
 }
 
 /**
- * The right column: 团队, 产物 and 工作区.
+ * The right column: 产物 and 工作区.
  *
- * The group tabs are the handoff's, and so is the shape under them: 团队 is a
- * whole-panel view, while 产物 and 工作区 keep a 240px list on the left and open
- * the selected document in tabs on the right. A document belongs to the group
- * it was opened from, so switching groups does not show an artifact under the
- * workspace tab. 任务 is not a tab: the run's progress is already the
- * conversation, and a second list of the same tool calls said nothing new.
+ * Both groups keep a 240px list on the left and open the selected document in
+ * tabs on the right. A document belongs to the group it was opened from, so
+ * switching groups does not show an artifact under the workspace tab. 任务 is
+ * not a tab: the run's progress is already the conversation, and a second list
+ * of the same tool calls said nothing new.
  */
 export function WorkspacePanel({
   actions,
@@ -319,7 +287,6 @@ export function WorkspacePanel({
     && detectStructureFormat({ content: active.content ?? "", name: activeName }) !== undefined;
 
   const groups: { id: PanelGroup; label: string }[] = [
-    { id: "team", label: TEXT.workspace.groups.team },
     { id: "artifacts", label: TEXT.workspace.groups.artifacts },
     { id: "files", label: TEXT.workspace.groups.files },
   ];
@@ -468,9 +435,7 @@ export function WorkspacePanel({
       </header>
 
       <div className="panel-body">
-        {activeGroup === "team" ? (
-          <TeamView />
-        ) : activeGroup === "artifacts" ? (
+        {activeGroup === "artifacts" ? (
           <>
             <div className="panel-list">
               <div className="panel-list-title">{TEXT.workspace.allArtifacts}</div>

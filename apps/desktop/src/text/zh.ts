@@ -40,18 +40,16 @@ export const ZH = {
 
   /** The narrow icon rail down the left edge. */
   rail: {
-    task: "任务",
+    task: "会话",
     settings: "设置",
   },
   sidebar: {
-    title: "科研任务",
+    title: "科研会话",
     githubStar: "在 GitHub 上加星",
-    newTask: "新建任务",
-    searchPlaceholder: "搜索",
+    newTask: "新建会话",
     project: "项目",
-    tasks: "任务",
-    noTasks: "暂无任务",
-    noMatch: "没有匹配的任务",
+    tasks: "会话",
+    noTasks: "暂无会话",
     showMore: "显示更多",
     collapseSidebar: "收起侧栏",
     expandSidebar: "显示侧栏",
@@ -779,7 +777,6 @@ export const ZH = {
     artifacts: "产物",
     collapsible: "工作区",
     groups: {
-      team: "团队",
       artifacts: "产物",
       files: "工作区",
     },
@@ -808,10 +805,6 @@ export const ZH = {
     download: "下载",
     searchArtifacts: "搜索产物",
     searchFiles: "搜索文件",
-    teamActive: (count: number) => `当前活跃 ${count}`,
-    teamEmpty: "还没有团队",
-    teamEmptyHint: "这个版本没有接入多智能体团队，任务由当前模型单独完成。",
-    teamTitle: "当前活跃",
   },
 
   /** The 三维 structure view that opens for structure files. */
