@@ -187,13 +187,6 @@ button.settings-card-main:hover strong { color: var(--primary-strong); }
 .drop-item-meta { color: var(--text-faint); }
 .drop-item-hint { justify-content: center; color: var(--text-faint); }
 
-.wizard-card-title {
-  margin: 0 0 14px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-heading);
-}
-
 /* Confirmation under a control that writes only to this machine, so it never
    earns a toast. */
 .row-note {

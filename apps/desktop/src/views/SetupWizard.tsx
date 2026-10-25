@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useState } from "react";
-
 import type { ApiClient } from "../api/client.js";
 import type { ModelProvider, ModelProviderPreset } from "../api/types.js";
-import { DATA_DIR_STORAGE_KEY } from "../state/storage.js";
 import { TEXT } from "../text.js";
 import { ModelForm, type ModelFormResult } from "./ModelForm.js";
 
@@ -30,21 +27,19 @@ interface Props {
   providers: ModelProvider[];
 }
 
-type Step = "data" | "provider";
-
-const STEPS: Step[] = ["data", "provider"];
-
 /**
- * The first run, when there is no model and therefore nothing the app can do.
+ * The model step, for a launch that found no model.
  *
- * Two steps, in this order on purpose: the model is the gate, and the data
- * directory is a note-to-self that must not stand between a user and the app.
- * A user who cannot get a key working can still finish the second step and see
- * where their data would go.
+ * Workspace selection and backend startup already happened before this bundle
+ * is loaded: the Electron shell chooses the data directory and waits for the
+ * local service. What is left is the one thing the SPA itself owns — a
+ * provider, a model, and the default selection — so this page is a single step
+ * in the same split-screen language as the shell wizard, not a second copy of
+ * the workspace and boot screens.
  *
- * The data directory is recorded, not applied: no route in this API reports or
- * changes the live data directory, so pretending otherwise would be a control
- * that silently does nothing. The note says so in plain words.
+ * The form is the shared `ModelForm`; `revealSubmitOnSuccess` makes its test
+ * the primary action and keeps the final button hidden until that test passes,
+ * which is the same 测试并继续 → 开始使用 order the shell uses.
  */
 export function SetupWizard({
   client,
@@ -53,149 +48,60 @@ export function SetupWizard({
   presets,
   providers,
 }: Props) {
-  const [step, setStep] = useState<Step>("data");
-  const [dataDir, setDataDir] = useState(() => localStorage.getItem(DATA_DIR_STORAGE_KEY) ?? "");
-  const [saved, setSaved] = useState(false);
-
-  const rememberDataDir = () => {
-    if (dataDir.trim() === "") localStorage.removeItem(DATA_DIR_STORAGE_KEY);
-    else localStorage.setItem(DATA_DIR_STORAGE_KEY, dataDir.trim());
-    setSaved(true);
-  };
-
-  const index = STEPS.indexOf(step);
-  const stepFlag = (candidate: Step) =>
-    candidate === "provider" ? TEXT.wizard.required : TEXT.wizard.optional;
-
   return (
     <div className="wizard-page">
-      <aside className="wizard-rail">
-        <div className="wizard-brand">
-          <span className="boot-mark" aria-hidden="true">
-            ⬡
-          </span>
-          <strong>{TEXT.appName}</strong>
-        </div>
-        <nav className="wizard-steps">
-          {STEPS.map((candidate) => (
-            <button
-              className={`wizard-step${
-                candidate === step ? " is-current" : STEPS.indexOf(candidate) < index ? " is-done" : ""
-              }`}
-              key={candidate}
-              onClick={() => setStep(candidate)}
-              type="button"
+      <main className="wizard-pane">
+        <header className="wizard-brand">
+          <span className="wizard-brand-mark" aria-hidden="true">
+            <svg
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.7"
+              viewBox="0 0 24 24"
             >
-              <span className="wizard-step-dot">
-                {STEPS.indexOf(candidate) < index ? "✓" : STEPS.indexOf(candidate) + 1}
-              </span>
-              <span className="wizard-step-label">{TEXT.wizard.steps[candidate]}</span>
-              <span
-                className={`wizard-step-flag${
-                  candidate === "provider" ? " is-required" : " is-optional"
-                }`}
-              >
-                {stepFlag(candidate)}
-              </span>
-            </button>
-          ))}
-        </nav>
-        <p className="wizard-rail-foot">{TEXT.wizard.railFoot}</p>
-      </aside>
-
-      <main className="wizard-main">
-        <header className="wizard-head">
-          <h1 className="wizard-title">{TEXT.wizard.title}</h1>
-          <p className="wizard-sub">{TEXT.wizard.sub[step]}</p>
+              <path d="M9 3h6" />
+              <path d="M10 3v5.2L5.2 17a2.4 2.4 0 0 0 2.1 3.6h9.4a2.4 2.4 0 0 0 2.1-3.6L14 8.2V3" />
+              <path d="M7.5 15h9" />
+            </svg>
+          </span>
+          <span className="wizard-brand-name">{TEXT.appName}</span>
         </header>
 
-        <div className="wizard-body">
-          <div className="wizard-body-inner">
-            {step === "data" ? (
-              <section className="wizard-card">
-                <div className="wizard-card-head">
-                  <strong>{TEXT.wizard.data.heading}</strong>
-                </div>
-                <div className="wizard-card-body">
-                  <label className="field">
-                    <span className="field-label">{TEXT.wizard.data.label}</span>
-                    <input
-                      className="field-input"
-                      onChange={(event) => {
-                        setDataDir(event.target.value);
-                        setSaved(false);
-                      }}
-                      placeholder={TEXT.wizard.data.placeholder}
-                      spellCheck={false}
-                      value={dataDir}
-                    />
-                    <span className="field-help">{TEXT.wizard.data.body}</span>
-                  </label>
-                  <div className="test-result">{TEXT.wizard.data.ignoredNote}</div>
-                </div>
-              </section>
-            ) : (
-              <section className="wizard-card">
-                <div className="wizard-card-head">
-                  <strong>{TEXT.wizard.provider.heading}</strong>
-                </div>
-                <div className="wizard-card-body">
-                  <ModelForm
-                    client={client}
-                    onConfigured={onConfigured}
-                    onProvidersChanged={onProvidersChanged}
-                    presets={presets}
-                    providers={providers}
-                    submitLabel={TEXT.wizard.testAndContinue}
-                  />
-                </div>
-              </section>
-            )}
+        <div className="wizard-scroll">
+          <div className="wizard-content">
+            <div className="wizard-progress" aria-hidden="true">
+              <span />
+            </div>
+
+            <section>
+              <h1>{TEXT.wizard.title}</h1>
+              <p className="wizard-sub">{TEXT.wizard.sub}</p>
+
+              <div className="wizard-form">
+                <ModelForm
+                  client={client}
+                  onConfigured={onConfigured}
+                  onProvidersChanged={onProvidersChanged}
+                  presets={presets}
+                  providers={providers}
+                  revealSubmitOnSuccess
+                  submitLabel={TEXT.wizard.finish}
+                  testLabel={TEXT.wizard.testAndContinue}
+                />
+              </div>
+            </section>
           </div>
         </div>
-
-        {step === "data" ? (
-          <footer className="wizard-foot">
-            <span className="wizard-foot-status">
-              {saved
-                ? dataDir.trim() === ""
-                  ? TEXT.wizard.status.dataDefault
-                  : TEXT.wizard.status.dataChosen
-                : ""}
-            </span>
-            <button
-              className="secondary-button"
-              onClick={() => {
-                // "Skip" is not a different path from naming a directory: both
-                // end up here, and an empty value is what removes the record.
-                setDataDir("");
-                localStorage.removeItem(DATA_DIR_STORAGE_KEY);
-                setStep("provider");
-              }}
-              type="button"
-            >
-              {TEXT.wizard.skipDefault}
-            </button>
-            <button
-              className="primary-button"
-              onClick={() => {
-                rememberDataDir();
-                setStep("provider");
-              }}
-              type="button"
-            >
-              {TEXT.wizard.next}
-            </button>
-          </footer>
-        ) : (
-          <footer className="wizard-foot">
-            <span className="wizard-foot-status">{TEXT.wizard.status.providerFailed}</span>
-            <button className="secondary-button" onClick={() => setStep("data")} type="button">
-              {TEXT.wizard.back}
-            </button>
-          </footer>
-        )}
       </main>
+
+      <aside className="wizard-art" aria-hidden="true">
+        <div className="wizard-art-copy">
+          <h2>{TEXT.wizard.art.title}</h2>
+          <p>{TEXT.wizard.art.sub}</p>
+        </div>
+      </aside>
     </div>
   );
 }

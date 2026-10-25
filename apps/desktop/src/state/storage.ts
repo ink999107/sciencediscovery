@@ -40,13 +40,6 @@ export const TOKEN_STORAGE_KEY = `${CURRENT_PREFIX}-token`;
 /** Everything else this app stores is namespaced separately, so a future shape
  *  change cannot collide with a key `apps/web` already owns. */
 
-/**
- * The wizard's data-location answer. Recorded for display only: the directory
- * the running service actually uses comes from its launch arguments, and no
- * route reports it back. Storing the choice is honest — the wizard says as
- * much — while pretending the app could relocate it would not be.
- */
-export const DATA_DIR_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:data-dir`;
 export const RIGHT_PANEL_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:right-panel`;
 /** The interface language picked in 设置 › 通用. Namespaced rather than shared
  *  with `apps/web`: the two front ends may be read on the same origin, and a

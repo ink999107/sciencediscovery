@@ -45,13 +45,20 @@ interface Props {
    *  the default. */
   onConfigured: (result: ModelFormResult) => void | Promise<void>;
   /** Closes the form without writing the default selection. The wizard has no
-   *  cancel of its own — 返回上一步 is its way back — so it omits this. */
+   *  cancel of its own — the model step has to be completed — so it omits
+   *  this. */
   onCancel?: () => void;
   onProvidersChanged: () => void;
   presets: ModelProviderPreset[];
   providers: ModelProvider[];
   /** The save button's own wording: the wizard continues, settings saves. */
   submitLabel: string;
+  /** The wizard's 测试并继续: the final button stays hidden until a test passes,
+   *  and any edit that could change connectivity hides it again. Settings keeps
+   *  both buttons visible, so the default is false. */
+  revealSubmitOnSuccess?: boolean;
+  /** Wording for the test button while it is the wizard's primary action. */
+  testLabel?: string;
 }
 
 type Verdict = { kind: "fail" | "ok" | "testing"; message: string };
@@ -110,7 +117,9 @@ export function ModelForm({
   onProvidersChanged,
   presets,
   providers,
+  revealSubmitOnSuccess = false,
   submitLabel,
+  testLabel,
 }: Props) {
   const [presetId, setPresetId] = useState<string>(presets[0]?.id ?? CUSTOM);
   const preset = presets.find((candidate) => candidate.id === presetId);
@@ -124,22 +133,30 @@ export function ModelForm({
   const [listing, setListing] = useState<ProviderModelEntry[]>([]);
   const [busy, setBusy] = useState<"" | "fetch" | "submit" | "test">("");
   const [verdict, setVerdict] = useState<Verdict>();
+  const [testPassed, setTestPassed] = useState(false);
 
   const tokenOptional = preset?.tokenOptional === true;
   const keyMissing = !tokenOptional && apiKey.trim() === "";
   const ready = modelName.trim() !== "" && baseUrl.trim() !== "" && !keyMissing;
+
+  /** Any edit that changes what would be sent invalidates the previous test. */
+  const invalidate = () => {
+    setVerdict(undefined);
+    setTestPassed(false);
+  };
 
   const choosePreset = (id: string) => {
     setPresetId(id);
     const next = presets.find((candidate) => candidate.id === id);
     setBaseUrl(next?.baseUrl ?? "");
     setListing([]);
-    setVerdict(undefined);
+    invalidate();
   };
 
   const chooseProtocol = (value: string) => {
     const next = CUSTOM_PROTOCOLS.find((candidate) => candidate === value);
     if (next !== undefined) setProtocol(next);
+    invalidate();
   };
 
   /** The body both the preview and the save send, so the listing is fetched
@@ -170,7 +187,7 @@ export function ModelForm({
   const fetchListing = async () => {
     if (baseUrl.trim() === "") return;
     setBusy("fetch");
-    setVerdict(undefined);
+    invalidate();
     try {
       const preview = await previewProviderModels(client, requestBody());
       setListing(preview.models);
@@ -201,6 +218,7 @@ export function ModelForm({
       kind: "fail",
       message: keyMissing ? TEXT.wizard.missingKey : TEXT.wizard.missingModel,
     });
+    setTestPassed(false);
     return true;
   };
 
@@ -244,11 +262,13 @@ export function ModelForm({
           ? { kind: "ok", message: TEXT.wizard.testOk(test.latencyMs) }
           : { kind: "fail", message: failureMessage(test) },
       );
+      setTestPassed(test.ok);
     } catch (reason) {
       setVerdict({
         kind: "fail",
         message: reason instanceof Error ? reason.message : TEXT.errors.generic,
       });
+      setTestPassed(false);
     } finally {
       setBusy("");
     }
@@ -266,6 +286,7 @@ export function ModelForm({
         // Saved but unusable. It stays in the list: the fix is correcting this
         // form (which will now find and update that record), not starting over.
         setVerdict({ kind: "fail", message: failureMessage(test) });
+        setTestPassed(false);
         return;
       }
 
@@ -283,10 +304,23 @@ export function ModelForm({
         kind: "fail",
         message: reason instanceof Error ? reason.message : TEXT.errors.generic,
       });
+      setTestPassed(false);
     } finally {
       setBusy("");
     }
   };
+
+  const testButtonClass =
+    revealSubmitOnSuccess && !testPassed ? "primary-button" : "secondary-button";
+  const testButtonLabel =
+    busy === "test"
+      ? TEXT.wizard.testing
+      : revealSubmitOnSuccess
+        ? testPassed
+          ? TEXT.wizard.retest
+          : testLabel ?? TEXT.settings.model.test
+        : TEXT.settings.model.test;
+  const showSubmit = !revealSubmitOnSuccess || testPassed;
 
   return (
     <>
@@ -333,7 +367,7 @@ export function ModelForm({
           onChange={(event) => {
             setBaseUrl(event.target.value);
             setListing([]);
-            setVerdict(undefined);
+            invalidate();
           }}
           spellCheck={false}
           value={baseUrl}
@@ -352,9 +386,13 @@ export function ModelForm({
             disabled={busy !== ""}
             onChange={(event) => {
               setApiKey(event.target.value);
-              setVerdict(undefined);
+              invalidate();
             }}
-            placeholder={tokenOptional ? TEXT.wizard.provider.tokenOptional : ""}
+            placeholder={
+              tokenOptional
+                ? TEXT.wizard.provider.tokenOptional
+                : TEXT.wizard.provider.apiKeyPlaceholder
+            }
             spellCheck={false}
             type={revealed ? "text" : "password"}
             value={apiKey}
@@ -375,7 +413,10 @@ export function ModelForm({
           <select
             className="field-select"
             disabled={busy !== ""}
-            onChange={(event) => setModelName(event.target.value)}
+            onChange={(event) => {
+              setModelName(event.target.value);
+              invalidate();
+            }}
             value={listing.some((entry) => entry.id === modelName) ? modelName : ""}
           >
             <option value="">{TEXT.wizard.provider.selectPlaceholder}</option>
@@ -390,7 +431,10 @@ export function ModelForm({
           <input
             className="field-input"
             disabled={busy !== ""}
-            onChange={(event) => setModelName(event.target.value)}
+            onChange={(event) => {
+              setModelName(event.target.value);
+              invalidate();
+            }}
             placeholder={TEXT.wizard.provider.modelPlaceholder}
             spellCheck={false}
             value={modelName}
@@ -418,21 +462,23 @@ export function ModelForm({
 
       <div className="form-actions">
         <button
-          className="secondary-button"
+          className={testButtonClass}
           disabled={busy !== ""}
           onClick={() => void runTest()}
           type="button"
         >
-          {busy === "test" ? TEXT.wizard.testing : TEXT.settings.model.test}
+          {testButtonLabel}
         </button>
-        <button
-          className="primary-button"
-          disabled={busy !== ""}
-          onClick={() => void submit()}
-          type="button"
-        >
-          {busy === "submit" ? TEXT.wizard.testing : submitLabel}
-        </button>
+        {showSubmit ? (
+          <button
+            className="primary-button"
+            disabled={busy !== ""}
+            onClick={() => void submit()}
+            type="button"
+          >
+            {busy === "submit" ? TEXT.wizard.testing : submitLabel}
+          </button>
+        ) : null}
         {onCancel ? (
           <button
             className="secondary-button"
