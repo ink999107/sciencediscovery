@@ -87,20 +87,20 @@ test("an upload in flight replaces the plus with a spinner rather than allowing 
   assert.match(markup, /class="spinner"/);
 });
 
-test("会话设置 carries 权限模式 and 专家, and nothing under 专家", () => {
+test("会话设置 carries 权限模式 and 专家, each with its current value", () => {
   const markup = settingsMenu("ask_for_dangerous");
   assert.match(markup, />权限模式</);
-  assert.match(markup, />请求批准</);
+  assert.match(markup, />询问</);
   assert.match(markup, />专家</);
   assert.match(markup, />无</);
-  // The line the user removed; the row names the section and stops there.
-  assert.doesNotMatch(markup, /当前版本没有独立的专家目录/);
-  assert.doesNotMatch(markup, /expertsEmpty/);
+  // Both rows open a panel; neither is a dead end.
+  assert.match(markup, /aria-haspopup="true"/);
+  assert.match(markup, /为此对话绑定一位个人专家。/);
 });
 
 test("the permission row reads the mode the session is in", () => {
   assert.match(settingsMenu("always_allow"), />完全访问</);
-  assert.match(settingsMenu("ask_for_dangerous"), />请求批准</);
+  assert.match(settingsMenu("ask_for_dangerous"), />询问</);
 });
 
 test("permission cannot be switched mid-run", () => {

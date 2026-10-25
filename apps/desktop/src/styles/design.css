@@ -1301,18 +1301,32 @@ body.is-resizing {
   width: 300px;
 }
 
+/* 会话设置 is two cards laid side by side: the session's rows, and the choices
+   of whichever row is open. They are siblings rather than a nested flyout so
+   the choices are never clipped by the row column. The outer element is only
+   the anchor, which is why it drops the plain dropdown's chrome. */
 .composer-dropdown.is-settings {
   left: 12px;
-  width: 288px;
+  width: max-content;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-/* 权限模式's options open beside the row rather than replacing the menu, the
-   way the reference stacks the two panels. */
-.dropdown-submenu {
-  position: absolute;
-  left: calc(100% + 8px);
-  bottom: 0;
-  width: 300px;
+.session-menu {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.session-menu-panel,
+.session-menu-flyout {
+  display: flex;
+  flex-direction: column;
   padding: 6px;
   border: 1px solid #ececec;
   border-radius: 12px;
@@ -1320,25 +1334,178 @@ body.is-resizing {
   box-shadow: 0 14px 40px rgba(25, 25, 25, 0.14);
 }
 
-.dropdown-row.settings-row {
-  min-height: 38px;
+.session-menu-panel {
+  width: 320px;
 }
 
-.dropdown-row.settings-row.is-open {
+.session-menu-flyout {
+  width: 300px;
+}
+
+.session-menu-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: #191919;
+  font-size: 14px;
+  text-align: left;
+}
+
+.session-menu-row:hover:not(:disabled),
+.session-menu-row.is-open {
   background: #f5f5f5;
 }
 
-.dropdown-row .row-value {
-  margin-left: auto;
-  overflow: hidden;
-  color: #8c8c8c;
-  font-size: 12.5px;
-  text-overflow: ellipsis;
+.session-menu-row:disabled {
+  cursor: default;
+}
+
+.session-menu-row:disabled .session-menu-icon,
+.session-menu-row:disabled .session-menu-label {
+  color: #b3b3b3;
+}
+
+.session-menu-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  color: #4d4d4d;
+}
+
+.session-menu-label {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The row's current value, as the reference draws it: a quiet pill that also
+   carries the mark saying a panel opens from here. */
+.session-menu-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  flex: 0 0 auto;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #f2f2f2;
+  color: #4d4d4d;
+  font-size: 12px;
+  line-height: 1;
   white-space: nowrap;
 }
 
-.dropdown-row.settings-row .chev-right {
-  margin-left: 0;
+.session-menu-value-icon {
+  display: inline-flex;
+  color: #8c8c8c;
+}
+
+.session-menu-value-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.session-menu-chev {
+  color: #a6a6a6;
+}
+
+.session-menu-divider {
+  height: 1px;
+  margin: 3px -6px;
+  background: #f0f0f0;
+}
+
+.session-flyout-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: #191919;
+  font-size: 14px;
+  text-align: left;
+}
+
+.session-flyout-row:hover {
+  background: #f5f5f5;
+}
+
+.session-flyout-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  color: #4d4d4d;
+}
+
+.session-flyout-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-flyout-check {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: #0f766e;
+}
+
+/* 完全访问 is the one option that widens the session's reach, so it is the one
+   option that is coloured rather than told apart by position alone. */
+.session-flyout-row.is-danger,
+.session-flyout-row.is-danger .session-flyout-icon {
+  color: #c2410c;
+}
+
+/* 无's mark: a dash in a quiet square, the shape the reference uses for
+   "nothing chosen" rather than an empty tick slot. */
+.session-flyout-none {
+  display: grid;
+  place-items: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #f2f2f2;
+  color: #8c8c8c;
+}
+
+.session-flyout-row.is-action {
+  color: #8c8c8c;
+}
+
+/* The row's explanation, shown over the row above rather than pushing the
+   panel wider. */
+.session-menu-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 40px;
+  z-index: 2;
+  padding: 7px 11px;
+  border-radius: 8px;
+  background: #191919;
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.session-menu-row:hover .session-menu-tip,
+.session-menu-row:focus-visible .session-menu-tip {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .dropdown-section {
@@ -1396,12 +1563,6 @@ body.is-resizing {
   color: #4d4d4d;
 }
 
-.dropdown-row .chev-right {
-  margin-left: auto;
-  color: #a6a6a6;
-  font-size: 12px;
-}
-
 .dropdown-divider {
   height: 1px;
   margin: 4px 6px;
@@ -1419,30 +1580,6 @@ body.is-resizing {
   color: #1476ff;
   font-size: 10px;
   font-weight: 600;
-}
-
-.permission-option {
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.permission-option .row-label strong {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.permission-option .row-label small {
-  display: block;
-  margin-top: 2px;
-  color: #a6a6a6;
-  font-size: 11.5px;
-  line-height: 1.5;
-}
-
-.permission-option .row-check {
-  margin-left: auto;
-  color: #1476ff;
 }
 
 /* ── workspace panel ────────────────────────────────────────────────────── */

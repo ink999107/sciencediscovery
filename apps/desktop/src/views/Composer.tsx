@@ -59,9 +59,65 @@ function SlidersGlyph() {
   );
 }
 
+type SettingsPanel = "experts" | "permission";
+
+/** The shield that marks permission, and its warning form for 完全访问. */
+function ShieldGlyph({ alert = false }: { alert?: boolean }) {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="18">
+      <path d="M12 3.4 5.2 6.4v5.1c0 4.2 2.8 7.1 6.8 8.7 4-1.6 6.8-4.5 6.8-8.7V6.4z" />
+      {alert ? (
+        <>
+          <path d="M12 8.7v3.4" />
+          <path d="M12 15.6h.01" />
+        </>
+      ) : (
+        <path d="M12 9.2v3.1" />
+      )}
+    </svg>
+  );
+}
+
+/** The person that marks 专家. */
+function PersonGlyph() {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="18">
+      <circle cx="12" cy="8" r="3.3" />
+      <path d="M5.4 19.4c.7-3.2 3.4-5.2 6.6-5.2s5.9 2 6.6 5.2" />
+    </svg>
+  );
+}
+
+/** The tick against the chosen option in a flyout. */
+function CheckGlyph() {
+  return (
+    <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="15">
+      <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+    </svg>
+  );
+}
+
+function ChevronRightGlyph() {
+  return (
+    <svg aria-hidden="true" className="session-menu-chev" fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12">
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
+/** The dash in a quiet square: 专家's "none" option. */
+function NoneGlyph() {
+  return (
+    <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24" width="14">
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
 /**
- * 会话设置, behind the sliders beside the plus: the permission mode, with its
- * options in the panel to the right, and the way into 专家.
+ * 会话设置, behind the sliders beside the plus: a column of the session's own
+ * rows and, beside the open one, its choices. The two columns are separate
+ * cards so a flyout is never clipped by the row column's own scroll box.
  *
  * Exported because it is only mounted while open, and a static render of the
  * composer never gets there.
@@ -79,89 +135,126 @@ export function SessionSettingsMenu({
   onOpenSpecialists: () => void;
   running: boolean;
 }) {
-  const [permissionOpen, setPermissionOpen] = useState(false);
+  const [panel, setPanel] = useState<SettingsPanel>();
   const fullAccess = approvalMode === "always_allow";
+  const toggle = (next: SettingsPanel) => setPanel((current) => (current === next ? undefined : next));
 
   return (
     <div className="composer-dropdown is-settings" onPointerDown={(event) => event.stopPropagation()}>
-      <div className="dropdown-section">
-        <button
-          aria-expanded={permissionOpen}
-          className={`dropdown-row settings-row${permissionOpen ? " is-open" : ""}`}
-          disabled={running}
-          onClick={() => setPermissionOpen((current) => !current)}
-          title={running ? TEXT.composer.permissionLocked : undefined}
-          type="button"
-        >
-          <span className="row-icon">
-            <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" viewBox="0 0 24 24" width="16">
-              <path d="M12 3.5 5 6.5v5.2c0 4.3 2.9 7.2 7 8.8 4.1-1.6 7-4.5 7-8.8V6.5z" />
-              <path d="M9.4 12l1.9 1.9 3.5-3.7" />
-            </svg>
-          </span>
-          <span className="row-label">{TEXT.composer.permissionMode}</span>
-          <span className="row-value">
-            {fullAccess ? TEXT.composer.permissionFull : TEXT.composer.permission}
-          </span>
-          <span className="chev-right">›</span>
-        </button>
-        <div className="dropdown-divider" />
-        <button
-          className="dropdown-row settings-row"
-          onClick={() => {
-            onClose();
-            onOpenSpecialists();
-          }}
-          type="button"
-        >
-          <span className="row-icon">
-            <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" viewBox="0 0 24 24" width="16">
-              <path d="M12 3.5l1.9 4.8 4.9 1.9-4.9 1.9L12 17l-1.9-4.9-4.9-1.9 4.9-1.9z" />
-              <path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />
-            </svg>
-          </span>
-          <span className="row-label">{TEXT.composer.experts}</span>
-          <span className="row-value">{TEXT.composer.expertsNone}</span>
-          <span className="chev-right">›</span>
-        </button>
-      </div>
+      <div className="session-menu">
+        <div className="session-menu-panel">
+          <button
+            aria-expanded={panel === "permission"}
+            aria-haspopup="true"
+            className={`session-menu-row${panel === "permission" ? " is-open" : ""}`}
+            disabled={running}
+            onClick={() => toggle("permission")}
+            title={running ? TEXT.composer.permissionLocked : undefined}
+            type="button"
+          >
+            <span className="session-menu-icon">
+              <ShieldGlyph />
+            </span>
+            <span className="session-menu-label">{TEXT.composer.permissionMode}</span>
+            <span className="session-menu-value">
+              <span className="session-menu-value-icon">
+                <ShieldGlyph />
+              </span>
+              {fullAccess ? TEXT.composer.permissionFull : TEXT.composer.permissionAskShort}
+              <ChevronRightGlyph />
+            </span>
+          </button>
+          <div className="session-menu-divider" />
+          <button
+            aria-expanded={panel === "experts"}
+            aria-haspopup="true"
+            aria-label={TEXT.composer.experts}
+            className={`session-menu-row${panel === "experts" ? " is-open" : ""}`}
+            onClick={() => toggle("experts")}
+            type="button"
+          >
+            <span className="session-menu-icon">
+              <PersonGlyph />
+            </span>
+            <span className="session-menu-label">{TEXT.composer.experts}</span>
+            <span className="session-menu-value">
+              {TEXT.composer.expertsNone}
+              <ChevronRightGlyph />
+            </span>
+            <span className="session-menu-tip" role="tooltip">
+              {TEXT.composer.expertsHint}
+            </span>
+          </button>
+        </div>
 
-      {permissionOpen ? (
-        <div className="dropdown-submenu" onPointerDown={(event) => event.stopPropagation()}>
-          <div className="dropdown-section">
+        {panel === "permission" ? (
+          <div className="session-menu-flyout">
             <button
-              className={`dropdown-row permission-option${fullAccess ? "" : " is-active"}`}
+              className={`session-flyout-row${fullAccess ? "" : " is-selected"}`}
               onClick={() => {
                 onApprovalMode("ask_for_dangerous");
                 onClose();
               }}
+              title={TEXT.composer.permissionAskDesc}
               type="button"
             >
-              <span className="row-icon">◷</span>
-              <span className="row-label">
-                <strong>{TEXT.composer.permission}</strong>
-                <small>{TEXT.composer.permissionAskDesc}</small>
+              <span className="session-flyout-icon">
+                <ShieldGlyph />
               </span>
-              {fullAccess ? null : <span className="row-check">✓</span>}
+              <span className="session-flyout-label">{TEXT.composer.permission}</span>
+              {fullAccess ? null : (
+                <span className="session-flyout-check">
+                  <CheckGlyph />
+                </span>
+              )}
             </button>
             <button
-              className={`dropdown-row permission-option${fullAccess ? " is-active" : ""}`}
+              className={`session-flyout-row is-danger${fullAccess ? " is-selected" : ""}`}
               onClick={() => {
                 onApprovalMode("always_allow");
                 onClose();
               }}
+              title={TEXT.composer.permissionFullDesc}
               type="button"
             >
-              <span className="row-icon">◉</span>
-              <span className="row-label">
-                <strong>{TEXT.composer.permissionFull}</strong>
-                <small>{TEXT.composer.permissionFullDesc}</small>
+              <span className="session-flyout-icon">
+                <ShieldGlyph alert />
               </span>
-              {fullAccess ? <span className="row-check">✓</span> : null}
+              <span className="session-flyout-label">{TEXT.composer.permissionFull}</span>
+              {fullAccess ? (
+                <span className="session-flyout-check">
+                  <CheckGlyph />
+                </span>
+              ) : null}
             </button>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+
+        {panel === "experts" ? (
+          <div className="session-menu-flyout">
+            <button className="session-flyout-row is-selected" onClick={onClose} type="button">
+              <span className="session-flyout-none">
+                <NoneGlyph />
+              </span>
+              <span className="session-flyout-label">{TEXT.composer.expertsNone}</span>
+              <span className="session-flyout-check">
+                <CheckGlyph />
+              </span>
+            </button>
+            <div className="session-menu-divider" />
+            <button
+              className="session-flyout-row is-action"
+              onClick={() => {
+                onClose();
+                onOpenSpecialists();
+              }}
+              type="button"
+            >
+              <span className="session-flyout-label">{TEXT.composer.expertsCreate}</span>
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
