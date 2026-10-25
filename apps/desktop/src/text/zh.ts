@@ -45,6 +45,7 @@ export const ZH = {
   },
   sidebar: {
     title: "科研任务",
+    githubStar: "在 GitHub 上加星",
     newTask: "新建任务",
     searchPlaceholder: "搜索",
     project: "项目",

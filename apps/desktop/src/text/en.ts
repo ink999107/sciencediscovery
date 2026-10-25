@@ -50,6 +50,7 @@ export const EN: Text = {
   },
   sidebar: {
     title: "Research tasks",
+    githubStar: "Star this project on GitHub",
     newTask: "New task",
     searchPlaceholder: "Search",
     project: "Projects",
