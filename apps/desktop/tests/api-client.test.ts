@@ -17,6 +17,7 @@ const { test } = createTest(import.meta.url, { tags: ["category:ut", "os:linux",
 import assert from "node:assert/strict";
 
 import { ApiClient, ApiRequestError, isAbortError, isAuthFailure } from "../src/api/client.js";
+import { testModel } from "../src/api/models.js";
 import { SseFrameDecoder, readToolOutput } from "../src/api/stream.js";
 import type { RunStreamEvent, SessionRunEvent } from "../src/api/types.js";
 
@@ -254,4 +255,22 @@ test("progress without a result is still shown, and an empty substream is undefi
   ]);
   assert.equal(progressOnly, "working\n");
   assert.equal(await readOutput([]), undefined);
+});
+
+test("a model check states the consent the service requires", async () => {
+  // Without this body the service rejects the request before it ever reaches
+  // the provider, and the setup wizard reported that rejection as the model's
+  // own failure.
+  const client = new ApiClient("secret-token");
+  const calls = await withFetch(
+    () => Promise.resolve(jsonResponse({ category: "ok", latencyMs: 1, message: "", ok: true, testedAt: "" })),
+    async () => {
+      await testModel(client, "model/one");
+      await testModel(client, "model/one", true);
+    },
+  );
+  assert.ok(calls[0]!.url.endsWith("/api/models/model%2Fone/test"), calls[0]!.url);
+  assert.equal(calls[0]!.init.method, "POST");
+  assert.deepEqual(JSON.parse(String(calls[0]!.init.body)), { compatibility: false, consent: true });
+  assert.deepEqual(JSON.parse(String(calls[1]!.init.body)), { compatibility: true, consent: true });
 });

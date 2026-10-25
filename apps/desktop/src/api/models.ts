@@ -102,10 +102,19 @@ export function addProviderModel(
   });
 }
 
-export function testModel(client: ApiClient, modelId: string): Promise<ModelConnectivityTestResult> {
+/**
+ * The server calls the check itself, so it asks the caller to state that the
+ * synthetic requests may cost tokens. Every call site here is a button the
+ * user pressed, which is the consent it is asking for.
+ */
+export function testModel(
+  client: ApiClient,
+  modelId: string,
+  compatibility = false,
+): Promise<ModelConnectivityTestResult> {
   return client.request<ModelConnectivityTestResult>(
     `/api/models/${encodeURIComponent(modelId)}/test`,
-    { method: "POST" },
+    { body: JSON.stringify({ compatibility, consent: true }), method: "POST" },
   );
 }
 
