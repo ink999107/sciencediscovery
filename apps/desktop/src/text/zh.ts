@@ -89,7 +89,7 @@ export const ZH = {
     experts: "专家",
     expertsNone: "无",
     expertsHint: "为此对话绑定一位个人专家。",
-    expertsCreate: "新建......",
+    expertsCreate: "新建…",
     permission: "请求批准",
     permissionMode: "权限模式",
     permissionAskShort: "询问",

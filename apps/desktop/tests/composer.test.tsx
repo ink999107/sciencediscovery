@@ -19,7 +19,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { Composer, SessionSettingsMenu } from "../src/views/Composer.js";
+import { Composer, PermissionFlyout, SessionSettingsMenu } from "../src/views/Composer.js";
 
 /** The dropdown only exists while open, and a static render never runs effects,
  *  so these cover the closed state: the triggers themselves. */
@@ -96,6 +96,35 @@ test("会话设置 carries 权限模式 and 专家, each with its current value"
   // Both rows open a panel; neither is a dead end.
   assert.match(markup, /aria-haspopup="true"/);
   assert.match(markup, /为此对话绑定一位个人专家。/);
+});
+
+test("a permission option says on screen what it allows", () => {
+  const markup = renderToStaticMarkup(
+    <PermissionFlyout fullAccess={false} onApprovalMode={() => {}} onClose={() => {}} />,
+  );
+  // Both consequences are text in the row. They were `title`s, which only a
+  // mouse reaches, and this is the one switch that widens the session's reach.
+  assert.match(markup, /class="session-flyout-desc" id="session-permission-ask-desc">编辑外部文件和使用互联网时始终询问/u);
+  assert.match(markup, /class="session-flyout-desc" id="session-permission-full-desc">可不受限制地访问互联网和您电脑上的任何文件/u);
+  assert.doesNotMatch(markup, /title=/);
+  // The name is the option; the sentence is its description, not part of it.
+  assert.match(markup, /aria-label="请求批准"/);
+  assert.match(markup, /aria-describedby="session-permission-ask-desc"/);
+  assert.match(markup, /aria-describedby="session-permission-full-desc"/);
+  // The mode in force is the one marked.
+  assert.equal(markup.split("is-selected").length - 1, 1);
+});
+
+test("the 专家 row is named by its label and value, and its hint is attached", () => {
+  const markup = settingsMenu();
+  // No aria-label: the name comes from the row's own text, so 无 is read out
+  // with 专家 instead of being hidden behind a bare label.
+  assert.doesNotMatch(markup, /aria-label="专家"/);
+  assert.match(markup, /aria-describedby="session-experts-hint"/);
+  assert.match(markup, /class="sr-only" id="session-experts-hint">为此对话绑定一位个人专家。/u);
+  // The drawn tooltip is decoration; the description above is what is read.
+  assert.match(markup, /aria-hidden="true" class="session-menu-tip"/);
+  assert.doesNotMatch(markup, /role="tooltip"/);
 });
 
 test("the permission row reads the mode the session is in", () => {

@@ -115,6 +115,81 @@ function NoneGlyph() {
 }
 
 /**
+ * 权限模式's choices, beside the row that opened them.
+ *
+ * Each option says under its name what it allows. That sentence used to be a
+ * `title`, which only a mouse reaches — for the one switch that widens what
+ * the session can touch, the consequence has to be text on screen and a
+ * description a screen reader reads.
+ *
+ * Exported because it is only mounted while its row is open.
+ */
+export function PermissionFlyout({
+  fullAccess,
+  onApprovalMode,
+  onClose,
+}: {
+  fullAccess: boolean;
+  onApprovalMode: (mode: ApprovalMode) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="session-menu-flyout">
+      <button
+        aria-describedby="session-permission-ask-desc"
+        aria-label={TEXT.composer.permission}
+        className={`session-flyout-row${fullAccess ? "" : " is-selected"}`}
+        onClick={() => {
+          onApprovalMode("ask_for_dangerous");
+          onClose();
+        }}
+        type="button"
+      >
+        <span className="session-flyout-icon">
+          <ShieldGlyph />
+        </span>
+        <span className="session-flyout-text">
+          <span className="session-flyout-label">{TEXT.composer.permission}</span>
+          <span className="session-flyout-desc" id="session-permission-ask-desc">
+            {TEXT.composer.permissionAskDesc}
+          </span>
+        </span>
+        {fullAccess ? null : (
+          <span className="session-flyout-check">
+            <CheckGlyph />
+          </span>
+        )}
+      </button>
+      <button
+        aria-describedby="session-permission-full-desc"
+        aria-label={TEXT.composer.permissionFull}
+        className={`session-flyout-row is-danger${fullAccess ? " is-selected" : ""}`}
+        onClick={() => {
+          onApprovalMode("always_allow");
+          onClose();
+        }}
+        type="button"
+      >
+        <span className="session-flyout-icon">
+          <ShieldGlyph alert />
+        </span>
+        <span className="session-flyout-text">
+          <span className="session-flyout-label">{TEXT.composer.permissionFull}</span>
+          <span className="session-flyout-desc" id="session-permission-full-desc">
+            {TEXT.composer.permissionFullDesc}
+          </span>
+        </span>
+        {fullAccess ? (
+          <span className="session-flyout-check">
+            <CheckGlyph />
+          </span>
+        ) : null}
+      </button>
+    </div>
+  );
+}
+
+/**
  * 会话设置, behind the sliders beside the plus: a column of the session's own
  * rows and, beside the open one, its choices. The two columns are separate
  * cards so a flyout is never clipped by the row column's own scroll box.
@@ -166,9 +241,9 @@ export function SessionSettingsMenu({
           </button>
           <div className="session-menu-divider" />
           <button
+            aria-describedby="session-experts-hint"
             aria-expanded={panel === "experts"}
             aria-haspopup="true"
-            aria-label={TEXT.composer.experts}
             className={`session-menu-row${panel === "experts" ? " is-open" : ""}`}
             onClick={() => toggle("experts")}
             type="button"
@@ -181,53 +256,19 @@ export function SessionSettingsMenu({
               {TEXT.composer.expertsNone}
               <ChevronRightGlyph />
             </span>
-            <span className="session-menu-tip" role="tooltip">
+            {/* The row's explanation, shown over it on hover. It is aria-hidden
+                because a tooltip inside the button would otherwise be read as
+                part of the row's name; the hidden sentence below carries the
+                same words to assistive technology. */}
+            <span aria-hidden="true" className="session-menu-tip">
               {TEXT.composer.expertsHint}
             </span>
           </button>
+          <span className="sr-only" id="session-experts-hint">{TEXT.composer.expertsHint}</span>
         </div>
 
         {panel === "permission" ? (
-          <div className="session-menu-flyout">
-            <button
-              className={`session-flyout-row${fullAccess ? "" : " is-selected"}`}
-              onClick={() => {
-                onApprovalMode("ask_for_dangerous");
-                onClose();
-              }}
-              title={TEXT.composer.permissionAskDesc}
-              type="button"
-            >
-              <span className="session-flyout-icon">
-                <ShieldGlyph />
-              </span>
-              <span className="session-flyout-label">{TEXT.composer.permission}</span>
-              {fullAccess ? null : (
-                <span className="session-flyout-check">
-                  <CheckGlyph />
-                </span>
-              )}
-            </button>
-            <button
-              className={`session-flyout-row is-danger${fullAccess ? " is-selected" : ""}`}
-              onClick={() => {
-                onApprovalMode("always_allow");
-                onClose();
-              }}
-              title={TEXT.composer.permissionFullDesc}
-              type="button"
-            >
-              <span className="session-flyout-icon">
-                <ShieldGlyph alert />
-              </span>
-              <span className="session-flyout-label">{TEXT.composer.permissionFull}</span>
-              {fullAccess ? (
-                <span className="session-flyout-check">
-                  <CheckGlyph />
-                </span>
-              ) : null}
-            </button>
-          </div>
+          <PermissionFlyout fullAccess={fullAccess} onApprovalMode={onApprovalMode} onClose={onClose} />
         ) : null}
 
         {panel === "experts" ? (

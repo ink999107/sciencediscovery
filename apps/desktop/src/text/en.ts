@@ -91,7 +91,7 @@ export const EN: Text = {
     experts: "Experts",
     expertsNone: "None",
     expertsHint: "Bind a personal expert to this conversation.",
-    expertsCreate: "New...",
+    expertsCreate: "New…",
     permission: "Ask for approval",
     permissionMode: "Permission mode",
     permissionAskShort: "Ask",
