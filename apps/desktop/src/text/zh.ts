@@ -187,8 +187,6 @@ export const ZH = {
     placeholder: "有什么需要我帮忙的…",
     /** The ✕ on the category chip inside the composer. */
     clearCategory: "取消分类",
-    /** The strip's folder item when no Project name is known yet. */
-    projectDirectory: "选择项目目录",
     categories: {
       research: "文献调研",
       experiment: "实验设计",

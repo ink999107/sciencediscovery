@@ -52,3 +52,16 @@ export function isEmptyTranscript({ detail, pending, replays, run }: TranscriptS
   if (run.turns.length > 0 || run.finalContent !== undefined) return false;
   return (detail?.messages.length ?? 0) === 0;
 }
+
+/** What the welcome page is keyed by.
+ *
+ *  The page holds the category it was last given, so that a chip stays with the
+ *  turn it was chosen for. That state belongs to one session: React's key is
+ *  what ends it, and it has to end even when nothing is drawn between the two
+ *  sessions. An existing session is named by its id. A draft has none — 新增会话
+ *  clears the open session and creates the next one without a blank page in
+ *  between — so each draft is named by its epoch instead; two drafts in a row
+ *  (a create that failed, then another click) are still two pages. */
+export function landingKey(session: { draftEpoch: number; sessionId?: string }): string {
+  return session.sessionId ?? `draft-${session.draftEpoch}`;
+}

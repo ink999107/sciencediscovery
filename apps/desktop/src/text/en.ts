@@ -173,7 +173,6 @@ export const EN: Text = {
     tagline: "SCIENCE, EXPLORED",
     placeholder: "What can I help you with…",
     clearCategory: "Clear category",
-    projectDirectory: "Choose project directory",
     categories: {
       research: "Literature",
       experiment: "Experiments",

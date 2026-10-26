@@ -22,7 +22,7 @@ import {
 } from "react";
 
 import { ApiClient } from "./api/client.js";
-import { isEmptyTranscript } from "./app/landing.js";
+import { isEmptyTranscript, landingKey } from "./app/landing.js";
 import { useFileDrop } from "./app/use-file-drop.js";
 import { useLanguage } from "./app/use-language.js";
 import { usePanelWidth } from "./app/use-panel-width.js";
@@ -291,7 +291,9 @@ export function App({ initialToken }: Props) {
             workspaceOpen={workspaceOpen}
           />
           {landing ? (
-            <Landing composer={composerProps} />
+            /* The page's category and its open topic row belong to one
+               session; the key is what ends them when the session does. */
+            <Landing composer={composerProps} key={landingKey(state)} />
           ) : (
             <>
               <Conversation

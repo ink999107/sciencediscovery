@@ -106,6 +106,9 @@ export interface WorkspaceState {
   confirm: ConfirmRequest | undefined;
   defaultModelId?: string;
   detail?: SessionDetail;
+  /** Counts the drafts started since the app opened. Two consecutive drafts
+   *  share no Session id, so this is what tells them apart. */
+  draftEpoch: number;
   /** Every finished run of the open session, rebuilt from its events, oldest
    *  first. The transcript renders each in the place of the answer it wrote —
    *  the persisted transcript has no thinking, so a run that is not replayed
@@ -228,6 +231,9 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   const [activeProjectName, setActiveProjectName] = useState<string>();
   const [sessionsByProject, setSessionsByProject] = useState<Record<string, Session[]>>({});
   const [sessionId, setSessionId] = useState<string>();
+  // A draft has no Session to be named by, and the welcome page has to be able
+  // to tell one draft from the next — see `landingKey`.
+  const [draftEpoch, setDraftEpoch] = useState(0);
   const [detail, setDetail] = useState<SessionDetail>();
   const [loadingSession, setLoadingSession] = useState(false);
   const [models, setModels] = useState<ModelProfile[]>([]);
@@ -826,6 +832,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     viewEpoch.current += 1;
     clearSession();
     setSessionId(undefined);
+    setDraftEpoch((epoch) => epoch + 1);
     sessionRef.current = undefined;
     setSelectedModelId(defaultModelRef.current);
     // A draft is not waiting on anything: an open that was still reading its
@@ -1187,6 +1194,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     confirm,
     defaultModelId,
     detail,
+    draftEpoch,
     loadingSession,
     models,
     outputs,

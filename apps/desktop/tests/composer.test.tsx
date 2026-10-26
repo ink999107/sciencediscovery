@@ -49,7 +49,7 @@ function render(
       onSend={() => {}}
       onStop={() => {}}
       onUpload={() => {}}
-      projectName={options.projectName}
+      projectName={options.projectName ?? "我的工作区"}
       running={running}
       selectedModelId="m1"
       tag={options.tag === undefined ? undefined : { ...options.tag, onClear: () => {} }}
@@ -156,8 +156,9 @@ test("the landing arrangement carries the project and the approval mode under th
   assert.match(markup, /class="composer is-landing"/);
   assert.match(markup, /有什么需要我帮忙的/u);
   assert.match(markup, /class="composer-strip-project"[\s\S]*蛋白质组学/u);
-  // With no project chosen, the item is the invitation rather than a blank.
-  assert.match(render(false, { landing: true }), /选择项目目录/u);
+  // The name is always there: the strip names the Project it belongs to, and
+  // does not invite the reader to choose one it has no control to offer.
+  assert.match(render(false, { landing: true }), /class="composer-strip-label">我的工作区/u);
   // The strip is the landing page's, not the transcript composer's.
   assert.doesNotMatch(render(), /composer-strip/);
 });

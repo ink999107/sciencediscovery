@@ -45,8 +45,10 @@ interface Props {
   onSend: (content: string) => void;
   onStop: () => void;
   onUpload: (files: File[]) => void;
-  /** Shown in the landing strip, beside the folder. */
-  projectName?: string;
+  /** Shown in the landing strip, beside the folder. Always known: a session
+   *  belongs to a Project, and the app falls back to the unnamed workspace's
+   *  name rather than to an invitation this strip cannot answer. */
+  projectName: string;
   /** Where the model menu gets each row's brand mark. A profile names its
    *  provider, and the provider knows its preset. */
   providers?: ModelProvider[];
@@ -659,7 +661,7 @@ export function Composer({
         <div className="composer-strip">
           <span className="composer-strip-project">
             <span aria-hidden="true" className="composer-strip-icon" data-kind="folder" />
-            <span className="composer-strip-label">{projectName ?? TEXT.landing.projectDirectory}</span>
+            <span className="composer-strip-label">{projectName}</span>
           </span>
         </div>
       ) : null}

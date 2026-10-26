@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { isEmptyTranscript } from "../src/app/landing.js";
+import { isEmptyTranscript, landingKey } from "../src/app/landing.js";
 import { emptyRunStream, type RunStreamState } from "../src/run-stream/model.js";
 import type { ChatMessage, SessionDetail } from "../src/api/types.js";
 import { Landing } from "../src/views/Landing.js";
@@ -46,6 +46,7 @@ function landing(): string {
         onSend: () => {},
         onStop: () => {},
         onUpload: () => {},
+        projectName: "我的工作区",
         running: false,
         selectedModelId: "m1",
         uploading: false,
@@ -73,7 +74,7 @@ test("the welcome page's composer is the landing arrangement, with its strip", (
   // The strip names the project. The approval mode is not a second control
   // there: it lives in 会话设置, the one place a mode can be changed.
   assert.match(markup, /class="composer-strip-project"/u);
-  assert.match(markup, /选择项目目录/u);
+  assert.match(markup, /class="composer-strip-label">我的工作区/u);
   assert.doesNotMatch(markup, /composer-strip-permission/u);
 });
 
@@ -99,6 +100,20 @@ test("a transcript is empty only while nothing at all has happened in it", () =>
     turns: [{ responses: [], thinking: "", thinkingTruncated: false, tools: [], turn: 1 }],
   };
   assert.equal(isEmptyTranscript({ detail: detail([]), replays: [], run }), false);
+});
+
+test("the welcome page is a different page for every session and every draft", () => {
+  // The page holds the category until it is unmounted, and React's key is what
+  // unmounts it. 新增会话 goes from an open session straight to a draft without
+  // a blank page in between, so both halves of the identity have to count.
+  assert.equal(landingKey({ draftEpoch: 0, sessionId: "session-1" }), "session-1");
+  assert.notEqual(
+    landingKey({ draftEpoch: 0, sessionId: "session-1" }),
+    landingKey({ draftEpoch: 0, sessionId: "session-2" }),
+  );
+  // A draft has no id: two drafts are two pages, and the same draft is one.
+  assert.notEqual(landingKey({ draftEpoch: 1 }), landingKey({ draftEpoch: 2 }));
+  assert.equal(landingKey({ draftEpoch: 2 }), landingKey({ draftEpoch: 2 }));
 });
 
 test("an answer streaming with no turn yet still keeps the transcript", () => {
