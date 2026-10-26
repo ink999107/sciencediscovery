@@ -15,7 +15,7 @@
 import assert from "node:assert/strict";
 
 import { createTest } from "../../../test/support/tagged/compat.mjs";
-import { buildFileTree, countFiles, type FileTreeNode } from "../src/app/file-tree.js";
+import { buildFileTree, countFiles, filterFileTree, type FileTreeNode } from "../src/app/file-tree.js";
 import type { WorkspaceFile } from "../src/api/types.js";
 
 const { describe, it } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
@@ -111,5 +111,49 @@ describe("a workspace path becomes one row per directory", () => {
   it("is empty for an empty workspace", () => {
     const tree = buildFileTree([]);
     assert.deepEqual([tree.files, tree.subdirectories], [[], []]);
+  });
+});
+
+describe("a search keeps the files that match and the folders above them", () => {
+  const tree = buildFileTree([
+    file("common/notes.md"),
+    file("common/inputs/raw.csv"),
+    file("antibody_pipeline/runs/demo/report.md"),
+    file("readme.md"),
+  ]);
+
+  it("drops a folder that holds no matching file", () => {
+    // The reported bug: typing `common` still listed `antibody_pipeline` and its
+    // folders, so the search appeared to answer with everything.
+    const found = filterFileTree(tree, "common");
+    assert.deepEqual(found === undefined ? [] : outline(found), [
+      "common/",
+      "  inputs/",
+      "    raw.csv",
+      "  notes.md",
+    ]);
+  });
+
+  it("matches a folder name as well as a file name", () => {
+    const found = filterFileTree(tree, "inputs");
+    assert.deepEqual(found === undefined ? [] : outline(found), ["common/", "  inputs/", "    raw.csv"]);
+  });
+
+  it("matches inside the whole path, not only its last segment", () => {
+    const found = filterFileTree(tree, "demo/report");
+    assert.deepEqual(found === undefined ? [] : outline(found), [
+      "antibody_pipeline/",
+      "  runs/",
+      "    demo/",
+      "      report.md",
+    ]);
+  });
+
+  it("says nothing matched rather than drawing an empty tree", () => {
+    assert.equal(filterFileTree(tree, "nothing-here"), undefined);
+  });
+
+  it("leaves the tree alone for a blank query", () => {
+    assert.equal(filterFileTree(tree, "   "), tree);
   });
 });

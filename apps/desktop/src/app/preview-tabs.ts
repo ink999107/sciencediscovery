@@ -32,6 +32,9 @@ export type DocumentSource = "artifact" | "file";
 
 /** One slot in the panel's tab bar. */
 export interface PreviewSlot {
+  /** The artifact this tab is showing. One tab per artifact: its versions are
+   *  a property of the open document, chosen with the picker beside it, not
+   *  separate tabs. */
   artifactId?: string;
   content?: string;
   error?: string;
@@ -43,6 +46,8 @@ export interface PreviewSlot {
   /** The workspace path, when the document has one. Artifacts may not. */
   path: string;
   source?: DocumentSource;
+  /** Which version of the artifact is on screen. */
+  versionId?: string;
 }
 
 export interface TabState {
@@ -55,7 +60,18 @@ export interface DocumentRequest {
   artifactId?: string;
   label: string;
   path: string;
+  /** The Session the version was written in. The artifact list shows every
+   *  Session's output, and a version is read through the Session that made it;
+   *  absent means the open one. */
+  sessionId?: string;
   source?: DocumentSource;
+  versionId?: string;
+}
+
+export interface Placement extends TabState {
+  /** True when the document was already open and its tab was focused instead
+   *  of a second one being made (and read again). */
+  reused: boolean;
 }
 
 export const HOME_TAB_ID = "home";
@@ -81,52 +97,74 @@ function nextTabId(tabs: PreviewSlot[]): string {
   return `tab-${highest + 1}`;
 }
 
+/** Whether a tab is already showing the document this request names. A file is
+ *  its path; an artifact is the artifact, whatever version the tab is on. */
+function isOpen(slot: PreviewSlot, request: DocumentRequest): boolean {
+  if (slot.home || slot.source !== request.source) return false;
+  return request.artifactId !== undefined
+    ? slot.artifactId === request.artifactId
+    : slot.artifactId === undefined && slot.path === request.path;
+}
+
 /**
- * Puts a document in front of the user: into the home tab if it is still
- * showing, otherwise into a new tab. The content itself is read afterwards, so
- * the returned slot is always in its loading state.
+ * Puts a document in front of the user.
+ *
+ * A document that is already open is focused where it is: clicking the same row
+ * twice is a request to look at it, not to open a second copy, and a second tab
+ * for it would split the reader's scroll position in two. A failed read is the
+ * exception — that tab is filled again, because the click may be the retry.
+ *
+ * Otherwise the home tab is replaced if it is still showing, and a new tab is
+ * made after it. The content is read afterwards, so a slot that needs a read is
+ * left in its loading state.
  */
 export function placeDocument(
   tabs: PreviewSlot[],
   activeTabId: string,
   request: DocumentRequest,
-): TabState {
+): Placement {
+  const open = tabs.find((tab) => isOpen(tab, request));
+  if (open !== undefined && open.error === undefined) {
+    return { activeTabId: open.id, reused: true, tabs };
+  }
+  if (open !== undefined) {
+    // Fill the failed tab again rather than adding one beside it; its id keeps
+    // the tab bar from flickering between two entries.
+    const retried: PreviewSlot = { ...open, ...documentSlot(request, open.id) };
+    return {
+      activeTabId: retried.id,
+      reused: false,
+      tabs: tabs.map((tab) => (tab.id === retried.id ? retried : tab)),
+    };
+  }
   const index = tabs.findIndex((tab) => tab.id === activeTabId);
   const active = index === -1 ? undefined : tabs[index];
   if (active !== undefined && active.home) {
     // Replaced in place: the id survives, so the tab bar does not flicker
     // between two entries while the read is in flight.
-    const replaced: PreviewSlot = {
-      artifactId: request.artifactId,
-      content: undefined,
-      error: undefined,
-      home: false,
-      id: active.id,
-      label: request.label,
-      loading: true,
-      path: request.path,
-      source: request.source,
-    };
+    const replaced: PreviewSlot = documentSlot(request, active.id);
     const next = [...tabs];
     next[index] = replaced;
-    return { activeTabId: replaced.id, tabs: next };
+    return { activeTabId: replaced.id, reused: false, tabs: next };
   }
-  const created: PreviewSlot = {
+  const created: PreviewSlot = documentSlot(request, nextTabId(tabs));
+  return { activeTabId: created.id, reused: false, tabs: [...tabs, created] };
+}
+
+/** The fields a document request decides, for a slot that is about to load. */
+function documentSlot(request: DocumentRequest, id: string): PreviewSlot {
+  return {
     artifactId: request.artifactId,
+    content: undefined,
+    error: undefined,
     home: false,
-    id: nextTabId(tabs),
+    id,
     label: request.label,
     loading: true,
     path: request.path,
     source: request.source,
+    versionId: request.versionId,
   };
-  return { activeTabId: created.id, tabs: [...tabs, created] };
-}
-
-/** Opens another empty tab, which is what the tab bar's `+` does. */
-export function addTab(tabs: PreviewSlot[]): TabState {
-  const created: PreviewSlot = { ...homeTab(), id: nextTabId(tabs) };
-  return { activeTabId: created.id, tabs: [...tabs, created] };
 }
 
 export interface CloseResult extends TabState {

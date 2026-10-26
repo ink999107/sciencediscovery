@@ -417,6 +417,8 @@ export function App({ initialToken }: Props) {
           onSelectGroup={setPanelGroup}
           outputs={state.outputs}
           resize={resize}
+          sessionId={state.sessionId}
+          sessions={state.recent}
           subagent={openSubagent}
           subagentLoading={subagentLoading && (openSubagent?.steps.length ?? 0) === 0}
           tabs={state.tabs}

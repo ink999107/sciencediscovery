@@ -18,7 +18,6 @@ import assert from "node:assert/strict";
 
 import {
   HOME_TAB_ID,
-  addTab,
   closeTab,
   homeTab,
   initialTabState,
@@ -56,6 +55,107 @@ test("a second document opens its own tab and takes focus", () => {
   assert.equal(second.activeTabId, second.tabs[1]?.id);
 });
 
+test("clicking a document that is already open focuses its tab instead of opening a second", () => {
+  // The reported case: the artifact rows are clicked more than once. A second
+  // tab for the same document splits the reader's place in it in two.
+  const first = placeDocument(initialTabState().tabs, HOME_TAB_ID, DOC);
+  const again = placeDocument(first.tabs, first.activeTabId, DOC);
+  assert.equal(again.reused, true);
+  assert.equal(again.tabs.length, 1, "no second tab");
+  assert.equal(again.activeTabId, first.activeTabId);
+  assert.equal(again.tabs[0]?.content, first.tabs[0]?.content, "and nothing is read again");
+});
+
+test("an open document comes to the front from whichever tab is showing", () => {
+  const first = placeDocument(initialTabState().tabs, HOME_TAB_ID, DOC);
+  const second = placeDocument(first.tabs, first.activeTabId, { label: "notes.md", path: "out/notes.md" });
+  const back = placeDocument(second.tabs, second.activeTabId, DOC);
+  assert.equal(back.reused, true);
+  assert.equal(back.tabs.length, 2, "the other document is not closed");
+  assert.equal(back.activeTabId, first.activeTabId, "the first document's tab takes focus");
+});
+
+test("one artifact has one tab, whichever version is clicked", () => {
+  // A row is the artifact, not a version: clicking it again while the tab is on
+  // an older version is a request to look at the open document, and the version
+  // stays where the reader put it — the picker is what changes it.
+  const first = placeDocument(initialTabState().tabs, HOME_TAB_ID, {
+    artifactId: "a1",
+    label: "trace.md",
+    path: "app/trace.md",
+    source: "artifact",
+    versionId: "v1",
+  });
+  const second = placeDocument(first.tabs, first.activeTabId, {
+    artifactId: "a1",
+    label: "trace.md",
+    path: "app/trace.md",
+    source: "artifact",
+    versionId: "v2",
+  });
+  assert.equal(second.reused, true);
+  assert.equal(second.tabs.length, 1);
+  assert.equal(second.tabs[0]?.versionId, "v1");
+});
+
+test("two artifacts that share a name are still two tabs", () => {
+  const first = placeDocument(initialTabState().tabs, HOME_TAB_ID, {
+    artifactId: "a1",
+    label: "trace.md",
+    path: "subagents/a1/trace.md",
+    source: "artifact",
+    versionId: "v1",
+  });
+  const second = placeDocument(first.tabs, first.activeTabId, {
+    artifactId: "b2",
+    label: "trace.md",
+    path: "subagents/b2/trace.md",
+    source: "artifact",
+    versionId: "v2",
+  });
+  assert.equal(second.reused, false);
+  assert.equal(second.tabs.length, 2);
+});
+
+test("a failed read is retried in the tab it failed in", () => {
+  // The click that follows an error may be the retry: it refills that tab
+  // rather than adding one beside it.
+  const first = placeDocument(initialTabState().tabs, HOME_TAB_ID, DOC);
+  const failed = first.tabs.map((tab) => ({ ...tab, content: "old", error: "boom", loading: false }));
+  const retried = placeDocument(failed, first.activeTabId, DOC);
+  assert.equal(retried.reused, false);
+  assert.equal(retried.tabs.length, 1);
+  assert.equal(retried.activeTabId, first.activeTabId);
+  assert.equal(retried.tabs[0]?.error, undefined);
+  assert.equal(retried.tabs[0]?.content, undefined);
+  assert.equal(retried.tabs[0]?.loading, true);
+});
+
+test("a file and an artifact with the same path are two different documents", () => {
+  const first = placeDocument(initialTabState().tabs, HOME_TAB_ID, { label: "trace.md", path: "app/trace.md", source: "file" });
+  const second = placeDocument(first.tabs, first.activeTabId, {
+    artifactId: "a1",
+    label: "trace.md",
+    path: "app/trace.md",
+    source: "artifact",
+    versionId: "v1",
+  });
+  assert.equal(second.reused, false);
+  assert.equal(second.tabs.length, 2);
+});
+
+test("two documents with the same label each get a tab of their own", () => {
+  // A second `trace.md` is not the first one replaced: the label repeats, so
+  // the tab bar is the only place the two can be told apart.
+  const first = initialTabState();
+  const placed = placeDocument(first.tabs, first.activeTabId, { label: "trace.md", path: "subagents/a1/trace.md" });
+  const second = placeDocument(placed.tabs, placed.activeTabId, { label: "trace.md", path: "app/trace.md" });
+  assert.equal(second.tabs.length, 2);
+  assert.equal(second.tabs[0]?.label, "trace.md");
+  assert.equal(second.tabs[1]?.label, "trace.md");
+  assert.notEqual(second.tabs[0]?.id, second.tabs[1]?.id);
+});
+
 test("a document opened from a background tab becomes a new tab, not a replacement", () => {
   // The home tab is still open but is not the active one; overwriting it here
   // would throw away the panel's overview while the user is looking elsewhere.
@@ -78,27 +178,19 @@ test("tab ids stay unique when a closed number is handed out again", () => {
   // The document that replaces the home tab keeps its id, so numbering starts
   // at tab-1 for the next one.
   state = placeDocument(state.tabs, state.activeTabId, DOC);
-  state = addTab(state.tabs);
-  state = addTab(state.tabs);
+  state = placeDocument(state.tabs, state.activeTabId, { label: "b.md", path: "b.md" });
+  state = placeDocument(state.tabs, state.activeTabId, { label: "c.md", path: "c.md" });
   assert.deepEqual(
     state.tabs.map((tab) => tab.id),
     [HOME_TAB_ID, "tab-1", "tab-2"],
   );
-  // Close the middle one, then add: the new id must skip the gap, not reuse it
-  // while tab-2 is still open.
+  // Close the middle one, then open another: the new id must skip the gap, not
+  // reuse it while tab-2 is still open.
   const closed = closeTab(state.tabs, state.activeTabId, "tab-1");
-  const reopened = addTab(closed.tabs);
+  const reopened = placeDocument(closed.tabs, closed.activeTabId, { label: "d.md", path: "d.md" });
   const ids = reopened.tabs.map((tab) => tab.id);
   assert.deepEqual(ids, [HOME_TAB_ID, "tab-2", "tab-3"]);
   assert.equal(new Set(ids).size, ids.length, "ids stay unique");
-});
-
-test("the plus button opens an empty tab and focuses it", () => {
-  const state = initialTabState();
-  const opened = addTab(state.tabs);
-  assert.equal(opened.tabs.length, 2);
-  assert.equal(opened.tabs[1]?.home, true);
-  assert.equal(opened.activeTabId, opened.tabs[1]?.id);
 });
 
 test("closing a background tab leaves the active one where it was", () => {
@@ -147,10 +239,4 @@ test("closing an id that is not open changes nothing", () => {
   const result = closeTab(state.tabs, state.activeTabId, "tab-99");
   assert.equal(result.collapse, false);
   assert.equal(result.tabs.length, 1);
-});
-
-test("the home tab is not reachable twice: a new home tab gets a fresh id", () => {
-  const home = homeTab();
-  const opened = addTab([home]);
-  assert.notEqual(opened.tabs[1]?.id, HOME_TAB_ID);
 });

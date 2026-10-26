@@ -1885,15 +1885,19 @@ body.is-resizing {
 }
 
 .panel-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   overflow: hidden;
 }
 
+/* The list's width is the divider's, not the handoff's fixed 240: the reader
+   sets it by dragging, and the token is only where it starts. */
 .panel-list {
-  width: var(--d-panel-list);
-  flex: 0 0 var(--d-panel-list);
+  width: var(--panel-list-width, var(--d-panel-list));
+  flex: 0 0 var(--panel-list-width, var(--d-panel-list));
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1902,18 +1906,133 @@ body.is-resizing {
   overflow-y: auto;
 }
 
+/* Dragged to its end, the list goes rather than becoming a strip of rows that
+   cannot be read. The document then has the panel to itself. */
+.panel-body.is-list-closed .panel-list {
+  display: none;
+}
+
+/* The same at the other end: the document column closes and the list takes the
+   whole panel. It comes back when a row is clicked or the divider is dragged
+   back — see `openDoc`. */
+.panel-body.is-doc-closed .panel-doc {
+  display: none;
+}
+
+.panel-body.is-doc-closed .panel-list {
+  width: auto;
+  flex: 1 1 auto;
+  border-right: 0;
+}
+
+/* The divider between the two columns. It overlays the list's border rather
+   than taking a column of its own, so neither side loses a pixel to chrome. */
+.panel-splitter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--panel-list-width, var(--d-panel-list)) - 5px);
+  width: 10px;
+  z-index: 4;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.panel-splitter:hover,
+.panel-splitter:focus-visible {
+  background: rgba(20, 118, 255, 0.08);
+  outline: 0;
+}
+
+/* A closed edge keeps the divider as wide as the control drawn on it: the
+   pointer has to be able to reach the control without the first few pixels
+   belonging to something else, and a press anywhere in the band is still a
+   drag. No tint on hover — the control itself is the feedback, and a band the
+   height of the panel would be the hairline again in another colour. */
+.panel-body.is-list-closed .panel-splitter {
+  left: 0;
+  width: 26px;
+  /* The whole edge is the button while a column is closed: a click anywhere in
+     the band brings it back, so the pointer says so everywhere in it. Dragging
+     still works, but that is the less likely thing to do with a column that is
+     already gone. */
+  cursor: pointer;
+  background: transparent;
+}
+
+.panel-body.is-doc-closed .panel-splitter {
+  left: auto;
+  right: 0;
+  width: 26px;
+  cursor: pointer;
+  background: transparent;
+}
+
+/* A closed column has no border left to show where it was, and a hairline on
+   the empty edge reads as a stray line rather than a handle. The edge stays
+   bare until the pointer reaches the divider; then the control below appears. */
+.panel-expand {
+  position: absolute;
+  top: 50%;
+  z-index: 5;
+  width: 22px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 1px solid #ececec;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(25, 25, 25, 0.12);
+  color: #555;
+  opacity: 0;
+  /* A click is what this is for, so it reads as a button to the pointer even
+     though the press carries on to the divider underneath and can still start
+     a drag. */
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.panel-expand:hover {
+  border-color: #dcdcdc;
+  background: #fafafa;
+  color: #191919;
+}
+
+.panel-expand.is-left {
+  left: 3px;
+}
+
+.panel-expand.is-right {
+  right: 3px;
+}
+
+/* It sits inside the divider's band, so the band's hover — and its own, which
+   counts as the band's — keeps it out. */
+.panel-splitter:hover .panel-expand {
+  opacity: 1;
+}
+
 .panel-list-title {
+  flex: 0 0 auto;
   padding: 0 8px 12px;
   color: #191919;
   font-size: 13px;
   font-weight: 500;
 }
 
+/* The list is a scrolling column of flex items, so everything in it above the
+   rows has to refuse to shrink. Without this the search box gave up ten of its
+   32 pixels as soon as the tree was long enough to overflow — the artifacts
+   panel, with four rows, kept the height the workspace panel lost. */
 .panel-search {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
   height: 32px;
+  min-height: 32px;
   margin: 0 0 12px;
   padding: 0 10px;
   border: 1px solid #e6e6e6;
@@ -1933,6 +2052,19 @@ body.is-resizing {
   outline: 0;
   background: transparent;
   font-size: 12px;
+}
+
+/* A text input matches :focus-visible even when it was clicked, so the global
+   focus rule drew a blue ring inside the field the moment the pointer landed in
+   it. The box is already drawn; its border darkening is the whole cue a search
+   field needs. */
+.panel-search input:focus-visible {
+  box-shadow: none;
+}
+
+.panel-search:focus-within {
+  border-color: #c9c9c9;
+  color: #777;
 }
 
 .panel-list-row {
@@ -1958,6 +2090,21 @@ body.is-resizing {
 .panel-list-row .label {
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The second fact beside a repeated name — `v2` for another version, or the
+   folder for another artifact. It is the row's secondary fact, so it takes the
+   space the name leaves and never more than half the row. */
+.panel-list-row .label-meta {
+  margin-left: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  color: #a6a6a6;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1991,6 +2138,76 @@ body.is-resizing {
   padding-left: 10px;
 }
 
+/* One Session's artifacts. The list is a scrolling flex column, so a section
+   keeps its rows together and refuses to shrink them away; the gap is what
+   separates one Session from the next without a rule between them. */
+.panel-output {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+.panel-output + .panel-output {
+  margin-top: 14px;
+}
+
+/* The heading names the Session the rows below belong to, so it carries the
+   weight of a section title rather than of a caption: the same 13px as a file
+   name, in the darkest ink and semibold, which is what makes the group
+   findable when the reader is scanning past several of them. Every Session's
+   name is set alike — which one is open is the badge's job at the end of the
+   row, not a change of type between rows the reader is comparing. It is a row
+   like the folders in the tree beside it — same 30px height, same hover —
+   because clicking it folds its group away. */
+.panel-output-head {
+  width: 100%;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border-radius: 7px;
+  color: #191919;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.panel-output-head:hover {
+  background: #f7f7f7;
+}
+
+.panel-output-head .label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The same 15px slot as a row's file glyph, so the Session's name starts on
+   the same stem as the file names under it. */
+.panel-output-head .tree-chev {
+  width: 15px;
+  flex: 0 0 15px;
+  color: #a6a6a6;
+  font-size: 9px;
+  text-align: center;
+  transition: transform 0.15s ease;
+}
+
+.panel-output-head.is-open .tree-chev {
+  transform: rotate(90deg);
+}
+
+.panel-output-head .label-meta {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: #a6a6a6;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+
 .panel-empty {
   padding: 40px 16px;
   color: #a6a6a6;
@@ -2007,14 +2224,36 @@ body.is-resizing {
   flex-direction: column;
 }
 
-.doc-tabs {
+/* The strip row: the tabs on the left, the document actions on the right.
+   These two must stay separate elements — a single row that is also the
+   tablist gets its fixed 46px height read as a width when it becomes a flex
+   item itself, which clipped every tab past the first few pixels. */
+.doc-tabbar {
   flex: 0 0 46px;
   height: 46px;
   display: flex;
   align-items: stretch;
-  gap: 20px;
+  gap: 12px;
   padding: 0 20px;
-  overflow: hidden;
+  min-width: 0;
+}
+
+.doc-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 46px;
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+  /* Many open documents scroll instead of widening the panel; the wheel and
+     a trackpad are enough, so the bar stays 46px with no scrollbar gutter. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.doc-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .doc-tab {
@@ -2022,6 +2261,11 @@ body.is-resizing {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* A tab is as wide as what it says: a short name gets a short tab, and one
+     document does not leave the next one squeezed into an ellipsis. The strip
+     scrolls once the tabs together outgrow it, and the ceiling stops a single
+     long path from pushing every other tab off screen. */
+  flex: 0 0 auto;
   max-width: 220px;
   padding: 0;
   color: #8c8c8c;
@@ -2050,18 +2294,52 @@ body.is-resizing {
 
 .doc-tab-label {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+/* The name keeps the space; the second fact only gets what is left, and only
+   when two open documents share a name (two versions of one `trace.md`, or two
+   files of the same name in different folders). */
+.doc-tab-name {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.doc-tab-hint {
+  /* A far larger shrink factor makes the folder give up its room first: the
+     name is what identifies the document, and it keeps its ellipsis budget
+     until the folder has none left. */
+  flex: 0 50 auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  color: #a6a6a6;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+/* The ✕ is an svg, not the character: a glyph carries its own side bearings
+   and baseline, so the 18px hover square was visibly off-centre around it. */
 .doc-tab-close {
   width: 18px;
   height: 18px;
+  flex: 0 0 18px;
   display: grid;
   place-items: center;
+  padding: 0;
   border-radius: 4px;
   color: #a6a6a6;
-  font-size: 14px;
+}
+
+.doc-tab-close svg {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
 }
 
 .doc-tab-close:hover {
@@ -2071,15 +2349,96 @@ body.is-resizing {
 
 .doc-tabs-actions {
   margin-left: auto;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 2px;
 }
 
-.doc-tab-more {
-  color: #8c8c8c;
-  font-size: 14px;
-  padding: 0 6px;
+/* The open artifact's version picker, at the document's top right. It is drawn
+   here rather than left to a native select: the platform's popup is a square
+   list in the system highlight colour, which sits badly in a panel this quiet.
+   The trigger is a soft pill; the menu is the composer menus' card. */
+.doc-versions {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 2px;
+}
+
+.doc-version-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 7px 0 9px;
+  border: 1px solid #ececec;
+  border-radius: 7px;
+  color: #4d4d4d;
+  font-size: 12px;
+  line-height: 1;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.doc-version-button svg {
+  color: #a6a6a6;
+  flex: 0 0 10px;
+}
+
+.doc-version-button:hover,
+.doc-version-button.is-open {
+  border-color: #dcdcdc;
+  background: #f7f7f7;
+  color: #191919;
+}
+
+.doc-version-button:focus-visible {
+  border-color: #c9c9c9;
+  box-shadow: none;
+}
+
+.doc-version-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 92px;
+  padding: 4px;
+  border: 1px solid #ececec;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(25, 25, 25, 0.14);
+}
+
+.doc-version-option {
+  width: 100%;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: #4d4d4d;
+  font-size: 12px;
+  text-align: left;
+}
+
+.doc-version-option:hover {
+  background: #f5f5f5;
+  color: #191919;
+}
+
+/* The tick, not a filled row: with the rows this close in weight a highlight
+   would read as hover, and the version in use has to survive the pointer
+   leaving. */
+.doc-version-option.is-current {
+  color: #191919;
+}
+
+.doc-version-option svg {
+  color: #191919;
+  flex: 0 0 12px;
 }
 
 .doc-body {
@@ -2158,6 +2517,25 @@ body.is-resizing {
   line-height: 1.75;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Plain text without a markup language: the answer, the note, the report a
+   model wrote out as .txt. It becomes a page rather than a box of source — the
+   document's own type and measure, no border, and no scroll area of its own
+   inside the document's. The blank lines the author wrote still do the
+   paragraphing, so nothing has to be guessed at. */
+.tab-content-source.is-prose {
+  max-width: 70ch;
+  max-height: none;
+  overflow: visible;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #333;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.9;
 }
 
 .doc-placeholder {

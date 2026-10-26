@@ -857,8 +857,18 @@ export const ZH = {
       artifacts: "产物",
       files: "工作区",
     },
-    empty: "这次会话还没有产物。",
+    /** The list shows every session's artifacts, so an empty list says the
+     *  project has none rather than this session. */
+    empty: "还没有产物。",
     filesEmpty: "工作区里还没有文件。",
+    /** The document column before anything is opened. The lists beside it can
+     *  be full, so this says what the screen is missing, not the session. */
+    unopenedArtifacts: "还没有打开产物。",
+    unopenedFiles: "还没有打开文件。",
+    /** The note beside the heading of the open session's group. */
+    currentSession: "当前会话",
+    /** The heading of a group whose session the app has no title for. */
+    untitledSession: "未命名会话",
     filesTitle: (count: number) => `工作区 · ${count} 个文件`,
     /** The count next to the 工作区 section header, which already says 工作区. */
     filesCount: (count: number) => `${count} 个文件`,
@@ -873,15 +883,23 @@ export const ZH = {
     weeksAgo: (weeks: number) => `${weeks}周前`,
     open: "打开",
     unsupported: "这个类型暂时没有预览。",
-    addTab: "新增页签",
     closeTab: "关闭页签",
     /** The draggable left edge of the panel. */
     resize: "调整面板宽度",
+    /** The divider between the list and the document beside it. */
+    resizeList: "调整列表宽度",
+    /** The control that appears on an edge the divider closed. */
+    expand: "展开",
     collapsePanel: "收起面板",
     allArtifacts: "所有产物",
     download: "下载",
+    /** The picker beside an open document that chooses which version of the
+     *  artifact it shows. */
+    version: "版本",
     searchArtifacts: "搜索产物",
     searchFiles: "搜索文件",
+    /** A search that matched nothing, as opposed to a list that was empty. */
+    searchEmpty: "没有匹配的内容。",
   },
 
   /** The 三维 structure view that opens for structure files. */

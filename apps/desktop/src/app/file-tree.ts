@@ -80,6 +80,37 @@ export function buildFileTree(files: readonly WorkspaceFile[]): FileTreeNode {
   return root;
 }
 
+/**
+ * The part of the tree a search keeps, or `undefined` when it keeps nothing.
+ *
+ * A file is kept when its whole path contains the query, so a folder can be
+ * typed as well as a name — searching `inputs` finds the files under it — and
+ * the directories above a match come with it, or the row would have no place in
+ * the tree.
+ *
+ * A directory with no matching file below it is dropped rather than shown
+ * empty: it is a row that leads nowhere, and a search that answers with the
+ * same forty folders whichever word is typed has not narrowed anything. That is
+ * what the caller's `undefined` means — nothing matched — which is a different
+ * answer from an empty workspace.
+ */
+export function filterFileTree(node: FileTreeNode, query: string): FileTreeNode | undefined {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return node;
+  return prune(node, needle);
+}
+
+function prune(node: FileTreeNode, needle: string): FileTreeNode | undefined {
+  const files = node.files.filter((file) => file.path.toLowerCase().includes(needle));
+  const subdirectories: FileTreeNode[] = [];
+  for (const child of node.subdirectories) {
+    const kept = prune(child, needle);
+    if (kept !== undefined) subdirectories.push(kept);
+  }
+  if (files.length === 0 && subdirectories.length === 0) return undefined;
+  return { files, name: node.name, path: node.path, subdirectories };
+}
+
 /** How many files are at or below a directory — what its row reports, because
  *  "2 个文件" on a folder whose own two files are joined by forty in a
  *  subdirectory is a count that describes the wrong thing. */

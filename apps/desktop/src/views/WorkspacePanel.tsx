@@ -12,16 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { PanelResize } from "../app/use-panel-width.js";
 import type { PreviewSlot, TabState, WorkspaceActions } from "../app/use-workspace.js";
-import { buildFileTree, type FileTreeNode } from "../app/file-tree.js";
-import { fileName } from "../app/paths.js";
+import { artifactGroups, type ArtifactGroup } from "../app/artifact-groups.js";
+import { artifactHints, artifactName, artifactPath, versionsOf } from "../app/artifact-labels.js";
+import { buildFileTree, filterFileTree, type FileTreeNode } from "../app/file-tree.js";
+import { DOC_MIN_WIDTH, LIST_MIN_WIDTH, LIST_NUDGE_STEP, isListClosed } from "../app/panel-split.js";
+import { usePanelSplit } from "../app/use-panel-split.js";
+import { fileFolder, fileName } from "../app/paths.js";
 import { PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, PANEL_NUDGE_STEP, PANEL_NUDGE_STRIDE } from "../app/panel-width.js";
 import { Markdown } from "../Markdown.js";
 import { detectStructureFormat } from "../molecular.js";
-import type { SessionArtifactOutput, Subagent, WorkspaceFile } from "../api/types.js";
+import type { Session, SessionArtifactOutput, Subagent, WorkspaceFile } from "../api/types.js";
 import { subagentTask } from "../run-stream/subagent.js";
 import { TEXT } from "../text.js";
 import { SubagentDetail } from "./SubagentDetail.js";
@@ -40,6 +44,12 @@ interface Props {
   onSelectGroup: (group: PanelGroup) => void;
   outputs: SessionArtifactOutput[];
   resize: PanelResize;
+  /** The Session whose artifacts head the list, and which a row with no Session
+   *  of its own falls back to. */
+  sessionId?: string;
+  /** Every Session the app knows about, newest first: the artifact list shows
+   *  their output too, grouped under each Session's name. */
+  sessions?: Session[];
   /** The subagent whose execution is open. While set, the panel shows only
    *  that child's record — it is not a tab beside 产物 and 工作区. */
   subagent?: Subagent;
@@ -123,7 +133,12 @@ function Preview({ content, expanded, label, onExpand, path }: Expandable & { co
     return <pre className="tab-content-source">{pretty}</pre>;
   }
   if (content === "") return <div className="doc-placeholder">{TEXT.workspace.unsupported}</div>;
-  return <pre className="tab-content-source">{content}</pre>;
+  // A .txt is a document that carries no markup rather than a source file: an
+  // answer, a note, a report. Set in the source font, inside a box that scrolls
+  // on its own, a page of paragraphs reads as a log; it gets the document's own
+  // type instead. Logs, tables and source stay monospaced, where columns line up.
+  const prose = lower.endsWith(".txt") || lower.endsWith(".text");
+  return <pre className={`tab-content-source${prose ? " is-prose" : ""}`}>{content}</pre>;
 }
 
 function Document({ expanded, onExpand, slot }: Expandable & { slot: PreviewSlot }) {
@@ -134,57 +149,114 @@ function Document({ expanded, onExpand, slot }: Expandable & { slot: PreviewSlot
 
 /* ── artifact and file lists ────────────────────────────────────────────── */
 
-function artifactName(output: SessionArtifactOutput): string {
-  return output.artifact.title ?? fileName(output.artifact.name);
-}
-
 function ArtifactList({
   actions,
   activeId,
-  outputs,
+  groups,
+  hints,
   query,
 }: {
   actions: WorkspaceActions;
   activeId?: string;
-  outputs: SessionArtifactOutput[];
+  /** The Sessions' artifacts, the open Session's first. */
+  groups: ArtifactGroup[];
+  /** What tells each colliding row apart — see `artifactHints`. */
+  hints: Map<string, string>;
   query: string;
 }) {
+  // A Session's group folds away, the way a folder does in the tree beside it.
+  // The open Session's group is open; the others start closed, so the list
+  // opens on the work in hand and the rest is one click away rather than
+  // pushing it down. Only the reader's own choices are recorded here — the
+  // default belongs to `artifactGroups`, which is what knows which group is
+  // the open one.
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
   const needle = query.trim().toLowerCase();
-  const shown = outputs.filter((output) =>
-    needle === "" || artifactName(output).toLowerCase().includes(needle));
+  // The path is searchable too: when two artifacts share a name, the folder is
+  // the only thing the reader can type to reach the one they mean.
+  const shown = groups
+    .map((group) => ({
+      group,
+      outputs: group.outputs.filter((output) =>
+        needle === ""
+        || artifactName(output).toLowerCase().includes(needle)
+        || artifactPath(output).toLowerCase().includes(needle)),
+    }))
+    .filter(({ outputs }) => outputs.length > 0);
   if (shown.length === 0) {
-    return <div className="panel-empty">{TEXT.workspace.empty}</div>;
+    return (
+      <div className="panel-empty">
+        {needle === "" ? TEXT.workspace.empty : TEXT.workspace.searchEmpty}
+      </div>
+    );
   }
+  // One Session's artifacts need no heading: the list is theirs. As soon as a
+  // second Session appears — or the only one is not the open one — the heading
+  // is what says whose file this is.
+  const headed = groups.some((group) => !group.isCurrent);
   return (
     <>
-      {shown.map((output) => (
-        <button
-          className={`panel-list-row${output.version.id === activeId ? " is-active" : ""}`}
-          key={output.version.id}
-          onClick={() => void actions.openArtifact(output)}
-          title={output.artifact.description ?? output.artifact.name}
-          type="button"
-        >
-          <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="15">
-            <path d="M14 3.5H7.5A1.5 1.5 0 0 0 6 5v14a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19V7.5z" />
-            <path d="M14 3.5V8h4" />
-          </svg>
-          <span className="label">{artifactName(output)}</span>
-        </button>
-      ))}
+      {shown.map(({ group, outputs }) => {
+        // A search opens every group it reaches: a match behind a fold is a
+        // match the reader cannot see, and typing is already a request to see
+        // what is there. The fold is remembered for when the search is cleared.
+        const open = needle !== "" || (opened[group.sessionId] ?? group.isCurrent);
+        return (
+          <div className="panel-output" key={group.sessionId}>
+            {headed ? (
+              <button
+                aria-expanded={open}
+                className={`panel-output-head${group.isCurrent ? " is-current" : ""}${open ? " is-open" : ""}`}
+                onClick={() => setOpened((current) => ({ ...current, [group.sessionId]: !open }))}
+                title={group.title}
+                type="button"
+              >
+                <span aria-hidden="true" className="tree-chev">▸</span>
+                <span className="label">{group.title}</span>
+                {group.isCurrent ? <span className="label-meta">{TEXT.workspace.currentSession}</span> : null}
+              </button>
+            ) : null}
+            {!open ? null : outputs.map((output) => {
+              const name = artifactName(output);
+              // One row per artifact, keyed by the artifact: its versions are
+              // behind the picker beside the document, not rows of their own.
+              //
+              // The hint is computed over the whole list, not the filtered one,
+              // so it does not flicker away while the reader is still typing.
+              const hint = hints.get(output.artifact.id) ?? "";
+              const isActive = output.artifact.id === activeId;
+              return (
+                <button
+                  className={`panel-list-row${isActive ? " is-active" : ""}`}
+                  key={output.artifact.id}
+                  onClick={() => void actions.openArtifact(output)}
+                  title={output.artifact.description ?? artifactPath(output)}
+                  type="button"
+                >
+                  <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="15">
+                    <path d="M14 3.5H7.5A1.5 1.5 0 0 0 6 5v14a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19V7.5z" />
+                    <path d="M14 3.5V8h4" />
+                  </svg>
+                  <span className="label">{name}</span>
+                  {hint === "" ? null : (
+                    <span className="label-meta" title={artifactPath(output)}>{hint}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
     </>
   );
 }
 
-function TreeLevel({ actions, activePath, node, query }: {
+function TreeLevel({ actions, activePath, node }: {
   actions: WorkspaceActions;
   activePath?: string;
   node: FileTreeNode;
-  query: string;
 }) {
   const [folded, setFolded] = useState<Record<string, boolean>>({});
-  const needle = query.trim().toLowerCase();
-  const matches = (name: string) => needle === "" || name.toLowerCase().includes(needle);
   return (
     <>
       {node.subdirectories.map((child) => {
@@ -205,13 +277,13 @@ function TreeLevel({ actions, activePath, node, query }: {
             </button>
             {open ? (
               <div className="panel-list-group">
-                <TreeLevel actions={actions} activePath={activePath} node={child} query={query} />
+                <TreeLevel actions={actions} activePath={activePath} node={child} />
               </div>
             ) : null}
           </div>
         );
       })}
-      {node.files.filter((file) => matches(fileName(file.path))).map((file) => (
+      {node.files.map((file) => (
         <button
           className={`panel-list-row${file.path === activePath ? " is-active" : ""}`}
           key={file.path}
@@ -253,6 +325,143 @@ function PanelSearch({ label, onChange, placeholder, value }: {
   );
 }
 
+function CheckGlyph() {
+  return (
+    <svg aria-hidden="true" fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12">
+      <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+    </svg>
+  );
+}
+
+/**
+ * The way back from a closed column.
+ *
+ * It stays out of sight until the pointer is on the edge, so a closed panel
+ * looks as plain as an open one, and the arrow points towards the column it
+ * brings back. It is only the drawing: the divider underneath is still the
+ * control. A press on the edge is a drag like any other; one that never moved
+ * is a click, and a click there restores the default split. Intercepting the
+ * press with a button of its own would take the middle of the divider away
+ * from the drag, which is exactly where the pointer is when the control shows.
+ *
+ * Exported because it only exists after a drag, and its markup is the part
+ * worth testing.
+ */
+export function PanelExpand({ side }: { side: "left" | "right" }) {
+  return (
+    <span aria-hidden="true" className={`panel-expand is-${side}`}>
+      <svg fill="none" height="14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24" width="14">
+        <path d={side === "left" ? "m9 5 7 7-7 7" : "m15 5-7 7 7 7"} />
+      </svg>
+    </span>
+  );
+}
+
+/**
+ * The versions of the open artifact, as a card rather than the platform's own
+ * menu: a native select draws a square popup in the system's highlight colour
+ * in the middle of the panel's quiet chrome. Exported because the menu exists
+ * only while it is open, and its rows are the part worth testing.
+ */
+export function VersionMenu({
+  current,
+  onSelect,
+  versions,
+}: {
+  current?: string;
+  onSelect: (version: SessionArtifactOutput) => void;
+  versions: SessionArtifactOutput[];
+}) {
+  return (
+    <div aria-label={TEXT.workspace.version} className="doc-version-menu" role="menu">
+      {versions.map((output) => {
+        const selected = output.version.id === current;
+        return (
+          <button
+            aria-checked={selected}
+            className={`doc-version-option${selected ? " is-current" : ""}`}
+            key={output.version.id}
+            onClick={() => onSelect(output)}
+            role="menuitemradio"
+            type="button"
+          >
+            <span>v{output.version.version}</span>
+            {selected ? <CheckGlyph /> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The trigger and its menu. Only rendered when there is more than one version,
+ *  so the closed state always has something behind it. */
+function VersionPicker({
+  current,
+  onSelect,
+  versions,
+}: {
+  current?: string;
+  onSelect: (version: SessionArtifactOutput) => void;
+  versions: SessionArtifactOutput[];
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLSpanElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const shown = versions.find((output) => output.version.id === current) ?? versions[0];
+
+  useEffect(() => {
+    if (!open) return;
+    // A click anywhere else closes the menu, the way the composer's own menus
+    // do. Escape closes it and hands focus back to the trigger, since the menu
+    // it was in is gone.
+    const dismiss = (event: globalThis.PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      trigger.current?.focus();
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", key);
+    };
+  }, [open]);
+
+  return (
+    <span className="doc-versions" ref={root}>
+      <button
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={TEXT.workspace.version}
+        className={`doc-version-button${open ? " is-open" : ""}`}
+        onClick={() => setOpen((value) => !value)}
+        ref={trigger}
+        title={TEXT.workspace.version}
+        type="button"
+      >
+        {shown === undefined ? "" : `v${shown.version.version}`}
+        <svg aria-hidden="true" fill="none" height="10" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 10 10" width="10">
+          <path d="m2.5 4 2.5 2.5L7.5 4" />
+        </svg>
+      </button>
+      {open ? (
+        <VersionMenu
+          current={shown?.version.id}
+          onSelect={(version) => {
+            setOpen(false);
+            onSelect(version);
+          }}
+          versions={versions}
+        />
+      ) : null}
+    </span>
+  );
+}
+
 /**
  * The right column: 产物 and 工作区.
  *
@@ -270,6 +479,8 @@ export function WorkspacePanel({
   onSelectGroup,
   outputs,
   resize,
+  sessionId,
+  sessions = [],
   subagent,
   subagentLoading,
   tabs,
@@ -278,15 +489,87 @@ export function WorkspacePanel({
   const [artifactQuery, setArtifactQuery] = useState("");
   const [fileQuery, setFileQuery] = useState("");
   const body = useRef<HTMLDivElement>(null);
+  const activeTab = useRef<HTMLDivElement>(null);
 
   const docs = tabs.tabs.filter((slot) => !slot.home && slot.source === (activeGroup === "files" ? "file" : "artifact"));
   const active = tabs.tabs.find((slot) => slot.id === tabs.activeTabId && docs.includes(slot));
-  const activeArtifact = activeGroup === "artifacts"
-    ? outputs.find((output) => output.version.id === tabs.tabs.find((slot) => slot.id === tabs.activeTabId)?.artifactId)
-    : undefined;
+  // The list shows every Session's artifacts, grouped by the Session that made
+  // them, with the open Session's group first. The versions of the artifact on
+  // screen are the picker's business, and it is the newest version that has a
+  // row — whichever Session wrote it.
+  const artifactSections = artifactGroups(outputs, sessions, sessionId, TEXT.workspace.untitledSession);
+  const artifacts = artifactSections.flatMap((group) => group.outputs);
+  // The picker reaches versions written by any Session, so it reads the union
+  // rather than the group a row happens to sit under.
+  const allVersions = artifactSections.flatMap((group) => group.versions);
+  const activeArtifact = active?.artifactId === undefined
+    ? undefined
+    : outputs.find((output) => output.artifact.id === active.artifactId);
+  const activeVersions = active?.artifactId === undefined ? [] : versionsOf(allVersions, active.artifactId);
+
+  // The list column and the document column share the panel, and the divider
+  // between them is the reader's: drag it left and the list goes, drag it right
+  // and the document does. See `panel-split` for where each one snaps closed.
+  const splitBody = useRef<HTMLDivElement>(null);
+  const panel = usePanelSplit(splitBody);
+  const listClosed = isListClosed(panel.split);
+  const closed = listClosed || panel.split.docClosed;
+  // A click on a row is a request to see the document, and a closed document
+  // column would swallow it: opening anything brings the column back.
+  const listActions: WorkspaceActions = {
+    ...actions,
+    openArtifact: (output) => {
+      panel.openDoc();
+      return actions.openArtifact(output);
+    },
+    openFile: (file) => {
+      panel.openDoc();
+      return actions.openFile(file);
+    },
+  };
+  const listMax = Math.max(LIST_MIN_WIDTH, resize.width - DOC_MIN_WIDTH);
+  const splitter = (
+    <div
+      aria-label={closed ? TEXT.workspace.expand : TEXT.workspace.resizeList}
+      aria-orientation="vertical"
+      aria-valuemax={listMax}
+      aria-valuemin={0}
+      aria-valuenow={listClosed ? 0 : Math.min(panel.split.list, listMax)}
+      className="panel-splitter"
+      onKeyDown={(event) => {
+        if (closed && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          panel.reset();
+          return;
+        }
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        panel.nudge(event.key === "ArrowLeft" ? -LIST_NUDGE_STEP : LIST_NUDGE_STEP);
+      }}
+      onPointerDown={panel.start}
+      role="separator"
+      tabIndex={0}
+    >
+      {/* A closed column leaves no border behind to say the divider is there,
+          so the edge offers a way back instead: the control is invisible until
+          the pointer reaches the divider, then one click restores the default
+          split. It sits inside the divider rather than over it, so its press
+          still reaches the drag — and its cursor is the pointer's, since a
+          click is what it is for. */}
+      {listClosed ? <PanelExpand side="left" /> : null}
+      {panel.split.docClosed ? <PanelExpand side="right" /> : null}
+    </div>
+  );
 
   useEffect(() => {
     setExpanded(false);
+  }, [tabs.activeTabId]);
+
+  // Opening a document has to show the tab it landed in. In a narrow panel the
+  // strip scrolls, and a new tab past the right edge would otherwise look like
+  // the document had been swapped into the tab already on screen.
+  useEffect(() => {
+    activeTab.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [tabs.activeTabId]);
 
   const activeName = active === undefined ? "" : previewName(active.label, active.path);
@@ -294,6 +577,25 @@ export function WorkspacePanel({
     active !== undefined
     && !active.loading
     && detectStructureFormat({ content: active.content ?? "", name: activeName }) !== undefined;
+  // Two tabs can carry the same label — two artifacts that share a file name,
+  // or a file and an artifact with the same name. Only then is there a second
+  // fact worth showing; a unique label keeps the whole tab for itself.
+  const hints = artifactHints(artifacts);
+  const labelCounts = new Map<string, number>();
+  for (const slot of docs) labelCounts.set(slot.label, (labelCounts.get(slot.label) ?? 0) + 1);
+  const tabHint = (slot: PreviewSlot): string => {
+    if ((labelCounts.get(slot.label) ?? 0) < 2) return "";
+    // An artifact's note comes from the list it was opened from; a source file
+    // has only its folder to offer. A version is not a note here any more —
+    // one tab holds one artifact, and its version has a picker of its own.
+    const note = slot.artifactId === undefined ? undefined : hints.get(slot.artifactId);
+    return note ?? fileFolder(slot.path);
+  };
+  const tabTitle = (slot: PreviewSlot): string => (slot.path === "" ? slot.label : slot.path);
+  // A search narrows the tree to the files that match and the folders above
+  // them; `undefined` means nothing matched, which the column says outright
+  // rather than drawing folders that hold no result.
+  const shownTree = filterFileTree(buildFileTree(files), fileQuery);
 
   const groups: { id: PanelGroup; label: string }[] = [
     { id: "artifacts", label: TEXT.workspace.groups.artifacts },
@@ -308,25 +610,35 @@ export function WorkspacePanel({
           <span aria-hidden="true" className="mark">
             <GroupIcon group={activeGroup} />
           </span>
-          <span>{activeGroup === "artifacts" ? TEXT.workspace.empty : TEXT.workspace.filesEmpty}</span>
+          <span>{activeGroup === "artifacts" ? TEXT.workspace.unopenedArtifacts : TEXT.workspace.unopenedFiles}</span>
         </div>
       ) : (
         <>
-          <div className="doc-tabs">
+          {/* The strip and its actions share a row; the strips must not be the
+              same element, or the tablist inherits the 46px height rule as a
+              width and clips every tab but the first. */}
+          <div className="doc-tabbar">
             <div className="doc-tabs" role="tablist">
               {docs.map((slot) => {
                 const isActive = slot.id === tabs.activeTabId;
+                const hint = tabHint(slot);
                 return (
-                  <div className={`doc-tab${isActive ? " is-active" : ""}`} key={slot.id} role="presentation">
+                  <div
+                    className={`doc-tab${isActive ? " is-active" : ""}`}
+                    key={slot.id}
+                    ref={isActive ? activeTab : undefined}
+                    role="presentation"
+                  >
                     <button
                       aria-selected={isActive}
                       className="doc-tab-label"
                       onClick={() => actions.selectPanelTab(slot.id)}
                       role="tab"
-                      title={slot.path === "" ? undefined : slot.path}
+                      title={tabTitle(slot)}
                       type="button"
                     >
-                      {slot.label}
+                      <span className="doc-tab-name">{slot.label}</span>
+                      {hint === "" ? null : <span className="doc-tab-hint">{hint}</span>}
                     </button>
                     <button
                       aria-label={TEXT.workspace.closeTab}
@@ -337,22 +649,27 @@ export function WorkspacePanel({
                       title={TEXT.workspace.closeTab}
                       type="button"
                     >
-                      ×
+                      {/* A glyph's own bearings cannot be centred by a box, so
+                          the ✕ is drawn: it is the same distance from all four
+                          edges of the 18px hover square. */}
+                      <svg aria-hidden="true" fill="none" height="10" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" viewBox="0 0 10 10" width="10">
+                        <path d="M2 2l6 6M8 2 2 8" />
+                      </svg>
                     </button>
                   </div>
                 );
               })}
-              <button
-                aria-label={TEXT.workspace.addTab}
-                className="doc-tab-more"
-                onClick={actions.addPanelTab}
-                title={TEXT.workspace.addTab}
-                type="button"
-              >
-                +
-              </button>
             </div>
             <div className="doc-tabs-actions">
+              {/* The version of the open artifact, in the document's own top
+                  right. One version is not a choice, so it gets no picker. */}
+              {active !== undefined && activeVersions.length > 1 ? (
+                <VersionPicker
+                  current={active.versionId}
+                  onSelect={(output) => void actions.selectArtifactVersion(active.id, output)}
+                  versions={activeVersions}
+                />
+              ) : null}
               {activeArtifact ? (
                 <button
                   aria-label={TEXT.workspace.download}
@@ -452,7 +769,11 @@ export function WorkspacePanel({
       </header>
 
       {subagent === undefined ? (
-        <div className="panel-body">
+        <div
+          className={`panel-body${panel.split.docClosed ? " is-doc-closed" : ""}${listClosed ? " is-list-closed" : ""}`}
+          ref={splitBody}
+          style={{ "--panel-list-width": `${panel.split.list}px` } as CSSProperties}
+        >
           {activeGroup === "artifacts" ? (
             <>
               <div className="panel-list">
@@ -464,12 +785,14 @@ export function WorkspacePanel({
                   value={artifactQuery}
                 />
                 <ArtifactList
-                  actions={actions}
-                  activeId={tabs.tabs.find((slot) => slot.id === tabs.activeTabId)?.artifactId}
-                  outputs={outputs}
+                  actions={listActions}
+                  activeId={active?.artifactId}
+                  groups={artifactSections}
+                  hints={hints}
                   query={artifactQuery}
                 />
               </div>
+              {splitter}
               {docArea}
             </>
           ) : (
@@ -484,15 +807,13 @@ export function WorkspacePanel({
                 />
                 {files.length === 0 ? (
                   <div className="panel-empty">{TEXT.workspace.filesEmpty}</div>
+                ) : shownTree === undefined ? (
+                  <div className="panel-empty">{TEXT.workspace.searchEmpty}</div>
                 ) : (
-                  <TreeLevel
-                    actions={actions}
-                    activePath={active?.path}
-                    node={buildFileTree(files)}
-                    query={fileQuery}
-                  />
+                  <TreeLevel actions={listActions} activePath={active?.path} node={shownTree} />
                 )}
               </div>
+              {splitter}
               {docArea}
             </>
           )}

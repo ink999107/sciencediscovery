@@ -15,7 +15,7 @@
 import assert from "node:assert/strict";
 
 import { createTest } from "../../../test/support/tagged/compat.mjs";
-import { fileName } from "../src/app/paths.js";
+import { fileFolder, fileName } from "../src/app/paths.js";
 
 const { describe, it } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
 
@@ -35,5 +35,22 @@ describe("a label shows the artifact, not the path it lives in", () => {
   it("keeps a path that has nothing to take", () => {
     assert.equal(fileName(""), "");
     assert.equal(fileName("/"), "/");
+  });
+});
+
+describe("the folder is what tells two same-named documents apart", () => {
+  it("names the nearest folder rather than the whole path to it", () => {
+    // `subagents/` is shared by every child, so a truncated prefix would hide
+    // the id that actually differs.
+    assert.equal(fileFolder("subagents/ab12f/trace.md"), "ab12f");
+  });
+
+  it("says nothing for a name with no folder", () => {
+    assert.equal(fileFolder("trace.md"), "");
+    assert.equal(fileFolder(""), "");
+  });
+
+  it("keeps a path with nothing before the separator empty", () => {
+    assert.equal(fileFolder("/trace.md"), "");
   });
 });

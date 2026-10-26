@@ -14,13 +14,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { artifactName } from "./artifact-labels.js";
 import { resolveCatalog, resolveConnection } from "./bootstrap.js";
 import { fileName } from "./paths.js";
 import { byRecency, reusableDraft, resumeOnBoot } from "./session-order.js";
 import { sessionTitle } from "./session-title.js";
 import { formatByteLimit, splitBySize } from "./upload.js";
 import {
-  addTab,
   closeTab as closeTabIn,
   initialTabState,
   placeDocument,
@@ -161,8 +161,6 @@ export interface WorkspaceState {
 }
 
 export interface WorkspaceActions {
-  /** Opens another empty tab in the right panel. */
-  addPanelTab: () => void;
   /** Returns true when the close emptied the panel, which collapses it. */
   closeTab: (tabId: string) => boolean;
   /** Opens the confirmation dialog. Exposed so a settings row can route its own
@@ -187,6 +185,9 @@ export interface WorkspaceActions {
   selectProject: (projectId?: string) => void;
   openArtifact: (output: SessionArtifactOutput) => Promise<void>;
   openFile: (file: WorkspaceFile) => Promise<void>;
+  /** Put another version of the artifact an open tab is showing on screen. The
+   *  tab itself stays where it is — see `selectArtifactVersion`. */
+  selectArtifactVersion: (tabId: string, output: SessionArtifactOutput) => Promise<void>;
   selectPanelTab: (tabId: string) => void;
   /** `projectId` is the Project the row came from: naming it lets the app file
    *  later writes under it before the Session read comes back. */
@@ -515,6 +516,57 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   );
 
   // ── projects and session lists ───────────────────────────────────────────
+  /**
+   * Artifacts read per Session, and the set of reads already in flight.
+   *
+   * The panel lists every Session's output, not only the open one's. A Session
+   * cannot gain an artifact while it is not open — a run writes into the open
+   * Session — so its list is read once and then kept; only the open Session is
+   * re-read, by `refreshPanel`.
+   */
+  const artifactsBySession = useRef<Record<string, SessionArtifactOutput[]>>({});
+  const artifactsReading = useRef(new Set<string>());
+
+  const publishArtifacts = useCallback(() => {
+    setOutputs(Object.values(artifactsBySession.current).flat());
+  }, []);
+
+  const readSessionArtifacts = useCallback(
+    (target: string) => {
+      if (artifactsBySession.current[target] !== undefined) return;
+      if (artifactsReading.current.has(target)) return;
+      artifactsReading.current.add(target);
+      void listArtifactOutputs(client, target)
+        .then((list) => {
+          artifactsBySession.current[target] = list;
+          publishArtifacts();
+        })
+        .catch(() => {
+          // The panel is secondary. The next listing — a run, an upload, a
+          // session action — tries this one again.
+        })
+        .finally(() => artifactsReading.current.delete(target));
+    },
+    [client, publishArtifacts],
+  );
+
+  /** Forget what a Session that is gone had listed. An artifact another Session
+   *  also wrote survives under the Session that made it — only the deleted
+   *  Session's versions leave. */
+  const pruneArtifacts = useCallback(
+    (sessions: readonly Session[]) => {
+      const live = new Set(sessions.map((session) => session.id));
+      let dropped = false;
+      for (const id of Object.keys(artifactsBySession.current)) {
+        if (live.has(id)) continue;
+        delete artifactsBySession.current[id];
+        dropped = true;
+      }
+      if (dropped) publishArtifacts();
+    },
+    [publishArtifacts],
+  );
+
   /** Re-read the sidebar's list. Returns every Session it now holds, so the
    *  caller can act on the same snapshot the list was built from — `undefined`
    *  when the listing failed, which is not the same as an empty workspace.
@@ -535,13 +587,18 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         [...known, inbox].map(async (project) => [project.id, await listSessions(client, project.id)] as const),
       );
       setProjects(known);
+      const sessions = entries.flatMap(([, list]) => list);
       setSessionsByProject(Object.fromEntries(entries));
-      return entries.flatMap(([, sessions]) => sessions);
+      // The artifact list spans Sessions; read the ones this app has not seen,
+      // and forget the ones the listing no longer has.
+      pruneArtifacts(sessions);
+      for (const session of sessions) readSessionArtifacts(session.id);
+      return sessions;
     } catch (reason) {
       report(reason);
       return undefined;
     }
-  }, [client, report]);
+  }, [client, pruneArtifacts, readSessionArtifacts, report]);
 
   /**
    * Create a Session in the current Project and make it the open one.
@@ -613,13 +670,14 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         // The panel belongs to the Session it was read for; a read that lands
         // after the user has left it must not fill another Session's panel.
         if (sessionRef.current !== target) return;
-        setOutputs(nextOutputs);
+        artifactsBySession.current[target] = nextOutputs;
+        publishArtifacts();
         setPanelFiles(nextFiles);
       } catch {
         // The panel is secondary; a failure here must not disturb the run.
       }
     },
-    [client],
+    [client, publishArtifacts],
   );
 
   /**
@@ -873,10 +931,12 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     // Open documents belong to the session's workspace, so leaving the session
     // takes them with it rather than showing another session's file contents.
     setTabs(initialTabState());
-    setOutputs([]);
+    // The artifact list is every Session's, so leaving one empties no more than
+    // that Session's group — the others keep their rows without a re-read.
+    publishArtifacts();
     setPanelFiles([]);
     resetRun();
-  }, [resetRun]);
+  }, [publishArtifacts, resetRun]);
 
   /** Clear the view back to an empty draft, writing nothing. Used by 新增会话
    *  before it creates, and by a deletion that removed the open Session (there
@@ -1126,13 +1186,31 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     }));
   }, []);
 
+  /** The same write, gated on the version the read was made for: a pick that
+   *  replaces one still in flight must not be overwritten by the older answer. */
+  const settleVersion = useCallback((id: string, versionId: string, patch: Partial<PreviewSlot>) => {
+    setTabs((current) => ({
+      ...current,
+      tabs: current.tabs.map((tab) =>
+        tab.id === id && tab.versionId === versionId ? { ...tab, ...patch } : tab),
+    }));
+  }, []);
+
   const openPreview = useCallback(
     async (request: DocumentRequest, read: (target: string) => Promise<string>) => {
-      const target = sessionRef.current;
+      // An artifact carries the Session its version was written in: the list
+      // shows every Session's output, so the open one is only the fallback.
+      const target = request.sessionId ?? sessionRef.current;
       if (!target) return;
       // Placement happens before the read, so the tab appears immediately and
       // the content lands in it when it arrives.
       const placed = placeDocument(tabs.tabs, tabs.activeTabId, request);
+      // Already open: the click is a request to look at the document, so its
+      // tab takes focus and nothing is read a second time.
+      if (placed.reused) {
+        setTabs(placed);
+        return;
+      }
       const openedId = placed.activeTabId;
       setTabs(placed);
       try {
@@ -1153,25 +1231,71 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     [client, openPreview],
   );
 
+  // A row is an artifact, not a version: it opens on the version it shows (the
+  // newest), and the picker beside the document reaches the rest. The tab is
+  // keyed by the artifact, so clicking the row again lands on the open tab
+  // whichever version it has been switched to.
   const openArtifact = useCallback(
     (output: SessionArtifactOutput) =>
       openPreview(
         {
-          artifactId: output.version.id,
-          label: output.artifact.title ?? fileName(output.artifact.name),
+          artifactId: output.artifact.id,
+          label: artifactName(output),
           path: output.version.sourcePath ?? "",
+          sessionId: output.version.sessionId || undefined,
           source: "artifact",
+          versionId: output.version.id,
         },
         (target) => readArtifactVersion(client, target, output.version.id),
       ),
     [client, openPreview],
   );
 
+  /**
+   * Show another version of the artifact a tab already holds.
+   *
+   * The tab keeps its id and its place in the strip: a version is a property of
+   * the open document, not something to open beside it. The tab is blanked to
+   * its loading state first so the old text never sits under the new version's
+   * name, and the read only lands if the tab is still on that version — a
+   * second pick while the first is in flight wins.
+   */
+  const selectArtifactVersion = useCallback(
+    async (tabId: string, output: SessionArtifactOutput) => {
+      // The version is read through the Session that wrote it: the artifact may
+      // have been open since another Session wrote it last.
+      const target = output.version.sessionId || sessionRef.current;
+      if (!target) return;
+      const versionId = output.version.id;
+      setTabs((current) => ({
+        ...current,
+        tabs: current.tabs.map((tab) =>
+          tab.id === tabId && tab.artifactId === output.artifact.id
+            ? {
+                ...tab,
+                content: undefined,
+                error: undefined,
+                loading: true,
+                // A version may have been written elsewhere than the one before
+                // it, and the preview picks its renderer from this path.
+                path: output.version.sourcePath ?? "",
+                versionId,
+              }
+            : tab),
+      }));
+      try {
+        const content = await readArtifactVersion(client, target, versionId);
+        settleVersion(tabId, versionId, { content, loading: false });
+      } catch (reason) {
+        settleVersion(tabId, versionId, { error: errorMessage(reason), loading: false });
+      }
+    },
+    [client, settleVersion],
+  );
+
   const selectPanelTab = useCallback((tabId: string) => {
     setTabs((current) => ({ ...current, activeTabId: tabId }));
   }, []);
-
-  const addPanelTab = useCallback(() => setTabs((current) => addTab(current.tabs)), []);
 
   // Closing the last tab leaves a fresh home tab in state and reports that the
   // panel should collapse; re-opening it therefore starts from 新标签页 rather
@@ -1284,7 +1408,6 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
 
   const actions: WorkspaceActions = useMemo(
     () => ({
-      addPanelTab,
       closeTab,
       confirmAction,
       createProject: createProjectAndOpen,
@@ -1312,6 +1435,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         mutate({ id: session.id, operation: () => updateSession(client, session.id, { title }) }),
       refreshCatalog,
       retryBoot,
+      selectArtifactVersion,
       selectModel,
       selectPanelTab,
       selectProject,
@@ -1323,7 +1447,6 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       uploadFiles,
     }),
     [
-      addPanelTab,
       closeTab,
       confirmAction,
       createProjectAndOpen,
@@ -1338,6 +1461,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       openSession,
       refreshCatalog,
       retryBoot,
+      selectArtifactVersion,
       selectModel,
       selectPanelTab,
       selectProject,

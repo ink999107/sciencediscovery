@@ -29,3 +29,18 @@ export function fileName(path: string): string {
   const segments = path.split("/").filter((segment) => segment !== "");
   return segments.at(-1) ?? path;
 }
+
+/**
+ * The folder a workspace path lives in, by name, or "" when it has none.
+ *
+ * Two artifacts can carry the same file name — a subagent writes `trace.md`
+ * into its own workspace and the next one writes another — and the last
+ * segment alone cannot tell them apart. The containing folder is what does, so
+ * it is shown beside the name whenever the names collide. Only the nearest
+ * folder is named: the path above it (`subagents/`) is shared, and a truncated
+ * prefix would hide the part that differs.
+ */
+export function fileFolder(path: string): string {
+  const segments = path.split("/").filter((segment) => segment !== "");
+  return segments.length < 2 ? "" : segments.at(-2)!;
+}
