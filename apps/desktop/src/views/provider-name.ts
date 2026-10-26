@@ -41,3 +41,16 @@ export function providerName(name: string): string {
   }
   return name;
 }
+
+/**
+ * The model half of a profile's name.
+ *
+ * A menu row has one line for a name and an icon for the provider, so it shows
+ * the model alone: `月之暗面 · Kimi-K3` is a row with 月之暗面's mark and the
+ * words `Kimi-K3`. The whole name stays on the row's tooltip. A standalone
+ * profile — no provider half to drop — is returned untouched.
+ */
+export function modelLabel(name: string): string {
+  const separator = name.lastIndexOf(LABEL_SEPARATOR);
+  return separator === -1 ? name : name.slice(separator + LABEL_SEPARATOR.length);
+}

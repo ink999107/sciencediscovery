@@ -14,9 +14,18 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { ApprovalMode, ModelProfile } from "../api/types.js";
+import type { ApprovalMode, ModelProfile, ModelProvider } from "../api/types.js";
+import type { LandingCategory, LandingSeed } from "../app/landing.js";
 import { TEXT } from "../text.js";
-import { providerName } from "./provider-name.js";
+import { modelBrand } from "./model-brand.js";
+import { modelLabel, providerName } from "./provider-name.js";
+
+/** The category chip the welcome page puts in front of the input. */
+export interface ComposerTag {
+  kind: LandingCategory;
+  label: string;
+  onClear: () => void;
+}
 
 interface Props {
   approvalMode?: ApprovalMode;
@@ -25,6 +34,9 @@ interface Props {
   attachBlocked?: string;
   /** The per-file ceiling to state in that tooltip, already formatted. */
   attachLimit?: string;
+  /** The welcome page's arrangement: the card floats, and a grey strip under
+   *  it carries the project and the permission mode. */
+  landing?: boolean;
   models: ModelProfile[];
   onApprovalMode: (mode: ApprovalMode) => void;
   onOpenSettings: () => void;
@@ -33,8 +45,17 @@ interface Props {
   onSend: (content: string) => void;
   onStop: () => void;
   onUpload: (files: File[]) => void;
+  /** Shown in the landing strip, beside the folder. */
+  projectName?: string;
+  /** Where the model menu gets each row's brand mark. A profile names its
+   *  provider, and the provider knows its preset. */
+  providers?: ModelProvider[];
   running: boolean;
+  /** A starter prompt chosen on the welcome page, to be placed in the input. */
+  seed?: LandingSeed;
   selectedModelId?: string;
+  /** The category the welcome page attached to this turn. */
+  tag?: ComposerTag;
   uploading: boolean;
 }
 
@@ -93,6 +114,15 @@ function CheckGlyph() {
   return (
     <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="15">
       <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+    </svg>
+  );
+}
+
+/** The ✕ that detaches the category chip from the turn. */
+function CloseGlyph() {
+  return (
+    <svg aria-hidden="true" fill="none" height="11" stroke="currentColor" strokeLinecap="round" strokeWidth="1.9" viewBox="0 0 24 24" width="11">
+      <path d="m6 6 12 12M18 6 6 18" />
     </svg>
   );
 }
@@ -320,6 +350,75 @@ function Chevron({ down = true }: { down?: boolean }) {
 }
 
 /**
+ * The model menu's contents: the models, a hairline, and the way to add one.
+ *
+ * One row per model, each row a single line — the provider is its icon, so the
+ * words only have to say which model. Exported because the menu only exists
+ * while it is open, and the rows are the part worth testing.
+ */
+export function ModelMenu({
+  models,
+  onAdd,
+  onSelect,
+  providers = [],
+  selectedId,
+}: {
+  models: ModelProfile[];
+  onAdd: () => void;
+  onSelect: (modelId: string) => void;
+  providers?: ModelProvider[];
+  selectedId?: string;
+}) {
+  const list = useRef<HTMLDivElement>(null);
+
+  // With more models than the list can show, the one in use may start below
+  // the fold. Put it in view without moving the card.
+  useEffect(() => {
+    list.current?.querySelector('[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [selectedId]);
+
+  return (
+    <>
+      <div className="model-menu-list" ref={list}>
+        {models.map((model) => {
+          const name = providerName(model.name);
+          const current = model.id === selectedId;
+          return (
+            <button
+              aria-current={current ? "true" : undefined}
+              className="model-option"
+              key={model.id}
+              onClick={() => onSelect(model.id)}
+              title={name}
+              type="button"
+            >
+              <span
+                aria-hidden="true"
+                className="model-option-icon"
+                data-brand={modelBrand(model, providers)}
+              />
+              <span className="model-option-label">{modelLabel(name)}</span>
+              {current ? (
+                <span className="model-option-check">
+                  <CheckGlyph />
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+      <div className="model-menu-divider" />
+      <button className="model-option is-add" onClick={onAdd} type="button">
+        <span aria-hidden="true" className="model-option-plus">
+          <PlusGlyph />
+        </span>
+        <span className="model-option-label">{TEXT.composer.addCustomModel}</span>
+      </button>
+    </>
+  );
+}
+
+/**
  * The composer, as the handoff draws it: one rounded card, the input over a
  * footer of 上传, 会话设置, the model and 发送.
  *
@@ -332,6 +431,7 @@ export function Composer({
   approvalMode,
   attachBlocked,
   attachLimit,
+  landing = false,
   models,
   onApprovalMode,
   onOpenSettings,
@@ -340,8 +440,12 @@ export function Composer({
   onSend,
   onStop,
   onUpload,
+  projectName,
+  providers = [],
   running,
+  seed,
   selectedModelId,
+  tag,
   uploading,
 }: Props) {
   const [text, setText] = useState("");
@@ -363,6 +467,22 @@ export function Composer({
     node.style.height = "auto";
     node.style.height = `${node.scrollHeight}px`;
   }, [text]);
+
+  // A starter prompt from the welcome page replaces whatever the input holds:
+  // it is a deliberate choice, not text inserted at the caret. The cursor goes
+  // to the end so the reader can keep typing from where the prompt stops.
+  useEffect(() => {
+    if (seed === undefined) return;
+    setText(seed.text);
+    const node = area.current;
+    if (!node) return;
+    const frame = window.requestAnimationFrame(() => {
+      node.focus();
+      const end = node.value.length;
+      node.setSelectionRange(end, end);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [seed]);
 
   useEffect(() => {
     if (!menu) return;
@@ -386,8 +506,22 @@ export function Composer({
   const stop = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
   return (
-    <div className="composer">
+    <div className={`composer${landing ? " is-landing" : ""}`}>
       <div className="composer-input">
+        {tag ? (
+          <span className="composer-tag">
+            <span aria-hidden="true" className="composer-tag-icon" data-kind={tag.kind} />
+            <span className="composer-tag-label">{tag.label}</span>
+            <button
+              aria-label={TEXT.landing.clearCategory}
+              className="composer-tag-clear"
+              onClick={tag.onClear}
+              type="button"
+            >
+              <CloseGlyph />
+            </button>
+          </span>
+        ) : null}
         <textarea
           disabled={running}
           id="composer-textarea"
@@ -398,7 +532,7 @@ export function Composer({
               submit();
             }
           }}
-          placeholder={TEXT.composer.placeholder}
+          placeholder={landing ? TEXT.landing.placeholder : TEXT.composer.placeholder}
           ref={area}
           rows={1}
           value={text}
@@ -416,19 +550,30 @@ export function Composer({
           {uploading ? <span className="spinner" /> : <PlusGlyph />}
         </button>
 
-        <button
-          aria-expanded={menu === "settings"}
-          aria-label={TEXT.composer.sessionSettings}
-          className="composer-plus composer-settings"
-          onClick={(event) => {
-            event.stopPropagation();
-            setMenu(menu === "settings" ? undefined : "settings");
-          }}
-          title={TEXT.composer.sessionSettings}
-          type="button"
-        >
-          <SlidersGlyph />
-        </button>
+        <span className="composer-menu-anchor is-settings">
+          <button
+            aria-expanded={menu === "settings"}
+            aria-label={TEXT.composer.sessionSettings}
+            className="composer-plus composer-settings"
+            onClick={(event) => {
+              event.stopPropagation();
+              setMenu(menu === "settings" ? undefined : "settings");
+            }}
+            title={TEXT.composer.sessionSettings}
+            type="button"
+          >
+            <SlidersGlyph />
+          </button>
+          {menu === "settings" ? (
+            <SessionSettingsMenu
+              approvalMode={approvalMode}
+              onApprovalMode={onApprovalMode}
+              onClose={() => setMenu(undefined)}
+              onOpenSpecialists={onOpenSpecialists}
+              running={running}
+            />
+          ) : null}
+        </span>
 
         <input
           className="composer-file-input"
@@ -447,23 +592,42 @@ export function Composer({
 
         <span className="composer-spacer" />
 
-        <button
-          aria-expanded={menu === "model"}
-          aria-label={TEXT.composer.modelSelect}
-          className="composer-model-pill"
-          onClick={(event) => {
-            event.stopPropagation();
-            if (running) return;
-            setMenu(menu === "model" ? undefined : "model");
-          }}
-          title={running ? TEXT.composer.pillLocked : TEXT.composer.modelSelect}
-          type="button"
-        >
-          <span className="model-name">
-            {selectedName ?? TEXT.errors.modelRequired}
-          </span>
-          <Chevron down={menu !== "model"} />
-        </button>
+        <span className="composer-menu-anchor is-model">
+          <button
+            aria-expanded={menu === "model"}
+            aria-label={TEXT.composer.modelSelect}
+            className="composer-model-pill"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (running) return;
+              setMenu(menu === "model" ? undefined : "model");
+            }}
+            title={running ? TEXT.composer.pillLocked : TEXT.composer.modelSelect}
+            type="button"
+          >
+            <span className="model-name">
+              {selectedName ?? TEXT.errors.modelRequired}
+            </span>
+            <Chevron down={menu !== "model"} />
+          </button>
+          {menu === "model" ? (
+            <div className="composer-dropdown is-models" onPointerDown={stop}>
+              <ModelMenu
+                models={models}
+                onAdd={() => {
+                  setMenu(undefined);
+                  onOpenSettings();
+                }}
+                onSelect={(modelId) => {
+                  setMenu(undefined);
+                  onSelectModel(modelId);
+                }}
+                providers={providers}
+                selectedId={selected?.id}
+              />
+            </div>
+          ) : null}
+        </span>
 
         {running ? (
           <button
@@ -486,69 +650,18 @@ export function Composer({
             title={TEXT.composer.send}
             type="button"
           >
-            <svg
-              fill="none"
-              height="16"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1.8"
-              viewBox="0 0 24 24"
-              width="16"
-            >
-              <path d="M22 2 11 13" />
-              <path d="M22 2 15 22l-4-9-9-4 20-7z" />
-            </svg>
+            <span aria-hidden="true" className="send-glyph" />
           </button>
         )}
       </div>
 
-      {menu === "model" ? (
-        <div className="composer-dropdown is-models" onPointerDown={stop}>
-          <div className="dropdown-section">
-            <div className="dropdown-label">{TEXT.composer.configuredModels}</div>
-            {models.map((model) => {
-              const name = providerName(model.name);
-              return (
-                <button
-                  className="dropdown-row model-row"
-                  key={model.id}
-                  onClick={() => {
-                    setMenu(undefined);
-                    onSelectModel(model.id);
-                  }}
-                  type="button"
-                >
-                  <span className="model-mark">{name.trim().slice(0, 1).toUpperCase()}</span>
-                  <span className="row-label">{name}</span>
-                  {model.id === selected?.id ? <span className="row-check">✓</span> : null}
-                </button>
-              );
-            })}
-            <div className="dropdown-divider" />
-            <button
-              className="dropdown-row dropdown-row-sub"
-              onClick={() => {
-                setMenu(undefined);
-                onOpenSettings();
-              }}
-              type="button"
-            >
-              <span className="row-icon">＋</span>
-              <span className="row-label">{TEXT.composer.addCustomModel}</span>
-            </button>
-          </div>
+      {landing ? (
+        <div className="composer-strip">
+          <span className="composer-strip-project">
+            <span aria-hidden="true" className="composer-strip-icon" data-kind="folder" />
+            <span className="composer-strip-label">{projectName ?? TEXT.landing.projectDirectory}</span>
+          </span>
         </div>
-      ) : null}
-
-      {menu === "settings" ? (
-        <SessionSettingsMenu
-          approvalMode={approvalMode}
-          onApprovalMode={onApprovalMode}
-          onClose={() => setMenu(undefined)}
-          onOpenSpecialists={onOpenSpecialists}
-          running={running}
-        />
       ) : null}
     </div>
   );

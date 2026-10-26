@@ -16,9 +16,6 @@
 /* 530:932 */
 /* composer */
 .composer {
-  /* Containing block for the capability / model dropdowns, which anchor to the
-     composer's top edge (bottom: calc(100% + 8px)). Without this they resolve
-     against the viewport and open off-screen above. */
   position: relative;
   flex: 0 0 auto;
   align-self: center;
@@ -166,10 +163,12 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Positioned against `.composer-menu-anchor`, the box around the button that
+   opened it, so the menu always opens directly above that button. */
 .composer-dropdown {
   position: absolute;
   bottom: calc(100% + 8px);
-  left: 14px;
+  left: 0;
   z-index: 50;
   width: 320px;
   max-height: 420px;
@@ -181,102 +180,8 @@
   padding: 8px;
   animation: popIn .12s ease;
 }
-.composer-dropdown .dropdown-section { padding: 4px 0; }
-.composer-dropdown .dropdown-section + .dropdown-section {
-  border-top: 1px solid var(--border-soft);
-  margin-top: 4px;
-  padding-top: 8px;
-}
-.composer-dropdown .dropdown-label {
-  padding: 4px 8px;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-.composer-dropdown .dropdown-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 7px 10px;
-  border-radius: 6px;
-  text-align: left;
-  color: var(--text);
-  font-size: 13px;
-}
-.composer-dropdown .dropdown-row:hover { background: var(--primary-soft); }
-.composer-dropdown .dropdown-row .row-label { font-weight: 600; }
-.composer-dropdown .dropdown-row .row-icon {
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--primary-soft);
-  color: var(--primary-strong);
-  font-size: 13px;
-  font-weight: 700;
-}
-.composer-dropdown .dropdown-row .row-tag {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--surface-soft);
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-}
-.composer-dropdown .dropdown-row .row-check {
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--primary);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 800;
-}
-.composer-dropdown .dropdown-row .row-arrow {
-  color: var(--text-faint);
-  font-size: 16px;
-}
-.composer-dropdown .dropdown-row .model-mark {
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border-radius: 5px;
-  background: linear-gradient(135deg, #1c2531 0%, #344054 100%);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  font-family: var(--font-mono);
-}
-.composer-dropdown .dropdown-row-sub {
-  grid-template-columns: auto 1fr auto;
-  color: var(--muted);
-  font-weight: 550;
-}
-.composer-dropdown .dropdown-divider {
-  height: 1px;
-  background: var(--border-soft);
-  margin: 4px 6px;
-}
-.composer-dropdown .dropdown-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 7px 10px;
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  cursor: pointer;
-}
-.composer-dropdown .dropdown-toggle:hover { background: var(--surface-soft); }
-.composer-dropdown .dropdown-toggle input { accent-color: var(--primary); }
+/* What goes inside — the model list and 会话设置's two cards — is styled in
+   design.css, which is the sheet that carries this screen's layout. */
 
 /* messages (after send) */
 

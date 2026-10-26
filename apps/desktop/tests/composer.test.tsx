@@ -19,15 +19,28 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { Composer, PermissionFlyout, SessionSettingsMenu } from "../src/views/Composer.js";
+import { Composer, ModelMenu, PermissionFlyout, SessionSettingsMenu } from "../src/views/Composer.js";
+import { modelBrand } from "../src/views/model-brand.js";
+import { modelLabel } from "../src/views/provider-name.js";
 
 /** The dropdown only exists while open, and a static render never runs effects,
  *  so these cover the closed state: the triggers themselves. */
-function render(running = false, options: { blocked?: string; limit?: string; uploading?: boolean } = {}): string {
+function render(
+  running = false,
+  options: {
+    blocked?: string;
+    landing?: boolean;
+    limit?: string;
+    projectName?: string;
+    tag?: { kind: "research" | "experiment" | "analysis"; label: string };
+    uploading?: boolean;
+  } = {},
+): string {
   return renderToStaticMarkup(
     <Composer
       attachBlocked={options.blocked}
       attachLimit={options.limit}
+      landing={options.landing}
       models={[{ id: "m1", name: "测试模型" } as never]}
       onApprovalMode={() => {}}
       onOpenSettings={() => {}}
@@ -36,8 +49,10 @@ function render(running = false, options: { blocked?: string; limit?: string; up
       onSend={() => {}}
       onStop={() => {}}
       onUpload={() => {}}
+      projectName={options.projectName}
       running={running}
       selectedModelId="m1"
+      tag={options.tag === undefined ? undefined : { ...options.tag, onClear: () => {} }}
       uploading={options.uploading ?? false}
     />,
   );
@@ -134,4 +149,66 @@ test("the permission row reads the mode the session is in", () => {
 
 test("permission cannot be switched mid-run", () => {
   assert.match(settingsMenu(undefined, true), /<button[^>]*aria-expanded="false"[^>]*disabled=""/);
+});
+
+test("the landing arrangement carries the project and the approval mode under the card", () => {
+  const markup = render(false, { landing: true, projectName: "蛋白质组学" });
+  assert.match(markup, /class="composer is-landing"/);
+  assert.match(markup, /有什么需要我帮忙的/u);
+  assert.match(markup, /class="composer-strip-project"[\s\S]*蛋白质组学/u);
+  // With no project chosen, the item is the invitation rather than a blank.
+  assert.match(render(false, { landing: true }), /选择项目目录/u);
+  // The strip is the landing page's, not the transcript composer's.
+  assert.doesNotMatch(render(), /composer-strip/);
+});
+
+test("a category chip sits in front of the input and can be taken off", () => {
+  const markup = render(false, { landing: true, tag: { kind: "experiment", label: "实验设计" } });
+  assert.match(markup, /class="composer-tag"/u);
+  assert.match(markup, /data-kind="experiment"/u);
+  assert.match(markup, /class="composer-tag-label">实验设计/u);
+  assert.match(markup, /aria-label="取消分类"/u);
+});
+
+test("the model menu is one line per model, the provider carried by its mark", () => {
+  const markup = renderToStaticMarkup(
+    <ModelMenu
+      models={[
+        { id: "m1", model: "kimi-k3", name: "月之暗面 · Kimi-K3", providerId: "p1" } as never,
+        { id: "m2", model: "DeepSeek-V4.1-Flash", name: "DeepSeek-V4.1-Flash" } as never,
+      ]}
+      onAdd={() => {}}
+      onSelect={() => {}}
+      providers={[{ id: "p1", presetId: "moonshot" } as never]}
+      selectedId="m1"
+    />,
+  );
+  // The row says the model; the provider is the icon, and the whole name is
+  // still reachable as the tooltip.
+  assert.match(markup, /class="model-option-label">Kimi-K3</u);
+  assert.match(markup, /title="月之暗面 · Kimi-K3"/u);
+  assert.match(markup, /data-brand="moonshot"/u);
+  // A profile with no provider falls back to the neutral mark.
+  assert.match(markup, /data-brand="deepseek"/u);
+  // The model in use is ticked once; the others are not.
+  assert.equal(markup.split('class="model-option-check"').length - 1, 1);
+  assert.equal(markup.split('aria-current="true"').length - 1, 1);
+  // Adding one is not a model: it comes after the hairline.
+  assert.match(markup, /class="model-menu-divider"[\s\S]*添加自定义模型/u);
+});
+
+test("a row's mark comes from its provider, then from its name", () => {
+  const providers = [
+    { id: "p1", presetId: "dashscope" } as never,
+    { id: "p2", name: "自定义网关" } as never,
+  ];
+  assert.equal(modelBrand({ model: "qwen-max", name: "阿里云百炼 · qwen-max", providerId: "p1" }, providers), "dashscope");
+  // A custom gateway says nothing about what it serves, so the model name is
+  // what the row goes on.
+  assert.equal(modelBrand({ model: "qwen-max", name: "自定义网关 · qwen-max", providerId: "p2" }, providers), "dashscope");
+  // A standalone profile has only its name to go on.
+  assert.equal(modelBrand({ model: "glm-5", name: "glm-5" }), "zhipu");
+  assert.equal(modelBrand({ model: "my-model", name: "my-model" }), "custom");
+  assert.equal(modelLabel("月之暗面 · Kimi-K3"), "Kimi-K3");
+  assert.equal(modelLabel("Kimi-K3"), "Kimi-K3");
 });

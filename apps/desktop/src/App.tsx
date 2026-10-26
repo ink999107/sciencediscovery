@@ -12,9 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+  type CSSProperties,
+} from "react";
 
 import { ApiClient } from "./api/client.js";
+import { isEmptyTranscript } from "./app/landing.js";
 import { useFileDrop } from "./app/use-file-drop.js";
 import { useLanguage } from "./app/use-language.js";
 import { usePanelWidth } from "./app/use-panel-width.js";
@@ -31,6 +39,7 @@ import { AuthScreen } from "./views/AuthScreen.js";
 import { Composer } from "./views/Composer.js";
 import { ConfirmDialog } from "./views/ConfirmDialog.js";
 import { Conversation } from "./views/Conversation.js";
+import { Landing } from "./views/Landing.js";
 import { OfflineScreen } from "./views/OfflineScreen.js";
 import { Rail } from "./views/Rail.js";
 import { SessionBar } from "./views/SessionBar.js";
@@ -120,6 +129,12 @@ export function App({ initialToken }: Props) {
   const canUpload = boot === "ready" && state.detail?.archivedAt === undefined;
   const dragging = useFileDrop((files) => void upload(files), canUpload);
 
+  /** A session with nothing to read yet shows the welcome page instead of an
+   *  empty transcript: the composer sits centred with the wordmark, rather
+   *  than pinned to the bottom of a page with nothing above it. A run that is
+   *  still going keeps the transcript, even before its first event lands. */
+  const landing = !state.loadingSession && !state.running && isEmptyTranscript(state);
+
   const acceptToken = (next: string) => {
     try {
       localStorage.setItem(TOKEN_STORAGE_KEY, next);
@@ -204,6 +219,27 @@ export function App({ initialToken }: Props) {
     setSettingsOpen(true);
   };
 
+  /** The composer is one component in two places — under the transcript, and
+   *  in the middle of the welcome page — so its props are assembled once. */
+  const composerProps: Omit<ComponentProps<typeof Composer>, "landing" | "seed" | "tag"> = {
+    approvalMode: state.detail?.approvalMode,
+    attachBlocked: canUpload ? undefined : TEXT.composer.attachArchived,
+    attachLimit,
+    models: state.models,
+    onApprovalMode: (mode) => void actions.setApprovalMode(mode),
+    onOpenSettings: () => openSettings("models"),
+    onOpenSpecialists: () => openSettings("specialists"),
+    onSelectModel: (modelId) => void actions.selectModel(modelId),
+    onSend: (content) => void actions.send(content),
+    onStop: () => void actions.stop(),
+    onUpload: (files) => void upload(files),
+    projectName: state.activeProjectName ?? TEXT.project.defaultName,
+    providers: state.providers,
+    running: state.running,
+    selectedModelId: state.selectedModelId,
+    uploading: state.uploading,
+  };
+
   // The panel takes the sidebar's place rather than sharing the window with
   // it: the handoff's open-panel frames show the conversation wider by exactly
   // the 296px the task column gives back.
@@ -254,31 +290,22 @@ export function App({ initialToken }: Props) {
             sidebarCollapsed={showExpand}
             workspaceOpen={workspaceOpen}
           />
-          <Conversation
-            client={client}
-            detail={state.detail}
-            loading={state.loadingSession}
-            onDecidePermission={(request, decision) => actions.decidePermission(request.id, decision)}
-            pending={state.pendingMessage}
-            replays={state.replays}
-            run={state.run}
-          />
-          <Composer
-            approvalMode={state.detail?.approvalMode}
-            attachBlocked={canUpload ? undefined : TEXT.composer.attachArchived}
-            attachLimit={attachLimit}
-            models={state.models}
-            onApprovalMode={(mode) => void actions.setApprovalMode(mode)}
-            onOpenSettings={() => openSettings("models")}
-            onOpenSpecialists={() => openSettings("specialists")}
-            onSelectModel={(modelId) => void actions.selectModel(modelId)}
-            onSend={(content) => void actions.send(content)}
-            onStop={() => void actions.stop()}
-            onUpload={(files) => void upload(files)}
-            running={state.running}
-            selectedModelId={state.selectedModelId}
-            uploading={state.uploading}
-          />
+          {landing ? (
+            <Landing composer={composerProps} />
+          ) : (
+            <>
+              <Conversation
+                client={client}
+                detail={state.detail}
+                loading={state.loadingSession}
+                onDecidePermission={(request, decision) => actions.decidePermission(request.id, decision)}
+                pending={state.pendingMessage}
+                replays={state.replays}
+                run={state.run}
+              />
+              <Composer {...composerProps} />
+            </>
+          )}
         </main>
 
         <WorkspacePanel

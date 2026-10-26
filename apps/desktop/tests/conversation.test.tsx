@@ -257,6 +257,12 @@ test("a replayed run's unanswered authorization is history, not a live question"
   assert.match(markup, /<button[^>]*disabled/u);
 });
 
-test("an empty transcript with nothing to replay keeps the welcome line", () => {
-  assert.match(render(), /让科研发现更简单/);
+test("an empty transcript draws nothing: the welcome page is not its furniture", () => {
+  // The welcome page replaced the line that used to sit here, so a transcript
+  // with nothing in it has to stay empty rather than print a slogan of its
+  // own. What remains is the frame the messages will fill.
+  const markup = render();
+  assert.match(markup, /<section class="conversation">/u);
+  assert.equal(markup.match(/class="message (?:user|assistant)/gu), null);
+  assert.doesNotMatch(markup, /让科研发现更简单/u);
 });

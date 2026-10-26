@@ -83,7 +83,6 @@ export const EN: Text = {
     stop: "Stop",
     modelSelect: "Choose a model",
     addCustomModel: "Add a custom model",
-    configuredModels: "Configured models",
     pillLocked: "You can switch models when this run finishes",
     stopHint: "Closing the page or reloading will not stop the run. Stop it here explicitly.",
     uploadFile: "Upload files",
@@ -119,8 +118,6 @@ export const EN: Text = {
   },
 
   conversation: {
-    slogan: "Make scientific discovery simpler",
-    subSlogan: "Attach data or a paper, then describe what you want to know.",
     copyAnswer: "Copy answer",
     copied: "Copied",
     turn: (turn: number) => `Turn ${turn}`,
@@ -170,6 +167,39 @@ export const EN: Text = {
     outputTruncated: "The output was truncated by the retention policy.",
     authorized: "Approved",
     resultUnavailable: "The result is temporarily unavailable.",
+  },
+
+  landing: {
+    tagline: "SCIENCE, EXPLORED",
+    placeholder: "What can I help you with…",
+    clearCategory: "Clear category",
+    projectDirectory: "Choose project directory",
+    categories: {
+      research: "Literature",
+      experiment: "Experiments",
+      analysis: "Data analysis",
+    },
+    topics: {
+      research: [
+        { label: "State of the field", prompt: "Search and summarize the research of this field over the last three years: the main approaches, representative work, and what is still open." },
+        { label: "Key techniques", prompt: "Survey the key techniques in this area, compare when each applies, their strengths and limits, and cite representative papers." },
+        { label: "Recent papers", prompt: "Find the important papers published in this area recently, group them by theme, and state each one's contribution." },
+        { label: "Competing approaches", prompt: "Analyze how the leading teams or products in this field approach the problem, and compare their trade-offs." },
+      ],
+      experiment: [
+        { label: "Controlled design", prompt: "Design a controlled experiment for me: the treatment and control groups, variable control, number of replicates, and the metrics." },
+        { label: "Parameter tuning", prompt: "Plan a parameter optimization for this experiment: the ranges to sweep, the sampling method, and the acceptance criteria." },
+        { label: "Sample size", prompt: "Estimate the sample size this experiment needs, stating the assumptions, effect size, significance level, and test." },
+        { label: "Error analysis", prompt: "Analyze the main sources of error in this experiment and how to reduce systematic and random error." },
+      ],
+      analysis: [
+        { label: "Proteomics", prompt: "Analyze this proteomics data: preprocessing, differential analysis, enrichment, and how to read the results." },
+        { label: "Material formulas", prompt: "Analyze this set of material formula data and find the ingredients that drive performance and how they interact." },
+        { label: "Single-cell sequencing", prompt: "Plan a single-cell sequencing analysis: quality control, clustering, cell annotation, and differential expression." },
+        { label: "Customer value", prompt: "Analyze customer value from this transaction data: how to segment, which metrics matter, and what to do about it." },
+        { label: "Financial risk", prompt: "Build a framework for financial risk analysis: feature selection, model evaluation, and how to set the threshold." },
+      ],
+    },
   },
 
   permission: {

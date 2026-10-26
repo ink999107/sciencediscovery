@@ -359,28 +359,6 @@ body.is-resizing * {
   overflow-y: auto;
 }
 
-/* Home slogan: plain type on the page background, no card. */
-.empty-state {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 96px clamp(24px, 5vw, 60px) 24px;
-}
-.home-slogan {
-  font-family: var(--font-display);
-  font-size: 40px;
-  font-weight: 700;
-  letter-spacing: -.03em;
-  line-height: 1.15;
-  color: var(--text-strong);
-}
-.home-sub {
-  margin-top: 14px;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.6;
-}
-
-
 /* 2378:2506 */
 /* ============================================================================
    Sidebar: per-row controls, inline rename, drag-to-project

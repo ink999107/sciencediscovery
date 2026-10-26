@@ -157,7 +157,6 @@ export function Conversation({ client, detail, loading, onDecidePermission, pend
    *  the stream has actually produced is drawn at once. */
   const placeholder = useAfter(pending !== undefined, RUN_LINE_DELAY_MS);
   const liveRun = reconstructed || placeholder;
-  const empty = messages.length === 0 && !pending && !reconstructed && replays.length === 0;
 
   useEffect(() => {
     const node = scroller.current;
@@ -175,66 +174,59 @@ export function Conversation({ client, detail, loading, onDecidePermission, pend
 
   return (
     <section className="conversation" onScroll={onScroll} ref={scroller}>
-      {empty ? (
-        <div className="empty-state">
-          <h1 className="home-slogan">{TEXT.conversation.slogan}</h1>
-          <p className="home-sub">{TEXT.conversation.subSlogan}</p>
-        </div>
-      ) : (
-        <div className="messages">
-          {messages.map((message) => {
-            const replacement = replacing.get(message.id);
-            return (
-              <Fragment key={message.id}>
-                {replacement === undefined ? (
-                  <MessageRow message={message} />
-                ) : (
-                  <AssistantTurns
-                    client={client}
-                    onDecide={onDecidePermission}
-                    run={replacement}
-                    sessionId={detail?.id}
-                  />
-                )}
-                {/* A run that never wrote an answer still belongs here, after
-                    the message that started it, rather than at the end of a
-                    conversation it did not come last in. */}
-                {(following.get(message.id) ?? []).map((replay) => (
-                  <AssistantTurns
-                    client={client}
-                    key={replay.runId}
-                    onDecide={onDecidePermission}
-                    run={replay.state}
-                    sessionId={detail?.id}
-                  />
-                ))}
-              </Fragment>
-            );
-          })}
-          {trailing.map((replay) => (
-            <AssistantTurns
-              client={client}
-              key={replay.runId}
-              onDecide={onDecidePermission}
-              run={replay.state}
-              sessionId={detail?.id}
-            />
-          ))}
-          {pending ? <UserRow content={pending.content} /> : null}
-          {/* No persisted answer to stand in for yet — the run is still going,
-              or the session was created by sending into it. A replayed run is
-              never here: it is in `replays`, anchored to its own answer. */}
-          {liveRun ? (
-            <AssistantTurns
-              client={client}
-              onDecide={onDecidePermission}
-              run={run}
-              sessionId={detail?.id}
-            />
-          ) : null}
-          {loading ? <div className="status-strip">{TEXT.boot.checking}</div> : null}
-        </div>
-      )}
+      <div className="messages">
+        {messages.map((message) => {
+          const replacement = replacing.get(message.id);
+          return (
+            <Fragment key={message.id}>
+              {replacement === undefined ? (
+                <MessageRow message={message} />
+              ) : (
+                <AssistantTurns
+                  client={client}
+                  onDecide={onDecidePermission}
+                  run={replacement}
+                  sessionId={detail?.id}
+                />
+              )}
+              {/* A run that never wrote an answer still belongs here, after
+                  the message that started it, rather than at the end of a
+                  conversation it did not come last in. */}
+              {(following.get(message.id) ?? []).map((replay) => (
+                <AssistantTurns
+                  client={client}
+                  key={replay.runId}
+                  onDecide={onDecidePermission}
+                  run={replay.state}
+                  sessionId={detail?.id}
+                />
+              ))}
+            </Fragment>
+          );
+        })}
+        {trailing.map((replay) => (
+          <AssistantTurns
+            client={client}
+            key={replay.runId}
+            onDecide={onDecidePermission}
+            run={replay.state}
+            sessionId={detail?.id}
+          />
+        ))}
+        {pending ? <UserRow content={pending.content} /> : null}
+        {/* No persisted answer to stand in for yet — the run is still going,
+            or the session was created by sending into it. A replayed run is
+            never here: it is in `replays`, anchored to its own answer. */}
+        {liveRun ? (
+          <AssistantTurns
+            client={client}
+            onDecide={onDecidePermission}
+            run={run}
+            sessionId={detail?.id}
+          />
+        ) : null}
+        {loading ? <div className="status-strip">{TEXT.boot.checking}</div> : null}
+      </div>
     </section>
   );
 }

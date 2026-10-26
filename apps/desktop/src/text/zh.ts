@@ -81,7 +81,6 @@ export const ZH = {
     stop: "停止",
     modelSelect: "选择模型",
     addCustomModel: "添加自定义模型",
-    configuredModels: "已配置模型",
     pillLocked: "这一轮跑完才能切换模型",
     stopHint: "关闭页面或刷新不会停止运行，必须在这里显式停止。",
     uploadFile: "上传文件",
@@ -120,8 +119,6 @@ export const ZH = {
   },
 
   conversation: {
-    slogan: "让科研发现更简单",
-    subSlogan: "附上数据或论文，然后说明您想了解的问题。",
     copyAnswer: "复制回答",
     copied: "已复制",
     /** The header of one request/answer turn inside a run. */
@@ -181,6 +178,45 @@ export const ZH = {
     /** The substream read failed — the trace is still shown, only its body is
      *  missing. Distinct from "the tool produced nothing". */
     resultUnavailable: "结果暂时读取不到。",
+  },
+
+  /** The welcome page a session starts on: the wordmark, the three ways in,
+   *  and the starter prompts behind each of them. */
+  landing: {
+    tagline: "科学探索 更高效",
+    placeholder: "有什么需要我帮忙的…",
+    /** The ✕ on the category chip inside the composer. */
+    clearCategory: "取消分类",
+    /** The strip's folder item when no Project name is known yet. */
+    projectDirectory: "选择项目目录",
+    categories: {
+      research: "文献调研",
+      experiment: "实验设计",
+      analysis: "数据分析",
+    },
+    /** Each category opens its own row; a topic drops its prompt into the
+     *  composer instead of sending it, so it stays editable. */
+    topics: {
+      research: [
+        { label: "研究现状综述", prompt: "请检索并综述这个方向近三年的研究现状，列出主要技术路线、代表工作和仍未解决的问题。" },
+        { label: "关键技术调研", prompt: "请调研这个方向的关键技术，比较它们的适用条件、优势与局限，并给出代表性文献。" },
+        { label: "前沿论文追踪", prompt: "请找出这个方向最近发表的重要论文，按主题归类，并说明每篇的核心贡献。" },
+        { label: "竞品技术分析", prompt: "请分析这个领域主要团队或产品的技术路线，比较它们的差异与取舍。" },
+      ],
+      experiment: [
+        { label: "对照实验方案设计", prompt: "请帮我设计一套对照实验方案，说明实验组、对照组、变量控制、重复次数和评价指标。" },
+        { label: "实验参数优化", prompt: "请帮我规划实验参数优化方案，给出需要扫描的参数范围、采样方法和判定标准。" },
+        { label: "样本量估算", prompt: "请帮我估算实验所需的样本量，说明假设、效应量、显著性水平和检验方法。" },
+        { label: "实验误差分析", prompt: "请帮我分析实验中的主要误差来源，并给出减小系统误差与随机误差的做法。" },
+      ],
+      analysis: [
+        { label: "蛋白质组学分析", prompt: "请帮我分析蛋白质组学数据，说明预处理、差异分析、富集分析和结果解读的步骤。" },
+        { label: "材料配方分析", prompt: "请帮我分析这批材料配方数据，找出影响性能的关键成分及其交互作用。" },
+        { label: "单细胞测序分析", prompt: "请帮我规划单细胞测序数据的分析流程，包括质控、聚类、细胞注释和差异表达。" },
+        { label: "电商用户价值分析", prompt: "请基于这份交易数据做用户价值分析，给出分群方法、关键指标和运营建议。" },
+        { label: "金融风控", prompt: "请帮我搭建一个风控分析框架，说明特征选择、模型评估和阈值设定的方法。" },
+      ],
+    },
   },
 
   permission: {
