@@ -16,7 +16,7 @@ import { createTest } from "../../../test/support/tagged/compat.mjs";
 const { test } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
 import assert from "node:assert/strict";
 
-import type { RunStreamEvent } from "../src/api/types.js";
+import type { RunStreamEvent, Subagent, SubagentStep } from "../src/api/types.js";
 import { closeRunStream, reduceRunStream } from "../src/run-stream/reducer.js";
 import { emptyRunStream, hasVisibleAnswer, thinkingSteps, type RunStreamState } from "../src/run-stream/model.js";
 
@@ -33,6 +33,26 @@ function delta(text: string, responseId?: string): RunStreamEvent {
   return responseId === undefined
     ? ({ delta: text, type: "assistant.delta" } as RunStreamEvent)
     : ({ delta: text, responseId, type: "assistant.delta" } as RunStreamEvent);
+}
+
+function subagent(id: string, overrides: Partial<Subagent> = {}): Subagent {
+  return {
+    createdAt: "2026-01-01T00:00:00.000Z",
+    id,
+    input: { description: `task ${id}`, prompt: "carry out the task" },
+    maxTurns: 12,
+    parentTurnId: "turn-1",
+    sessionId: "s1",
+    status: "running",
+    steps: [],
+    timeoutSeconds: 600,
+    turnCount: 0,
+    ...overrides,
+  };
+}
+
+function step(id: string, overrides: Partial<SubagentStep> = {}): SubagentStep {
+  return { content: "", createdAt: "2026-01-01T00:00:00.000Z", id, kind: "tool", ...overrides };
 }
 
 test("deltas accumulate into a response's body", () => {
@@ -393,6 +413,95 @@ test("hasVisibleAnswer separates a real answer from thinking alone", () => {
     hasVisibleAnswer({ ...emptyRunStream(), finalContent: "persisted" }),
     true,
   );
+});
+
+test("a delegated subagent opens one line on the turn it was delegated from", () => {
+  const state = fold([
+    responseStarted("r1"),
+    delta("I will look into this", "r1"),
+    { subagent: subagent("a1"), type: "subagent.updated" } as RunStreamEvent,
+  ]);
+  assert.equal(state.turns.length, 1);
+  const entries = state.turns[0]!.subagents;
+  assert.equal(entries.length, 1);
+  // `after` is the response the model had just written when it delegated, the
+  // same anchor a tool call uses — that is what puts the line inside the fold.
+  assert.equal(entries[0]!.after, 0);
+  assert.equal(entries[0]!.subagent.input.description, "task a1");
+});
+
+test("a later snapshot updates the line instead of opening a second one", () => {
+  const state = fold([
+    responseStarted("r1"),
+    { subagent: subagent("a1"), type: "subagent.updated" } as RunStreamEvent,
+    responseStarted("r2"),
+    delta("the child is still working", "r2"),
+    {
+      subagent: subagent("a1", {
+        status: "completed",
+        steps: [step("s1", { content: "read the files" })],
+        turnCount: 3,
+      }),
+      type: "subagent.updated",
+    } as RunStreamEvent,
+  ]);
+  const entries = state.turns.flatMap((turn) => turn.subagents);
+  assert.equal(entries.length, 1);
+  // The line stays where it was delegated; it does not drift to the newest
+  // response just because a snapshot arrived later.
+  assert.equal(entries[0]!.after, 0);
+  assert.equal(entries[0]!.subagent.status, "completed");
+  assert.equal(entries[0]!.subagent.turnCount, 3);
+  assert.equal(entries[0]!.subagent.steps.length, 1);
+});
+
+test("step and usage events refine a child that has already been announced", () => {
+  const state = fold([
+    responseStarted("r1"),
+    { subagent: subagent("a1"), type: "subagent.updated" } as RunStreamEvent,
+    { step: step("s1", { status: "running", toolName: "read_file" }), subagentId: "a1", type: "subagent.step" } as RunStreamEvent,
+    { subagentId: "a1", type: "subagent.usage", usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 } } as RunStreamEvent,
+  ]);
+  const child = state.turns[0]!.subagents[0]!.subagent;
+  assert.equal(child.steps.length, 1);
+  assert.equal(child.steps[0]!.toolName, "read_file");
+  assert.equal(child.usage?.totalTokens, 7);
+});
+
+test("a step that overtakes its snapshot does not invent a line", () => {
+  // Without the snapshot there is no task description to name the line with,
+  // so a half-populated row would be worse than dropping the event.
+  const state = fold([
+    responseStarted("r1"),
+    { step: step("s1"), subagentId: "ghost", type: "subagent.step" } as RunStreamEvent,
+  ]);
+  assert.equal(state.turns[0]!.subagents.length, 0);
+});
+
+test("a restarted step keeps its place rather than appearing twice", () => {
+  const state = fold([
+    responseStarted("r1"),
+    { subagent: subagent("a1"), type: "subagent.updated" } as RunStreamEvent,
+    { step: step("s1", { status: "running" }), subagentId: "a1", type: "subagent.step" } as RunStreamEvent,
+    { step: step("s1", { status: "completed" }), subagentId: "a1", type: "subagent.step" } as RunStreamEvent,
+  ]);
+  const steps = state.turns[0]!.subagents[0]!.subagent.steps;
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0]!.status, "completed");
+});
+
+test("a resumed child goes back to running on the same line", () => {
+  // A child interrupted by an API restart is continued on the same id; the
+  // server reports the resume as a running snapshot, and a line that refused
+  // it would stay finished while the work went on.
+  const state = fold([
+    responseStarted("r1"),
+    { subagent: subagent("a1", { status: "failed", error: "restart" }), type: "subagent.updated" } as RunStreamEvent,
+    { subagent: subagent("a1", { status: "running" }), type: "subagent.updated" } as RunStreamEvent,
+  ]);
+  const entries = state.turns.flatMap((turn) => turn.subagents);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0]!.subagent.status, "running");
 });
 
 test("thinking paragraphs split into steps on a blank line only", () => {

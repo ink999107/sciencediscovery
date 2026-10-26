@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import type { PermissionRequest, SessionRunStatus, ToolTrace } from "../api/types.js";
+import type { PermissionRequest, SessionRunStatus, Subagent, ToolTrace } from "../api/types.js";
 
 /** One model invoke attempt's visible text. A turn can hold several: the model
  *  may be re-invoked after a tool call, and each attempt gets its own
@@ -45,6 +45,19 @@ export interface AssistantTool {
   trace: ToolTrace;
 }
 
+/**
+ * One delegated subagent, and where it was started in the answer.
+ *
+ * `after` works exactly like `AssistantTool.after`: it names the response the
+ * coordinator had just finished when it delegated. The whole Subagent lives
+ * here, not a reference, because the transcript is the only reader and a live
+ * update has to redraw the line it already sits on.
+ */
+export interface AssistantSubagent {
+  after: number;
+  subagent: Subagent;
+}
+
 /** Everything produced between two user messages. */
 export interface AssistantTurn {
   turn: number;
@@ -52,6 +65,7 @@ export interface AssistantTurn {
   thinkingTruncated: boolean;
   responses: AssistantResponse[];
   tools: AssistantTool[];
+  subagents: AssistantSubagent[];
 }
 
 /**
@@ -155,7 +169,18 @@ export function hasVisibleAnswer(state: RunStreamState): boolean {
 export function turnFor(state: RunStreamState, turn: number): AssistantTurn {
   const existing = state.turns.find((candidate) => candidate.turn === turn);
   if (existing) return existing;
-  return { responses: [], thinking: "", thinkingTruncated: false, tools: [], turn };
+  return { responses: [], subagents: [], thinking: "", thinkingTruncated: false, tools: [], turn };
+}
+
+/**
+ * Every subagent this run started, in the order they first appeared.
+ *
+ * The transcript keeps them on the turn they were delegated from, because
+ * that is where the line belongs; the right panel needs one flat list to look
+ * one up by id.
+ */
+export function allSubagents(state: RunStreamState): Subagent[] {
+  return state.turns.flatMap((turn) => turn.subagents.map((entry) => entry.subagent));
 }
 
 /**

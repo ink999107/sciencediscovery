@@ -16,18 +16,22 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentProps,
   type CSSProperties,
 } from "react";
 
 import { ApiClient } from "./api/client.js";
+import { listSubagents } from "./api/sessions.js";
+import type { Subagent } from "./api/types.js";
 import { isEmptyTranscript, landingKey } from "./app/landing.js";
 import { useFileDrop } from "./app/use-file-drop.js";
 import { useLanguage } from "./app/use-language.js";
 import { usePanelWidth } from "./app/use-panel-width.js";
 import { useWorkspace } from "./app/use-workspace.js";
 import { formatByteLimit } from "./app/upload.js";
+import { allSubagents } from "./run-stream/model.js";
 import {
   RIGHT_PANEL_STORAGE_KEY,
   TOKEN_STORAGE_KEY,
@@ -73,6 +77,10 @@ export function App({ initialToken }: Props) {
   /** Which of the panel's three groups is showing. Opening an artifact or a
    *  file from elsewhere in the app lands on the group that lists it. */
   const [panelGroup, setPanelGroup] = useState<PanelGroup>("files");
+  /** The subagent whose execution the panel is showing, if any. It is a
+   *  mode of the panel rather than a fourth tab: the transcript's line opens
+   *  it, and the panel's own back arrow closes it. */
+  const [openSubagentId, setOpenSubagentId] = useState<string | undefined>();
 
   // The language lives in a module store rather than in state, because
   // `TEXT` is read from components the tree passes no props to. Reading it
@@ -101,6 +109,83 @@ export function App({ initialToken }: Props) {
   useEffect(() => {
     writeStoredFlag(localStorage, RIGHT_PANEL_STORAGE_KEY, workspaceOpen);
   }, [workspaceOpen]);
+
+  /** A subagent may be in the live run or in any replayed one; both are the
+   *  same view of the session, so the lookup spans both. */
+  const foundSubagent = useMemo(() => {
+    if (openSubagentId === undefined) return undefined;
+    const candidates = [
+      ...allSubagents(state.run),
+      ...state.replays.flatMap((replay) => allSubagents(replay.state)),
+    ];
+    return candidates.find((subagent) => subagent.id === openSubagentId);
+  }, [openSubagentId, state.replays, state.run]);
+  // A settled run moves from `run` to `replays` in the same tick it is
+  // refreshed, and a lookup that failed for that one render would blank the
+  // panel the user is reading. Keeping the last resolved copy bridges it.
+  const lastSubagent = useRef<Subagent | undefined>(undefined);
+  useEffect(() => {
+    if (foundSubagent !== undefined) lastSubagent.current = foundSubagent;
+  }, [foundSubagent]);
+
+  /** The run's event log stores subagent snapshots without their steps, so a
+   *  replayed child arrives empty. The catalog has them, and is re-read when
+   *  the open child reaches a terminal status so the last steps are complete. */
+  const [subagentCatalog, setSubagentCatalog] = useState<Subagent[]>([]);
+  const [subagentLoading, setSubagentLoading] = useState(false);
+  useEffect(() => {
+    if (openSubagentId === undefined || state.sessionId === undefined) {
+      setSubagentCatalog([]);
+      setSubagentLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSubagentLoading(true);
+    void listSubagents(client, state.sessionId)
+      .then((children) => {
+        if (!cancelled) setSubagentCatalog(children);
+      })
+      .catch(() => {
+        // The run-state copy still names the task and shows its status; only
+        // the steps are missing, so this is not worth an error banner.
+        if (!cancelled) setSubagentCatalog([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSubagentLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, foundSubagent?.status, openSubagentId, state.sessionId]);
+
+  const catalogSubagent = openSubagentId === undefined
+    ? undefined
+    : subagentCatalog.find((subagent) => subagent.id === openSubagentId);
+  const resolvedSubagent = foundSubagent
+    ?? catalogSubagent
+    ?? (lastSubagent.current?.id === openSubagentId ? lastSubagent.current : undefined);
+  // Live snapshots are fresher and already carry steps. A replay's copy is the
+  // terminal state but says nothing about what the child did, so its steps come
+  // from the catalog.
+  const openSubagent = resolvedSubagent === undefined
+    ? undefined
+    : resolvedSubagent.steps.length === 0 && catalogSubagent !== undefined
+      ? { ...resolvedSubagent, steps: catalogSubagent.steps }
+      : resolvedSubagent;
+
+  // A selection belongs to one session's transcript. Carrying it into another
+  // would open a panel on a subagent the reader cannot see.
+  useEffect(() => {
+    setOpenSubagentId(undefined);
+    lastSubagent.current = undefined;
+    setSubagentCatalog([]);
+  }, [state.sessionId]);
+
+  const openSubagentDetails = useCallback((id: string) => {
+    setOpenSubagentId(id);
+    setWorkspaceOpen(true);
+  }, []);
+  const closeSubagentDetails = useCallback(() => setOpenSubagentId(undefined), []);
 
   /**
    * Upload, then show where the file went.
@@ -301,6 +386,7 @@ export function App({ initialToken }: Props) {
                 detail={state.detail}
                 loading={state.loadingSession}
                 onDecidePermission={(request, decision) => actions.decidePermission(request.id, decision)}
+                onOpenSubagent={openSubagentDetails}
                 pending={state.pendingMessage}
                 replays={state.replays}
                 run={state.run}
@@ -314,10 +400,13 @@ export function App({ initialToken }: Props) {
           actions={actions}
           activeGroup={panelGroup}
           files={state.panelFiles}
+          onCloseSubagent={closeSubagentDetails}
           onCollapse={collapsePanel}
           onSelectGroup={setPanelGroup}
           outputs={state.outputs}
           resize={resize}
+          subagent={openSubagent}
+          subagentLoading={subagentLoading && (openSubagent?.steps.length ?? 0) === 0}
           tabs={state.tabs}
         />
       </div>

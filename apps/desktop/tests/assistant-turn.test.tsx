@@ -20,6 +20,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { createTest } from "../../../test/support/tagged/compat.mjs";
 import type { ApiClient } from "../src/api/client.js";
+import type { Subagent } from "../src/api/types.js";
 import { emptyRunStream, type AssistantTurn, type RunStreamState } from "../src/run-stream/model.js";
 import { AssistantTurns } from "../src/views/AssistantTurn.js";
 
@@ -30,7 +31,7 @@ const client = new Proxy({} as ApiClient, {
 });
 
 function turn(overrides: Partial<AssistantTurn> = {}): AssistantTurn {
-  return { responses: [], thinking: "", thinkingTruncated: false, tools: [], turn: 1, ...overrides };
+  return { responses: [], subagents: [], thinking: "", thinkingTruncated: false, tools: [], turn: 1, ...overrides };
 }
 
 function render(run: Partial<RunStreamState>): string {
@@ -287,5 +288,96 @@ describe("tool calls sit between the answers they were made from", () => {
       ],
     });
     assert.ok(html.indexOf("read_skill") < html.indexOf("the answer"));
+  });
+});
+
+function child(overrides: Partial<Subagent> = {}): Subagent {
+  return {
+    createdAt: "2026-01-01T00:00:00.000Z",
+    id: "a1",
+    input: { description: "read the literature", prompt: "search and summarize" },
+    maxTurns: 12,
+    parentTurnId: "turn-1",
+    sessionId: "s1",
+    status: "completed",
+    steps: [],
+    timeoutSeconds: 600,
+    turnCount: 2,
+    ...overrides,
+  };
+}
+
+describe("a delegated subagent is one line inside the run", () => {
+  it("says the task in a single row, with no persona or avatar of its own", () => {
+    const html = render({
+      terminal: true,
+      turns: [
+        turn({
+          responses: [{ content: "the answer", responseId: "a", settled: true, truncated: false }],
+          subagents: [{ after: 0, subagent: child() }],
+        }),
+      ],
+    });
+    const rowAt = html.indexOf('class="subagent-line');
+    assert.ok(rowAt >= 0);
+    const row = html.slice(rowAt, html.indexOf("</button>", rowAt));
+    assert.match(row, />Subagent</);
+    assert.match(row, /read the literature/);
+    assert.match(row, /已完成/);
+    // The line is a task, not a team member: no name, no initials, no face.
+    assert.doesNotMatch(row, /avatar|Leo|研究员|specialist/iu);
+    // It lives inside the folded run, like a tool call — not below the answer.
+    const foldAt = html.indexOf('<details class="msg-collapse run-fold"');
+    assert.ok(foldAt >= 0 && foldAt < rowAt);
+    assert.ok(rowAt < closesAt(html, foldAt));
+  });
+
+  it("does not draw the delegation tool as well as its line", () => {
+    const html = render({
+      terminal: true,
+      turns: [
+        turn({
+          responses: [{ content: "the answer", responseId: "a", settled: true, truncated: false }],
+          subagents: [{ after: 0, subagent: child() }],
+          tools: [{
+            after: 0,
+            id: "c1",
+            trace: { id: "c1", name: "task", status: "completed" },
+          }],
+        }),
+      ],
+    });
+    assert.doesNotMatch(html, /已调用 task/u);
+    assert.match(html, /read the literature/);
+  });
+
+  it("still shows a delegation tool whose child snapshot never arrived", () => {
+    // Pruned or older event logs can leave the call without a subagent record;
+    // hiding it too would leave the turn with no account of the delegation.
+    const html = render({
+      terminal: true,
+      turns: [
+        turn({
+          tools: [{
+            after: -1,
+            id: "c1",
+            trace: { id: "c1", name: "task", status: "completed" },
+          }],
+        }),
+      ],
+    });
+    assert.match(html, /已调用 task/u);
+  });
+
+  it("folds a run whose only work was a delegation", () => {
+    // No thinking, no tool call and no prose: the line is the whole account of
+    // the run, so the fold has to exist for it to sit in.
+    const html = render({
+      terminal: true,
+      turns: [turn({ subagents: [{ after: -1, subagent: child({ status: "running" }) }] })],
+    });
+    assert.match(html, /msg-collapse run-fold/);
+    assert.match(html, /read the literature/);
+    assert.match(html, /执行中/);
   });
 });

@@ -21,8 +21,10 @@ import { fileName } from "../app/paths.js";
 import { PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, PANEL_NUDGE_STEP, PANEL_NUDGE_STRIDE } from "../app/panel-width.js";
 import { Markdown } from "../Markdown.js";
 import { detectStructureFormat } from "../molecular.js";
-import type { SessionArtifactOutput, WorkspaceFile } from "../api/types.js";
+import type { SessionArtifactOutput, Subagent, WorkspaceFile } from "../api/types.js";
+import { subagentTask } from "../run-stream/subagent.js";
 import { TEXT } from "../text.js";
+import { SubagentDetail } from "./SubagentDetail.js";
 
 /** Loaded on the first structure that is opened. Mol* is an order of magnitude
  *  larger than the rest of the app together, and most sessions never show one. */
@@ -34,10 +36,17 @@ interface Props {
   actions: WorkspaceActions;
   activeGroup: PanelGroup;
   files: WorkspaceFile[];
+  /** Return from a subagent's execution to the panel's normal groups. */
+  onCloseSubagent: () => void;
   onCollapse: () => void;
   onSelectGroup: (group: PanelGroup) => void;
   outputs: SessionArtifactOutput[];
   resize: PanelResize;
+  /** The subagent whose execution is open. While set, the panel shows only
+   *  that child's record — it is not a tab beside 产物 and 工作区. */
+  subagent?: Subagent;
+  /** The catalog read that fills a replayed child's steps is still in flight. */
+  subagentLoading?: boolean;
   tabs: TabState;
 }
 
@@ -259,10 +268,13 @@ export function WorkspacePanel({
   actions,
   activeGroup,
   files,
+  onCloseSubagent,
   onCollapse,
   onSelectGroup,
   outputs,
   resize,
+  subagent,
+  subagentLoading,
   tabs,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -290,6 +302,7 @@ export function WorkspacePanel({
     { id: "artifacts", label: TEXT.workspace.groups.artifacts },
     { id: "files", label: TEXT.workspace.groups.files },
   ];
+  const subagentDescription = subagent === undefined ? "" : subagentTask(subagent);
 
   const docArea = (
     <div className="panel-doc">
@@ -402,22 +415,42 @@ export function WorkspacePanel({
         role="separator"
         tabIndex={0}
       />
-      <header className="panel-head">
-        <div className="panel-group-tabs" role="tablist">
-          {groups.map((group) => (
+      <header className={`panel-head${subagent === undefined ? "" : " is-subagent"}`}>
+        {subagent === undefined ? (
+          <div className="panel-group-tabs" role="tablist">
+            {groups.map((group) => (
+              <button
+                aria-selected={activeGroup === group.id}
+                className={`panel-group-tab${activeGroup === group.id ? " is-active" : ""}`}
+                key={group.id}
+                onClick={() => onSelectGroup(group.id)}
+                role="tab"
+                type="button"
+              >
+                <GroupIcon group={group.id} />
+                <span>{group.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <>
             <button
-              aria-selected={activeGroup === group.id}
-              className={`panel-group-tab${activeGroup === group.id ? " is-active" : ""}`}
-              key={group.id}
-              onClick={() => onSelectGroup(group.id)}
-              role="tab"
+              aria-label={TEXT.subagent.back}
+              className="panel-back"
+              onClick={onCloseSubagent}
+              title={TEXT.subagent.back}
               type="button"
             >
-              <GroupIcon group={group.id} />
-              <span>{group.label}</span>
+              <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24" width="15">
+                <path d="M15 5l-7 7 7 7" />
+              </svg>
             </button>
-          ))}
-        </div>
+            <div className="panel-subagent-title" title={subagentDescription}>
+              <span className="panel-subagent-label">{TEXT.subagent.lineLabel}</span>
+              <span className="panel-subagent-text">{subagentDescription}</span>
+            </div>
+          </>
+        )}
         <div className="panel-head-actions">
           <button
             aria-label={TEXT.workspace.collapsePanel}
@@ -434,51 +467,57 @@ export function WorkspacePanel({
         </div>
       </header>
 
-      <div className="panel-body">
-        {activeGroup === "artifacts" ? (
-          <>
-            <div className="panel-list">
-              <div className="panel-list-title">{TEXT.workspace.allArtifacts}</div>
-              <PanelSearch
-                label={TEXT.workspace.searchArtifacts}
-                onChange={setArtifactQuery}
-                placeholder={TEXT.workspace.searchArtifacts}
-                value={artifactQuery}
-              />
-              <ArtifactList
-                actions={actions}
-                activeId={tabs.tabs.find((slot) => slot.id === tabs.activeTabId)?.artifactId}
-                outputs={outputs}
-                query={artifactQuery}
-              />
-            </div>
-            {docArea}
-          </>
-        ) : (
-          <>
-            <div className="panel-list">
-              <div className="panel-list-title">{TEXT.workspace.collapsible}</div>
-              <PanelSearch
-                label={TEXT.workspace.searchFiles}
-                onChange={setFileQuery}
-                placeholder={TEXT.workspace.searchFiles}
-                value={fileQuery}
-              />
-              {files.length === 0 ? (
-                <div className="panel-empty">{TEXT.workspace.filesEmpty}</div>
-              ) : (
-                <TreeLevel
-                  actions={actions}
-                  activePath={active?.path}
-                  node={buildFileTree(files)}
-                  query={fileQuery}
+      {subagent === undefined ? (
+        <div className="panel-body">
+          {activeGroup === "artifacts" ? (
+            <>
+              <div className="panel-list">
+                <div className="panel-list-title">{TEXT.workspace.allArtifacts}</div>
+                <PanelSearch
+                  label={TEXT.workspace.searchArtifacts}
+                  onChange={setArtifactQuery}
+                  placeholder={TEXT.workspace.searchArtifacts}
+                  value={artifactQuery}
                 />
-              )}
-            </div>
-            {docArea}
-          </>
-        )}
-      </div>
+                <ArtifactList
+                  actions={actions}
+                  activeId={tabs.tabs.find((slot) => slot.id === tabs.activeTabId)?.artifactId}
+                  outputs={outputs}
+                  query={artifactQuery}
+                />
+              </div>
+              {docArea}
+            </>
+          ) : (
+            <>
+              <div className="panel-list">
+                <div className="panel-list-title">{TEXT.workspace.collapsible}</div>
+                <PanelSearch
+                  label={TEXT.workspace.searchFiles}
+                  onChange={setFileQuery}
+                  placeholder={TEXT.workspace.searchFiles}
+                  value={fileQuery}
+                />
+                {files.length === 0 ? (
+                  <div className="panel-empty">{TEXT.workspace.filesEmpty}</div>
+                ) : (
+                  <TreeLevel
+                    actions={actions}
+                    activePath={active?.path}
+                    node={buildFileTree(files)}
+                    query={fileQuery}
+                  />
+                )}
+              </div>
+              {docArea}
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="panel-body is-subagent">
+          <SubagentDetail loading={subagentLoading ?? false} subagent={subagent} />
+        </div>
+      )}
     </aside>
   );
 }

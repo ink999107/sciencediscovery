@@ -43,6 +43,7 @@ function answered(runId: string, thinking: string, answer: string): RunStreamSta
     terminal: true,
     turns: [{
       responses: [{ content: answer, settled: true, truncated: false }],
+      subagents: [],
       thinking,
       thinkingTruncated: false,
       tools: [],
@@ -185,6 +186,7 @@ test("the run still streaming is the last thing in the transcript", () => {
     runId: "run-live",
     turns: [{
       responses: [{ content: "LIVE-ANSWER", settled: false, truncated: false }],
+      subagents: [],
       thinking: "LIVE-THOUGHT",
       thinkingTruncated: false,
       tools: [],

@@ -27,6 +27,9 @@ interface Props {
   detail?: SessionDetail;
   loading: boolean;
   onDecidePermission: (request: PermissionRequest, decision: PermissionDecision) => Promise<void>;
+  /** Open one subagent's execution in the workspace panel. The transcript
+   *  itself only ever draws its line. */
+  onOpenSubagent?: (id: string) => void;
   pending?: PendingMessage;
   /** Every finished run of this session, each to be rendered in the place of
    *  the answer it wrote. */
@@ -141,7 +144,16 @@ function useAfter(flag: boolean, delayMs: number): boolean {
  * printing the answer twice. A session that took several turns has one replay
  * per turn, and the run still streaming has none yet, so it goes at the end.
  */
-export function Conversation({ client, detail, loading, onDecidePermission, pending, replays, run }: Props) {
+export function Conversation({
+  client,
+  detail,
+  loading,
+  onDecidePermission,
+  onOpenSubagent,
+  pending,
+  replays,
+  run,
+}: Props) {
   const scroller = useRef<HTMLElement>(null);
   const stick = useRef(true);
 
@@ -185,6 +197,7 @@ export function Conversation({ client, detail, loading, onDecidePermission, pend
                 <AssistantTurns
                   client={client}
                   onDecide={onDecidePermission}
+                  onOpenSubagent={onOpenSubagent}
                   run={replacement}
                   sessionId={detail?.id}
                 />
@@ -197,6 +210,7 @@ export function Conversation({ client, detail, loading, onDecidePermission, pend
                   client={client}
                   key={replay.runId}
                   onDecide={onDecidePermission}
+                  onOpenSubagent={onOpenSubagent}
                   run={replay.state}
                   sessionId={detail?.id}
                 />
@@ -209,6 +223,7 @@ export function Conversation({ client, detail, loading, onDecidePermission, pend
             client={client}
             key={replay.runId}
             onDecide={onDecidePermission}
+            onOpenSubagent={onOpenSubagent}
             run={replay.state}
             sessionId={detail?.id}
           />
@@ -221,6 +236,7 @@ export function Conversation({ client, detail, loading, onDecidePermission, pend
           <AssistantTurns
             client={client}
             onDecide={onDecidePermission}
+            onOpenSubagent={onOpenSubagent}
             run={run}
             sessionId={detail?.id}
           />

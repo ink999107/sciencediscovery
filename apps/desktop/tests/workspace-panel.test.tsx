@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import type { Subagent } from "../src/api/types.js";
 import { PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from "../src/app/panel-width.js";
 import type { PanelResize } from "../src/app/use-panel-width.js";
 import type { PreviewSlot, TabState, WorkspaceActions } from "../src/app/use-workspace.js";
@@ -46,6 +47,7 @@ function render(tabs: TabState, over: Partial<Parameters<typeof WorkspacePanel>[
       actions={actions}
       activeGroup="files"
       files={[]}
+      onCloseSubagent={() => {}}
       onCollapse={() => {}}
       onSelectGroup={() => {}}
       outputs={[]}
@@ -257,6 +259,164 @@ test("a structure file goes to the 3D viewer, not to a source listing", () => {
   // which is the point: the contents are never printed as raw text.
   assert.match(markup, /class="doc-placeholder"><span class="spinner"/);
   assert.doesNotMatch(markup, /ATOM/);
+});
+
+function subagent(overrides: Partial<Subagent> = {}): Subagent {
+  return {
+    createdAt: "2026-01-01T00:00:00.000Z",
+    id: "a1",
+    input: { description: "read the literature", prompt: "search and summarize" },
+    maxTurns: 12,
+    parentTurnId: "turn-1",
+    sessionId: "s1",
+    status: "completed",
+    steps: [],
+    timeoutSeconds: 600,
+    turnCount: 2,
+    ...overrides,
+  };
+}
+
+test("a subagent replaces the panel's groups rather than becoming a third tab", () => {
+  const markup = render(initialTabState(), { subagent: subagent() });
+  // No 团队 tab, and no group tabs at all while the child is open: the panel
+  // shows the child's record, and the back arrow is the way out.
+  assert.doesNotMatch(markup, /role="tab"/u);
+  assert.doesNotMatch(markup, /<span>团队<\/span>/);
+  assert.doesNotMatch(markup, /当前活跃/u);
+  assert.match(markup, /class="panel-back"/);
+  assert.match(markup, /aria-label="返回"/);
+  assert.match(markup, /read the literature/);
+  assert.match(markup, /class="subagent-detail"/);
+});
+
+test("the child's execution and its final output are both shown", () => {
+  const markup = render(initialTabState(), {
+    subagent: subagent({
+      steps: [
+        { content: "weighing the options", createdAt: "2026-01-01T00:00:01.000Z", id: "s1", kind: "thinking" },
+        {
+          content: "three papers found",
+          createdAt: "2026-01-01T00:00:02.000Z",
+          id: "s2",
+          kind: "tool",
+          status: "completed",
+          toolName: "literature_search",
+        },
+        { content: "CONCLUSION-TEXT", createdAt: "2026-01-01T00:00:03.000Z", id: "s3", kind: "assistant" },
+      ],
+    }),
+  });
+  assert.match(markup, /weighing the options/);
+  assert.match(markup, /literature_search/);
+  assert.match(markup, /three papers found/);
+  // The final answer is the output section, not a row in the timeline as well.
+  assert.equal(count(markup, "CONCLUSION-TEXT"), 1);
+  assert.match(markup, /class="subagent-output"/);
+});
+
+test("a tool's result is boxed, so it reads as output rather than as the timeline", () => {
+  const markup = render(initialTabState(), {
+    subagent: subagent({
+      steps: [{
+        content: "TOOL-RESULT",
+        createdAt: "2026-01-01T00:00:01.000Z",
+        id: "s1",
+        input: '{"skillId": "code-engineer"}',
+        kind: "tool",
+        status: "completed",
+        toolName: "read_skill",
+      }],
+    }),
+  });
+  const resultAt = markup.indexOf("TOOL-RESULT");
+  assert.ok(resultAt >= 0);
+  const boxAt = markup.lastIndexOf('class="subagent-tool-output"', resultAt);
+  assert.ok(boxAt >= 0 && boxAt < resultAt, "the result should sit inside an output box");
+  // 输入 and 输出 are both named, so the two boxes are not mistaken for each other.
+  assert.match(markup, /subagent-step-label">输出<\/div><div class="subagent-tool-output"/u);
+  assert.match(markup, /subagent-step-label">输入<\/div>/u);
+});
+
+test("the task the child was handed is shown above its steps", () => {
+  const markup = render(initialTabState(), {
+    subagent: subagent({
+      input: {
+        description: "read the literature",
+        inputPaths: ["papers/a.pdf"],
+        prompt: "PROMPT-BODY",
+      },
+    }),
+  });
+  assert.match(markup, /class="subagent-task"/u);
+  assert.match(markup, /PROMPT-BODY/u);
+  assert.match(markup, /subagent-section-title">任务</u);
+  // A path is shown as a chip of its own, not folded into the prose.
+  assert.match(markup, /class="subagent-task-path" title="papers\/a\.pdf"/u);
+  // The brief and the timeline are separately named, so one cannot be read as
+  // the other.
+  assert.match(markup, /subagent-section-title">执行详情</u);
+});
+
+test("a reply is shown in full rather than folded", () => {
+  const markup = render(initialTabState(), {
+    subagent: subagent({
+      steps: [
+        { content: "INTERIM-REPLY", createdAt: "2026-01-01T00:00:01.000Z", id: "s1", kind: "assistant" },
+        { content: "FINAL-ANSWER", createdAt: "2026-01-01T00:00:02.000Z", id: "s2", kind: "assistant" },
+      ],
+    }),
+  });
+  const replyAt = markup.indexOf("INTERIM-REPLY");
+  assert.ok(replyAt >= 0);
+  // No <details> is open around it: an earlier reply is prose in the timeline,
+  // while the last one is the output section.
+  const before = markup.slice(0, replyAt);
+  assert.ok(
+    before.lastIndexOf("<details") <= before.lastIndexOf("</details>"),
+    "the reply should not be inside a fold",
+  );
+});
+
+test("the runtime's own system steps are left out of the timeline", () => {
+  const markup = render(initialTabState(), {
+    subagent: subagent({
+      steps: [
+        { content: "Turn 1 started", createdAt: "2026-01-01T00:00:01.000Z", id: "s1", kind: "system" },
+        { content: "looked around", createdAt: "2026-01-01T00:00:02.000Z", id: "s2", kind: "thinking" },
+      ],
+    }),
+  });
+  assert.doesNotMatch(markup, /Turn 1 started/);
+  assert.match(markup, /looked around/);
+});
+
+test("a child that has not run anything yet says so", () => {
+  const markup = render(initialTabState(), { subagent: subagent({ status: "running" }) });
+  assert.match(markup, /执行中/);
+  assert.match(markup, /class="workspace-empty"/);
+});
+
+test("a replayed child says it is loading instead of claiming it recorded nothing", () => {
+  // A run's event log stores child snapshots without steps, so a reopened
+  // finished run arrives empty. Saying "no execution was recorded" while the
+  // catalog read is still in flight would be wrong, and would stay on screen
+  // if the reader looked away before it landed.
+  const markup = render(initialTabState(), {
+    subagent: subagent({ status: "completed" }),
+    subagentLoading: true,
+  });
+  assert.match(markup, /class="spinner"/u);
+  assert.match(markup, /正在加载执行记录/u);
+  assert.doesNotMatch(markup, /还没有留下可展示的执行记录/u);
+});
+
+test("a failed child keeps the reason beside its status", () => {
+  const markup = render(initialTabState(), {
+    subagent: subagent({ error: "the provider refused the request", status: "failed" }),
+  });
+  assert.match(markup, /执行失败|失败/);
+  assert.match(markup, /the provider refused the request/);
 });
 
 test("the panel's left edge is a separator that reports the width it is at", () => {

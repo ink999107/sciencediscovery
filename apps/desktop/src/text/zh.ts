@@ -180,6 +180,35 @@ export const ZH = {
     resultUnavailable: "结果暂时读取不到。",
   },
 
+  /** One delegated subagent. It is named by what it was asked to do, never by a
+   *  role or a persona: the transcript shows a line, and the right panel shows
+   *  the work. */
+  subagent: {
+    lineLabel: "Subagent",
+    status: {
+      running: "执行中",
+      completed: "已完成",
+      failed: "失败",
+      cancelled: "已取消",
+      timed_out: "已超时",
+    },
+    /** The right panel's subagent mode. */
+    back: "返回",
+    detail: "执行详情",
+    output: "输出",
+    task: "任务",
+    inputFiles: "输入文件",
+    emptySteps: "这个 subagent 还没有留下可展示的执行记录。",
+    loading: "正在加载执行记录…",
+    thinking: "思考",
+    tool: "工具",
+    turns: (count: number) => `${count} 轮`,
+    tokens: (count: number) => `${count} tokens`,
+    failedTitle: "执行失败",
+    timedOutTitle: "执行超时",
+    cancelledTitle: "执行已取消",
+  },
+
   /** The welcome page a session starts on: the wordmark, the three ways in,
    *  and the starter prompts behind each of them. */
   landing: {

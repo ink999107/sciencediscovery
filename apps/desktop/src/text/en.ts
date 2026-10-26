@@ -169,6 +169,31 @@ export const EN: Text = {
     resultUnavailable: "The result is temporarily unavailable.",
   },
 
+  subagent: {
+    lineLabel: "Subagent",
+    status: {
+      running: "Running",
+      completed: "Completed",
+      failed: "Failed",
+      cancelled: "Cancelled",
+      timed_out: "Timed out",
+    },
+    back: "Back",
+    detail: "Execution",
+    output: "Output",
+    task: "Task",
+    inputFiles: "Input files",
+    emptySteps: "This subagent has not recorded any execution to show yet.",
+    loading: "Loading the execution record…",
+    thinking: "Reasoning",
+    tool: "Tool",
+    turns: (count: number) => `${count} ${count === 1 ? "turn" : "turns"}`,
+    tokens: (count: number) => `${count} tokens`,
+    failedTitle: "Execution failed",
+    timedOutTitle: "Execution timed out",
+    cancelledTitle: "Execution cancelled",
+  },
+
   landing: {
     tagline: "SCIENCE, EXPLORED",
     placeholder: "What can I help you with…",

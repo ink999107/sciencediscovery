@@ -2863,3 +2863,388 @@ body.is-resizing {
   height: 13px;
   border-width: 1.4px;
 }
+
+/* ── delegated subagent ──────────────────────────────────────────────────── */
+
+/* The one line a delegation leaves in the run: same rhythm as a tool call, so
+ *  it reads as part of the work rather than as a second kind of message. It is
+ *  a button because pressing it opens the child's own record in the panel. */
+.subagent-line {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto 12px;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 28px;
+  margin: 4px 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4d4d4d;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.subagent-line:hover {
+  background: #f7f7f7;
+  color: #191919;
+}
+
+.subagent-line-icon {
+  display: inline-grid;
+  place-items: center;
+  color: #b3b3b3;
+  font-size: 12px;
+}
+
+.subagent-line.is-failed .subagent-line-icon,
+.subagent-line.is-timed_out .subagent-line-icon {
+  color: #d84a3a;
+}
+
+.subagent-line-title {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* "Subagent" names what the row is; the task beside it is only its subject,
+ *  so the label carries the weight and the summary steps back. */
+.subagent-line-label {
+  flex: 0 0 auto;
+  color: #191919;
+  font-weight: 600;
+}
+
+.subagent-line-text {
+  min-width: 0;
+  overflow: hidden;
+  color: #8a8a8a;
+  font-weight: 400;
+  text-overflow: ellipsis;
+}
+
+.subagent-line:hover .subagent-line-text {
+  color: #6b6b6b;
+}
+
+.subagent-line-status {
+  color: #b3b3b3;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.subagent-line.is-failed .subagent-line-status,
+.subagent-line.is-timed_out .subagent-line-status {
+  color: #d84a3a;
+}
+
+.subagent-line-chev {
+  color: #b3b3b3;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.subagent-line:hover .subagent-line-chev {
+  color: #191919;
+}
+
+/* The subagent mode of the panel: a back arrow and the task, in the place the
+ *  group tabs normally occupy. 团队 is deliberately not one of those tabs. */
+.panel-head.is-subagent {
+  gap: 8px;
+}
+
+.panel-back {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+  color: #4d4d4d;
+}
+
+.panel-back:hover {
+  background: #f7f7f7;
+  color: #191919;
+}
+
+.panel-subagent-title {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.panel-subagent-label {
+  flex: 0 0 auto;
+  color: #191919;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panel-subagent-text {
+  min-width: 0;
+  overflow: hidden;
+  color: #8a8a8a;
+  font-size: 13.5px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+}
+
+.panel-body.is-subagent {
+  display: block;
+  padding: 4px 20px 24px;
+  overflow-y: auto;
+}
+
+.subagent-detail {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.subagent-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 14px;
+  border-bottom: 1px solid #ececec;
+  color: #4d4d4d;
+  font-size: 13px;
+}
+
+.subagent-status-icon {
+  display: inline-grid;
+  place-items: center;
+  color: #1476ff;
+}
+
+.subagent-status.is-failed .subagent-status-icon,
+.subagent-status.is-timed_out .subagent-status-icon {
+  color: #d84a3a;
+}
+
+.subagent-status-meta {
+  color: #9a9a9a;
+  font-size: 12px;
+}
+
+.subagent-status-meta::before {
+  margin-right: 8px;
+  color: #b3b3b3;
+  content: "·";
+}
+
+.subagent-error {
+  margin: 14px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(216, 74, 58, 0.06);
+  color: #a3301f;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.subagent-error-title {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.subagent-steps {
+  padding-top: 4px;
+}
+
+.subagent-step {
+  margin: 2px 0;
+}
+
+.subagent-step > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: #4d4d4d;
+  font-size: 13px;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.subagent-step > summary::-webkit-details-marker {
+  display: none;
+}
+
+.subagent-step > summary:hover {
+  background: #f7f7f7;
+}
+
+.subagent-step-icon {
+  width: 14px;
+  display: inline-grid;
+  place-items: center;
+  color: #b3b3b3;
+  font-size: 12px;
+}
+
+.subagent-step.is-failed > summary .subagent-step-icon {
+  color: #d84a3a;
+}
+
+.subagent-step-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subagent-step .collapse-chev {
+  margin-left: auto;
+  color: #b3b3b3;
+  font-size: 14px;
+  transition: transform 0.15s ease;
+}
+
+.subagent-step[open] > summary .collapse-chev {
+  transform: rotate(90deg);
+}
+
+.subagent-step-body {
+  padding: 4px 8px 10px 30px;
+}
+
+.subagent-step-label {
+  margin: 6px 0 4px;
+  color: #9a9a9a;
+  font-size: 12px;
+}
+
+.subagent-pre {
+  max-height: 320px;
+  margin: 4px 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #f7f7f7;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* A tool's result sits in a box of its own, as the child's final answer does,
+ *  so a long result cannot be mistaken for the timeline around it. The task the
+ *  child was handed uses the same frame at the top of the panel, with a firmer
+ *  edge and a tint: it is the question everything below answers. */
+.subagent-tool-output,
+.subagent-task-block {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.subagent-tool-output {
+  border: 1px solid #e6e6e6;
+  background: #fbfbfb;
+}
+
+.subagent-task-block {
+  border: 1px solid #dedede;
+  background: #f6f6f6;
+}
+
+.subagent-tool-output > :first-child,
+.subagent-task-block > :first-child {
+  margin-top: 0;
+}
+
+.subagent-tool-output > :last-child,
+.subagent-task-block > :last-child {
+  margin-bottom: 0;
+}
+
+.subagent-tool-output .subagent-pre {
+  margin: 8px 0 0;
+  padding: 0;
+  background: transparent;
+}
+
+/* The panel is read in three parts — what was asked, what was done, what came
+ *  back — so each is named, and the later two are ruled off from the one above.
+ *  Without the headings the brief and the first reply ran together. */
+.subagent-section-title {
+  margin-bottom: 6px;
+  color: #9a9a9a;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.subagent-task {
+  margin-top: 18px;
+}
+
+.subagent-execution {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid #ececec;
+}
+
+.subagent-task-paths {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #e0e0e0;
+  font-size: 12px;
+}
+
+.subagent-task-paths-label {
+  margin-right: 2px;
+  color: #9a9a9a;
+}
+
+/* A path is a token, not a sentence: a chip keeps it apart from the prose
+ *  around it and lets a long name show its tail through the title. */
+.subagent-task-path {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 999px;
+  background: #fff;
+  color: #4d4d4d;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A reply is prose, not a row: always open, at the indent of the body above. */
+.subagent-step.is-assistant > .subagent-step-body {
+  padding: 2px 8px 12px 30px;
+  color: #4d4d4d;
+}
+
+.subagent-output {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid #ececec;
+}

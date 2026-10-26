@@ -22,6 +22,7 @@ import type {
   SessionDetail,
   SessionListState,
   SessionRun,
+  Subagent,
   UpdateSessionRequest,
   WorkspaceConflictPolicy,
   WorkspaceFile,
@@ -104,6 +105,18 @@ export function updateSession(
  *  recent run. */
 export function listRuns(client: ApiClient, sessionId: string): Promise<SessionRun[]> {
   return client.request<SessionRun[]>(`/api/sessions/${encodeURIComponent(sessionId)}/runs`);
+}
+
+/**
+ * Every child this Session ever delegated, each with the steps it recorded.
+ *
+ * The run's own event log deliberately stores `subagent.updated` snapshots
+ * without their steps (the steps live on the child's substream, which a run
+ * replay does not read). This catalog is therefore the one place a finished
+ * run's execution can be shown in full.
+ */
+export function listSubagents(client: ApiClient, sessionId: string): Promise<Subagent[]> {
+  return client.request<Subagent[]>(`/api/sessions/${encodeURIComponent(sessionId)}/subagents`);
 }
 
 export function cancelRun(client: ApiClient, sessionId: string, runId: string): Promise<SessionRun> {

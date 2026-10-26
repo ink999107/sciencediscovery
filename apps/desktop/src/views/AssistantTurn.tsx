@@ -19,7 +19,8 @@ import type { ApiClient } from "../api/client.js";
 import { TEXT } from "../text.js";
 import type { AssistantTurn as Turn, PermissionEntry, RunStreamState } from "../run-stream/model.js";
 import { permissionMatchingKey, pendingPermissions } from "../run-stream/permission.js";
-import type { PermissionDecision, PermissionRequest, SessionRunStatus } from "../api/types.js";
+import { subagentTask } from "../run-stream/subagent.js";
+import type { PermissionDecision, PermissionRequest, SessionRunStatus, Subagent } from "../api/types.js";
 import { collapseHint } from "./collapse-hint.js";
 import { PermissionCard } from "./PermissionCard.js";
 import { ThinkingBlock } from "./ThinkingBlock.js";
@@ -118,9 +119,67 @@ interface ToolContext {
   deciding: ReadonlySet<string>;
   interactive: boolean;
   onDecide: (request: PermissionRequest, decision: PermissionDecision) => void;
+  onOpenSubagent?: (id: string) => void;
   permissions: PermissionEntry[];
   runId?: string;
   sessionId?: string;
+}
+
+function subagentStatusLabel(subagent: Subagent): string {
+  const labels = TEXT.subagent.status;
+  return labels[subagent.status];
+}
+
+function subagentStatusIcon(subagent: Subagent): ReactNode {
+  if (subagent.status === "running") return <span aria-hidden="true" className="spinner" />;
+  if (subagent.status === "failed" || subagent.status === "timed_out") return "!";
+  if (subagent.status === "cancelled") return "·";
+  return "✓";
+}
+
+/**
+ * One delegated subagent, drawn like a tool call instead of as a member card.
+ *
+ * The line says only what the child was asked to do — no avatar, no specialist
+ * name — because the person reading the transcript is following the work, not
+ * a roster. Pressing it opens this child's own execution and output in the
+ * right panel; the line itself stays where it was delegated from.
+ */
+function SubagentLine({ onOpen, subagent }: { onOpen?: (id: string) => void; subagent: Subagent }) {
+  const description = subagentTask(subagent);
+  const status = subagentStatusLabel(subagent);
+  return (
+    <button
+      aria-label={`${TEXT.subagent.lineLabel} ${description} · ${status}`}
+      className={`subagent-line is-${subagent.status}`}
+      onClick={() => onOpen?.(subagent.id)}
+      title={`${description} · ${status}`}
+      type="button"
+    >
+      <span aria-hidden="true" className="subagent-line-icon">{subagentStatusIcon(subagent)}</span>
+      <span className="subagent-line-title">
+        <span className="subagent-line-label">{TEXT.subagent.lineLabel}</span>
+        <span className="subagent-line-text">{description}</span>
+      </span>
+      <span className="subagent-line-status">{status}</span>
+      <span aria-hidden="true" className="subagent-line-chev">›</span>
+    </button>
+  );
+}
+
+/**
+ * The tools that only exist to manage children.
+ *
+ * Their work is now the subagent line and the panel behind it, so drawing the
+ * call as well would say the same thing twice in the transcript. They are
+ * hidden only when the turn actually holds a child snapshot: an older record
+ * whose subagent events were pruned still has the tool call as its only
+ * account of what happened.
+ */
+const DELEGATION_TOOL_PREFIX = "subagent_";
+
+function isDelegationTool(name: string): boolean {
+  return name === "task" || name.startsWith(DELEGATION_TOOL_PREFIX);
 }
 
 /**
@@ -155,6 +214,7 @@ function TurnBlock({
   turn: Turn;
 }) {
   const layers: ReactNode[] = [];
+  const hasChildren = turn.subagents.length > 0;
 
   for (let index = -1; index < turn.responses.length; index += 1) {
     const response = index < 0 ? undefined : turn.responses[index];
@@ -178,7 +238,8 @@ function TurnBlock({
     // After the answer, not before it: `after` is set to `responses.length - 1`
     // when the call is announced, so it names the answer the model had just
     // finished producing when it reached for a tool.
-    for (const tool of turn.tools.filter((candidate) => candidate.after === index)) {
+    for (const tool of turn.tools.filter((candidate) =>
+      candidate.after === index && !(hasChildren && isDelegationTool(candidate.trace.name)))) {
       layers.push(
         <ToolCard
           authorized={tools.permissions.some((entry) =>
@@ -188,6 +249,17 @@ function TurnBlock({
           runId={tools.runId}
           sessionId={tools.sessionId}
           trace={tool.trace}
+        />,
+      );
+    }
+    // A delegated subagent sits where it was delegated, in the same weave as a
+    // tool call: one line in the run's own history, not a card outside the fold.
+    for (const entry of turn.subagents.filter((candidate) => candidate.after === index)) {
+      layers.push(
+        <SubagentLine
+          key={`subagent-${entry.subagent.id}`}
+          onOpen={tools.onOpenSubagent}
+          subagent={entry.subagent}
         />,
       );
     }
@@ -325,6 +397,7 @@ function shownAnswer(run: RunStreamState): ShownAnswer | undefined {
 function hasMiddleContent(run: RunStreamState, answer: ShownAnswer | undefined): boolean {
   return run.turns.some((turn) =>
     turn.thinking.trim() !== ""
+    || turn.subagents.length > 0
     || turn.tools.length > 0
     || turn.responses.some((response, index) =>
       response.content.trim() !== ""
@@ -375,11 +448,15 @@ function foldLabel(run: RunStreamState): { icon: string; title: string; working:
 export function AssistantTurns({
   client,
   onDecide,
+  onOpenSubagent,
   run,
   sessionId,
 }: {
   client: ApiClient;
   onDecide: (request: PermissionRequest, decision: PermissionDecision) => Promise<void>;
+  /** Open one child's execution in the right panel. Absent where there is no
+   *  such panel — the line still shows the task, it just is not a door. */
+  onOpenSubagent?: (id: string) => void;
   run: RunStreamState;
   sessionId?: string;
 }) {
@@ -418,6 +495,7 @@ export function AssistantTurns({
     deciding,
     interactive: live,
     onDecide: decide,
+    onOpenSubagent,
     permissions: run.permissions,
     runId: run.runId,
     sessionId,

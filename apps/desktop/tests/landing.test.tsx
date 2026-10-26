@@ -97,7 +97,7 @@ test("a transcript is empty only while nothing at all has happened in it", () =>
   );
   const run: RunStreamState = {
     ...emptyRunStream(),
-    turns: [{ responses: [], thinking: "", thinkingTruncated: false, tools: [], turn: 1 }],
+    turns: [{ responses: [], subagents: [], thinking: "", thinkingTruncated: false, tools: [], turn: 1 }],
   };
   assert.equal(isEmptyTranscript({ detail: detail([]), replays: [], run }), false);
 });

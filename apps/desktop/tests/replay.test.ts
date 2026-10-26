@@ -16,7 +16,7 @@ import { createTest } from "../../../test/support/tagged/compat.mjs";
 const { test } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
 import assert from "node:assert/strict";
 
-import type { ChatMessage, RunStreamEvent, SessionRun, SessionRunEvent } from "../src/api/types.js";
+import type { ChatMessage, RunStreamEvent, SessionRun, SessionRunEvent, Subagent } from "../src/api/types.js";
 import { emptyRunStream } from "../src/run-stream/model.js";
 import { foldRunRecords, placeReplays, replayRun, type RunReplay } from "../src/run-stream/replay.js";
 
@@ -191,6 +191,42 @@ test("run order survives placement", () => {
   );
   assert.deepEqual([...placement.replacing.keys()], ["answer-a", "answer-c"]);
   assert.deepEqual(placement.trailing.map((entry) => entry.runId), ["run-2"]);
+});
+
+test("a replayed run keeps the subagent lines it delegated", () => {
+  const child: Subagent = {
+    createdAt: "2026-01-01T00:00:00.000Z",
+    id: "a1",
+    input: { description: "read the literature", prompt: "search and summarize" },
+    maxTurns: 12,
+    parentTurnId: "turn-1",
+    sessionId: "session-1",
+    status: "running",
+    steps: [],
+    timeoutSeconds: 600,
+    turnCount: 0,
+  };
+  const state = foldRunRecords([
+    record(1, responseStarted("r1")),
+    record(2, delta("delegating", "r1")),
+    record(3, { subagent: child, type: "subagent.updated" } as RunStreamEvent),
+    record(4, {
+      step: { content: "found 3 papers", createdAt: "2026-01-01T00:00:10.000Z", id: "s1", kind: "assistant" },
+      subagentId: "a1",
+      type: "subagent.step",
+    } as RunStreamEvent),
+    record(5, {
+      subagent: { ...child, status: "completed", steps: [], turnCount: 2 },
+      type: "subagent.updated",
+    } as RunStreamEvent),
+  ]);
+  const entries = state.turns.flatMap((turn) => turn.subagents);
+  assert.equal(entries.length, 1);
+  // Replay is the live reducer folded from sequence 0, so a finished run's
+  // lines, steps and outcome all come back without a second request.
+  assert.equal(entries[0]!.after, 0);
+  assert.equal(entries[0]!.subagent.status, "completed");
+  assert.deepEqual(entries[0]!.subagent.steps.map((entry) => entry.id), ["s1"]);
 });
 
 test("a session with nothing replayed places nothing", () => {

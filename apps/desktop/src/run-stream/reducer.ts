@@ -23,6 +23,7 @@ import {
   turnFor,
 } from "./model.js";
 import { mergePermission } from "./permission.js";
+import { applySubagentEvent, type SubagentEvent } from "./subagent.js";
 
 /**
  * Event types this version knows about and deliberately does not render yet.
@@ -45,9 +46,6 @@ const DEFERRED_EVENT_TYPES: ReadonlySet<string> = new Set([
   "reviewer_checkpoint.updated",
   "session.approval_mode.changed",
   "session.updated", // the sidebar owns the title, not the transcript
-  "subagent.step",
-  "subagent.updated",
-  "subagent.usage",
   "workspace.changed",
 ]);
 
@@ -173,6 +171,26 @@ export function reduceRunStream(
         };
       });
 
+    case "subagent.updated": {
+      // A snapshot for a child already on the timeline updates it in place, so
+      // its line keeps the response it was delegated from. The first snapshot
+      // opens the line on the newest turn, exactly as `tool.started` does.
+      const existing = advanced.turns.some((turn) =>
+        turn.subagents.some((entry) => entry.subagent.id === event.subagent.id));
+      if (existing) return withSubagent(advanced, event);
+      return withTurn(advanced, newestTurn(advanced), (turn) => ({
+        ...turn,
+        subagents: [...turn.subagents, { after: turn.responses.length - 1, subagent: event.subagent }],
+      }));
+    }
+
+    case "subagent.step":
+    case "subagent.usage":
+      // These refine a snapshot that has already arrived. With no snapshot
+      // there is no task description to name the line with, so the event is
+      // dropped rather than guessed at.
+      return withSubagent(advanced, event);
+
     case "permission.required":
     case "permission.resolved":
       // Both carry the same `PermissionRequest` snapshot; `permission.resolved`
@@ -295,6 +313,37 @@ function withTurn(
 }
 
 /**
+ * Apply a subagent event to the turn that already holds its line.
+ *
+ * Subagents are placed at delegation time, so a later update must find the
+ * existing entry rather than append a second one to the newest turn. Returning
+ * the state unchanged means no turn owns it yet — only `subagent.updated` is
+ * allowed to open a line, and its caller handles that case.
+ */
+function withSubagent(state: RunStreamState, event: SubagentEvent): RunStreamState {
+  const subagentId = event.type === "subagent.updated" ? event.subagent.id : event.subagentId;
+  for (let turnIndex = 0; turnIndex < state.turns.length; turnIndex += 1) {
+    const turn = state.turns[turnIndex]!;
+    const index = turn.subagents.findIndex((entry) => entry.subagent.id === subagentId);
+    if (index < 0) continue;
+    const current = turn.subagents[index]!.subagent;
+    const next = applySubagentEvent(current, event);
+    if (next === undefined || next === current) return state;
+    return {
+      ...state,
+      turns: state.turns.map((candidate, candidateIndex) => candidateIndex === turnIndex
+        ? {
+            ...candidate,
+            subagents: candidate.subagents.map((entry, entryIndex) =>
+              entryIndex === index ? { ...entry, subagent: next } : entry),
+          }
+        : candidate),
+    };
+  }
+  return state;
+}
+
+/**
  * Route a text frame to its response.
  *
  * `responseId` is the reliable key and is preferred. Older records omit it, so
@@ -312,6 +361,7 @@ function withResponse(
   if (!turn) {
     const created: AssistantTurn = {
       responses: [update(blankResponse(responseId))],
+      subagents: [],
       thinking: "",
       thinkingTruncated: false,
       tools: [],
