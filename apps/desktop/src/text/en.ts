@@ -53,7 +53,16 @@ export const EN: Text = {
     githubStar: "Star this project on GitHub",
     newTask: "New session",
     project: "Projects",
-    tasks: "Sessions",
+    /** The standalone-conversation section, and the title the app shows
+     *  wherever a Session outside a Project has to name one. */
+    recent: "Recent sessions",
+    noRecent: "No recent sessions",
+    noProjects: "No projects yet",
+    newProject: "New project",
+    projectName: "Project name",
+    /** The `+` on a Project fold; the name is in it because a column of
+     *  identical buttons is not distinguishable to a screen reader. */
+    newSessionInProject: (name: string) => `New session in ${name}`,
     noTasks: "No sessions yet",
     showMore: "Show more",
     collapseSidebar: "Collapse sidebar",
@@ -66,7 +75,6 @@ export const EN: Text = {
     sessionMenu: "Session menu",
     sessionTitle: "Session name",
     renameHint: "Double-click to rename",
-    home: "New session",
     untitled: "Untitled session",
   },
 
@@ -195,6 +203,10 @@ export const EN: Text = {
     tagline: "SCIENCE, EXPLORED",
     placeholder: "What can I help you with…",
     clearCategory: "Clear category",
+    projectDirectory: "Choose project",
+    chooseProject: "Choose a project",
+    noProject: "Don't work in a project",
+    noProjectNote: "The session will appear under Recent sessions",
     categories: {
       research: "Literature",
       experiment: "Experiments",
@@ -852,10 +864,6 @@ export const EN: Text = {
     atoms: (count: number) => `${count} atoms`,
     expand: "Expand to full screen",
     close: "Exit full screen",
-  },
-
-  project: {
-    defaultName: "My workspace",
   },
 
   errors: {

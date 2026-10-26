@@ -166,9 +166,9 @@ export function SystemSettingsDialog({
       case "remote":
         return (
           <RuntimeSettings
-            activeProjectId={state.activeProjectId}
             client={client}
             onConfirm={actions.confirmAction}
+            project={state.activeProject}
           />
         );
       case "timeouts":

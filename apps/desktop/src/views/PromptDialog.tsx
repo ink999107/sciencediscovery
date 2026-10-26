@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { TEXT } from "../text.js";
 
@@ -33,6 +34,13 @@ interface Props {
  * This exists rather than `window.prompt` because Electron's renderer does not
  * implement `prompt()` at all — it is stubbed to return null — so a project
  * could never be named in the shell this front end is built for.
+ *
+ * It renders into `document.body` rather than beside its trigger. The backdrop
+ * is `position: fixed` with its own z-index, and both only reach the whole
+ * window from the root stacking context: the sidebar is a sticky column, which
+ * makes it a stacking context of its own, so a modal opened from a row there
+ * would otherwise be painted under the composer and the landing hero — the
+ * dialog would open with the page still on top of it.
  */
 export function PromptDialog({
   accept,
@@ -60,7 +68,7 @@ export function PromptDialog({
     onSubmit(trimmed);
   };
 
-  return (
+  const dialog = (
     <div className="modal-backdrop" onPointerDown={onCancel}>
       <div
         aria-labelledby="prompt-title"
@@ -101,4 +109,8 @@ export function PromptDialog({
       </div>
     </div>
   );
+
+  // The tests render this tree on the server, where there is no body to portal
+  // into; the dialog only appears after a click, so that path is the real one.
+  return typeof document === "undefined" ? dialog : createPortal(dialog, document.body);
 }

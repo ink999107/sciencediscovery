@@ -31,7 +31,7 @@ import {
 import type { PermissionRequest } from "../src/api/types.js";
 import { PermissionCard } from "../src/views/PermissionCard.js";
 import { providerName } from "../src/views/provider-name.js";
-import { sessionTitle } from "../src/views/session-title.js";
+import { sessionTitle } from "../src/app/session-title.js";
 import { GeneralSettings } from "../src/views/settings/GeneralSettings.js";
 import { ThinkingBlock } from "../src/views/ThinkingBlock.js";
 

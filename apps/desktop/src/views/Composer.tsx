@@ -14,11 +14,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { ApprovalMode, ModelProfile, ModelProvider } from "../api/types.js";
+import type { ApprovalMode, ModelProfile, ModelProvider, Project } from "../api/types.js";
 import type { LandingCategory, LandingSeed } from "../app/landing.js";
 import { TEXT } from "../text.js";
 import { modelBrand } from "./model-brand.js";
 import { modelLabel, providerName } from "./provider-name.js";
+import { ProjectPicker } from "./ProjectPicker.js";
 
 /** The category chip the welcome page puts in front of the input. */
 export interface ComposerTag {
@@ -29,6 +30,9 @@ export interface ComposerTag {
 
 interface Props {
   approvalMode?: ApprovalMode;
+  /** The Project the next conversation would go into, for the landing strip's
+   *  picker to mark. Undefined until the boot knows which Projects exist. */
+  activeProjectId?: string;
   /** Why uploading is not on offer, or `undefined` when it is. A reason rather
    *  than a flag because the button's tooltip has to say what is missing. */
   attachBlocked?: string;
@@ -39,16 +43,22 @@ interface Props {
   landing?: boolean;
   models: ModelProfile[];
   onApprovalMode: (mode: ApprovalMode) => void;
+  /** 新建项目 from the landing strip: a Project needs nothing but a name. */
+  onCreateProject: (name: string) => void;
   onOpenSettings: () => void;
   onOpenSpecialists: () => void;
   onSelectModel: (modelId: string) => void;
+  /** Point the next conversation at a Project, or at none (`undefined`). */
+  onSelectProject: (projectId?: string) => void;
   onSend: (content: string) => void;
   onStop: () => void;
   onUpload: (files: File[]) => void;
-  /** Shown in the landing strip, beside the folder. Always known: a session
-   *  belongs to a Project, and the app falls back to the unnamed workspace's
-   *  name rather than to an invitation this strip cannot answer. */
-  projectName: string;
+  /** Shown in the landing strip, beside the folder. Absent when the next
+   *  conversation goes into no Project: the strip then shows the picker's
+   *  invitation in place of a name. */
+  projectName?: string;
+  /** The Projects the landing strip's picker offers; the inbox is not one. */
+  projects: Project[];
   /** Where the model menu gets each row's brand mark. A profile names its
    *  provider, and the provider knows its preset. */
   providers?: ModelProvider[];
@@ -430,19 +440,23 @@ export function ModelMenu({
  * session's own settings.
  */
 export function Composer({
+  activeProjectId,
   approvalMode,
   attachBlocked,
   attachLimit,
   landing = false,
   models,
   onApprovalMode,
+  onCreateProject,
   onOpenSettings,
   onOpenSpecialists,
   onSelectModel,
+  onSelectProject,
   onSend,
   onStop,
   onUpload,
   projectName,
+  projects,
   providers = [],
   running,
   seed,
@@ -659,10 +673,13 @@ export function Composer({
 
       {landing ? (
         <div className="composer-strip">
-          <span className="composer-strip-project">
-            <span aria-hidden="true" className="composer-strip-icon" data-kind="folder" />
-            <span className="composer-strip-label">{projectName}</span>
-          </span>
+          <ProjectPicker
+            activeProjectId={activeProjectId}
+            label={projectName ?? TEXT.landing.projectDirectory}
+            onCreateProject={onCreateProject}
+            onSelectProject={onSelectProject}
+            projects={projects}
+          />
         </div>
       ) : null}
     </div>

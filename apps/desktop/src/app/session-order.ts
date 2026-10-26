@@ -32,6 +32,43 @@ export function byRecency<T extends { updatedAt: string }>(sessions: readonly T[
 }
 
 /**
+ * The title the service stores for a Session nobody has named.
+ *
+ * Repeated here rather than imported from `@sciencediscovery/schema` on
+ * purpose: this app reaches the schema for types only, which is what keeps its
+ * runtime out of the browser bundle (`api/types.ts` says so). A value import
+ * would pull the whole barrel in to compare two strings.
+ */
+const UNTITLED_SESSION_TITLE = "Untitled session";
+
+/** Whether a Session still has no name. The first message names it, so an
+ *  unnamed Session is also one nothing has been written in — see
+ *  `reusableDraft`. */
+export function untitled(title: string): boolean {
+  const trimmed = title.trim();
+  return trimmed === "" || trimmed === UNTITLED_SESSION_TITLE;
+}
+
+/**
+ * The Session 新建会话 should open instead of writing another one.
+ *
+ * The service names a Session from its first message, so one that is still
+ * untitled has never been written in: it *is* the empty page the button was
+ * asking for. Creating a second beside it only adds a row the user cannot tell
+ * apart from the first — five of them, after five hopeful clicks.
+ *
+ * Archived Sessions are not reused: a click that lands on a read-only page
+ * would read as a broken button.
+ */
+export function reusableDraft<T extends { archivedAt?: string; title: string; updatedAt: string }>(
+  sessions: readonly T[],
+): T | undefined {
+  return byRecency(sessions).find(
+    (session) => session.archivedAt === undefined && untitled(session.title),
+  );
+}
+
+/**
  * The Session to open once the first listing arrives, if any.
  *
  * The sidebar lists what the server has, but the composer starts life in a

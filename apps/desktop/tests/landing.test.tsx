@@ -40,13 +40,15 @@ function landing(): string {
         attachLimit: "1 GiB",
         models: [{ id: "m1", name: "测试模型" } as never],
         onApprovalMode: () => {},
+        onCreateProject: () => {},
         onOpenSettings: () => {},
         onOpenSpecialists: () => {},
         onSelectModel: () => {},
+        onSelectProject: () => {},
         onSend: () => {},
         onStop: () => {},
         onUpload: () => {},
-        projectName: "我的工作区",
+        projects: [],
         running: false,
         selectedModelId: "m1",
         uploading: false,
@@ -71,10 +73,11 @@ test("the welcome page's composer is the landing arrangement, with its strip", (
   const markup = landing();
   assert.match(markup, /class="composer is-landing"/u);
   assert.match(markup, /有什么需要我帮忙的/u);
-  // The strip names the project. The approval mode is not a second control
+  // The strip carries the project picker. With no Project chosen it shows the
+  // invitation rather than a name. The approval mode is not a second control
   // there: it lives in 会话设置, the one place a mode can be changed.
-  assert.match(markup, /class="composer-strip-project"/u);
-  assert.match(markup, /class="composer-strip-label">我的工作区/u);
+  assert.match(markup, /class="composer-strip-project is-placeholder"/u);
+  assert.match(markup, /选择项目/u);
   assert.doesNotMatch(markup, /composer-strip-permission/u);
 });
 

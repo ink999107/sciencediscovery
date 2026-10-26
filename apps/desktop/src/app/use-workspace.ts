@@ -16,7 +16,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { resolveCatalog, resolveConnection } from "./bootstrap.js";
 import { fileName } from "./paths.js";
-import { byRecency, resumeOnBoot } from "./session-order.js";
+import { byRecency, reusableDraft, resumeOnBoot } from "./session-order.js";
+import { sessionTitle } from "./session-title.js";
 import { formatByteLimit, splitBySize } from "./upload.js";
 import {
   addTab,
@@ -31,9 +32,10 @@ import { ApiClient, isAbortError, isAuthFailure } from "../api/client.js";
 import { getHealth, getSettings, listModels, listProviders, setGlobalModel } from "../api/models.js";
 import {
   cancelCurrentRun,
-  createProject,
+  createProject as createProjectRequest,
   createSession,
   deleteSession,
+  ensureInbox,
   getSession,
   getWorkspaceUploadLimit,
   listArtifactOutputs,
@@ -54,6 +56,7 @@ import type {
   ModelProvider,
   ModelProviderPreset,
   PermissionDecision,
+  Project,
   Session,
   SessionArtifactOutput,
   SessionDetail,
@@ -98,9 +101,13 @@ export interface PendingMessage {
 export type { PreviewSlot, TabState } from "./preview-tabs.js";
 
 export interface WorkspaceState {
+  /** The Project the open Session belongs to, or the inbox while no Session is
+   *  open. Settings read this to know which Project they are editing. */
+  activeProject?: Project;
   /** The project new sessions land in. */
   activeProjectId?: string;
-  /** Its name, which the sidebar shows under 科研任务. */
+  /** Its name, which the composer and the Session bar show. The inbox is titled
+   *  with the interface's own word for it, never with the stored name. */
   activeProjectName?: string;
   connection: Connection;
   confirm: ConfirmRequest | undefined;
@@ -109,6 +116,10 @@ export interface WorkspaceState {
   /** Counts the drafts started since the app opened. Two consecutive drafts
    *  share no Session id, so this is what tells them apart. */
   draftEpoch: number;
+  /** The Project standalone conversations live in. It is a Project like any
+   *  other — settings, runner allowlist, workspace — that the server keeps out
+   *  of `GET /api/projects` and hands out through `POST /api/inbox`. */
+  inboxProject?: Project;
   /** Every finished run of the open session, rebuilt from its events, oldest
    *  first. The transcript renders each in the place of the answer it wrote —
    *  the persisted transcript has no thinking, so a run that is not replayed
@@ -123,8 +134,10 @@ export interface WorkspaceState {
    *  (which carry the protocol and variant) and the saved providers (which it
    *  updates instead of duplicating). */
   presets: ModelProviderPreset[];
+  /** The Projects the user made, oldest first. The inbox is not here. */
+  projects: Project[];
   providers: ModelProvider[];
-  /** Every session this app knows about, newest first. */
+  /** The inbox's Sessions, newest first — the sidebar's 最近会话 section. */
   recent: Session[];
   /** The run that is streaming right now, or the one that was still going when
    *  the session was opened. Finished runs are not here — they are in
@@ -133,6 +146,10 @@ export interface WorkspaceState {
   running: boolean;
   selectedModelId?: string;
   sessionId?: string;
+  /** Every Project's Sessions, keyed by Project id and including the inbox.
+   *  The sidebar reads a Project's list from here; `recent` is the inbox's
+   *  slice of it. */
+  sessionsByProject: Record<string, Session[]>;
   tabs: TabState;
   toasts: Toast[];
   /** The per-file upload ceiling `/api/health` reported, in bytes. `undefined`
@@ -158,11 +175,22 @@ export interface WorkspaceActions {
   dismissConfirm: () => void;
   dismissToast: (id: number) => void;
   finishSetup: () => void;
-  newSession: () => void;
+  /** Make a Project from a name alone and open the Session the server creates
+   *  with it — the sidebar's 新建项目. */
+  createProject: (name: string) => Promise<void>;
+  /** Start a Session in `projectId`, or in the inbox when it is omitted. The
+   *  Session is written at click time, as the button has always done. */
+  newSession: (projectId?: string) => void;
+  /** Point the next conversation at `projectId`, or at the inbox (`undefined`),
+   *  without writing anything: the welcome page's project picker. The Session
+   *  is created by the first message, as it would be from an untouched draft. */
+  selectProject: (projectId?: string) => void;
   openArtifact: (output: SessionArtifactOutput) => Promise<void>;
   openFile: (file: WorkspaceFile) => Promise<void>;
   selectPanelTab: (tabId: string) => void;
-  openSession: (sessionId: string) => Promise<void>;
+  /** `projectId` is the Project the row came from: naming it lets the app file
+   *  later writes under it before the Session read comes back. */
+  openSession: (sessionId: string, projectId?: string) => Promise<void>;
   renameSession: (session: Session, title: string) => Promise<void>;
   /** Re-read the model catalog after the wizard or settings changed it. */
   refreshCatalog: () => Promise<void>;
@@ -228,7 +256,8 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   const [attempt, setAttempt] = useState(0);
   const [connection, setConnection] = useState<Connection>("online");
   const [activeProjectId, setActiveProjectId] = useState<string>();
-  const [activeProjectName, setActiveProjectName] = useState<string>();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [inboxProject, setInboxProject] = useState<Project>();
   const [sessionsByProject, setSessionsByProject] = useState<Record<string, Session[]>>({});
   const [sessionId, setSessionId] = useState<string>();
   // A draft has no Session to be named by, and the welcome page has to be able
@@ -259,6 +288,13 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   // started them, so they cannot close over the state they need to read.
   const sessionRef = useRef<string | undefined>(undefined);
   const projectRef = useRef<string | undefined>(undefined);
+  /** The listing 新建会话 reads to decide whether the empty page it would
+   *  write already exists. A mirror for the same reason as the rest: the
+   *  callback runs long after the render that made it. */
+  const sessionsByProjectRef = useRef<Record<string, Session[]>>({});
+  /** The inbox, for the paths that write a Session before a render can hand
+   *  them one. `refreshSessionLists` is the only reader that may not fail. */
+  const inboxRef = useRef<Project | undefined>(undefined);
   const defaultModelRef = useRef<string | undefined>(undefined);
   const selectedModelRef = useRef<string | undefined>(undefined);
   const runningRef = useRef(false);
@@ -271,8 +307,12 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   const replayEpoch = useRef(0);
   const toastSeq = useRef(0);
   /** The Session the app is creating right now. A second click, or a send that
-   *  races the click, joins that write instead of making a second Session. */
-  const sessionCreation = useRef<Promise<string | undefined> | undefined>(undefined);
+   *  races the click, joins that write instead of making a second Session —
+   *  but only when it asks for the same Project: 新增会话 in one Project and a
+   *  `+` on another are two different Sessions. */
+  const sessionCreation = useRef<
+    { projectId: string; promise: Promise<string | undefined>; token: object } | undefined
+  >(undefined);
   /** Whether startup has already opened the Session it resumes. Resuming is a
    *  one-time event: a later listing must not pull the user out of a draft they
    *  went back to on purpose (a deletion, 新增会话 before its creation lands). */
@@ -284,6 +324,8 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
 
   sessionRef.current = sessionId;
   projectRef.current = activeProjectId;
+  inboxRef.current = inboxProject;
+  sessionsByProjectRef.current = sessionsByProject;
   defaultModelRef.current = defaultModelId;
   selectedModelRef.current = selectedModelId;
 
@@ -475,13 +517,24 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   // ── projects and session lists ───────────────────────────────────────────
   /** Re-read the sidebar's list. Returns every Session it now holds, so the
    *  caller can act on the same snapshot the list was built from — `undefined`
-   *  when the listing failed, which is not the same as an empty workspace. */
+   *  when the listing failed, which is not the same as an empty workspace.
+   *
+   * The inbox is read alongside the user's Projects even though the server
+   * leaves it out of `GET /api/projects`: this map is replaced whole on every
+   * refresh (after each create, rename and delete), so a listing that skipped
+   * it would empty 最近会话 the first time the user did anything. */
   const refreshSessionLists = useCallback(async (): Promise<Session[] | undefined> => {
     try {
+      const inbox = inboxRef.current ?? (await ensureInbox(client));
+      if (inboxRef.current === undefined) {
+        inboxRef.current = inbox;
+        setInboxProject(inbox);
+      }
       const known = await listProjects(client);
       const entries = await Promise.all(
-        known.map(async (project) => [project.id, await listSessions(client, project.id)] as const),
+        [...known, inbox].map(async (project) => [project.id, await listSessions(client, project.id)] as const),
       );
+      setProjects(known);
       setSessionsByProject(Object.fromEntries(entries));
       return entries.flatMap(([, sessions]) => sessions);
     } catch (reason) {
@@ -505,18 +558,19 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
    * why; the caller has nothing useful left to do.
    */
   const createOpenSession = useCallback((): Promise<string | undefined> => {
-    const inFlight = sessionCreation.current;
-    if (inFlight !== undefined) return inFlight;
     const projectId = projectRef.current;
     if (!projectId) {
-      // The one project is created at boot, so this is only reachable if that
-      // write failed. The user has no vocabulary for it, so the error is
-      // phrased as the session that could not be created.
+      // The inbox is created at boot, so this is only reachable if that write
+      // failed. The user has no vocabulary for it, so the error is phrased as
+      // the session that could not be created.
       toast(TEXT.errors.sessionCreate);
       return Promise.resolve(undefined);
     }
+    const inFlight = sessionCreation.current;
+    if (inFlight !== undefined && inFlight.projectId === projectId) return inFlight.promise;
     const epoch = viewEpoch.current;
     const modelId = selectedModelRef.current ?? defaultModelRef.current;
+    const token = {};
     const creation = (async () => {
       try {
         const created = await createSession(client, projectId, modelId ? { modelId } : {});
@@ -531,12 +585,12 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         report(reason);
         return undefined;
       } finally {
-        // At most one creation is ever in flight — a second caller is handed
-        // this promise — so clearing unconditionally cannot drop a newer one.
-        sessionCreation.current = undefined;
+        // Compare tokens rather than clearing blindly: a creation for another
+        // Project may have replaced this one while it was in flight.
+        if (sessionCreation.current?.token === token) sessionCreation.current = undefined;
       }
     })();
-    sessionCreation.current = creation;
+    sessionCreation.current = { projectId, promise: creation, token };
     return creation;
   }, [client, refreshSessionLists, report, toast]);
 
@@ -841,24 +895,41 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   }, [clearSession]);
 
   /**
-   * 新增会话.
+   * The welcome page's project picker: point the *next* conversation
+   * somewhere, without writing a Session.
    *
-   * The click creates the Session now rather than leaving a silent draft: the
-   * sidebar lists what the server has, so a draft that only becomes real when
-   * the first message arrives makes the button look broken and the message
-   * look like it created a Session beside the one already on screen.
+   * Unlike 新建会话 this deliberately creates nothing. The picker is offered
+   * on a page that may already hold a Session — 新增会话 creates one and lands
+   * on an empty transcript — and choosing a Project there is a correction of
+   * where the message is going, not a second Session. So the draft starts
+   * over and the first send creates the Session in the chosen Project.
    */
-  const newSession = useCallback(() => {
-    // A creation already in flight — a double click, or a send that had to
-    // make the session first — will open its session when it lands. Starting
-    // a draft now would only make that creation's epoch check discard it.
-    if (sessionCreation.current !== undefined) return;
-    startDraft();
-    void createOpenSession();
-  }, [createOpenSession, startDraft]);
+  const selectProject = useCallback(
+    (projectId?: string) => {
+      const target = projectId ?? inboxRef.current?.id;
+      if (target === undefined || target === projectRef.current) return;
+      // Refs before state, for the same reason as `newSession`: the next send
+      // reads `projectRef`, and state would only land on the next render.
+      projectRef.current = target;
+      setActiveProjectId(target);
+      // Whatever was on screen was started in the Project the user just left.
+      // Leaving it behind empty is the cost of a Session this app creates at
+      // click time; sending into it would be the wrong Project, and moving the
+      // conversation is not something this release does.
+      startDraft();
+    },
+    [startDraft],
+  );
 
   const openSession = useCallback(
-    async (id: string) => {
+    async (id: string, projectId?: string) => {
+      // The row's Project is known before the Session is read, so it can be
+      // adopted first: a message or an upload started while `getSession` is in
+      // flight then lands where the user is looking.
+      if (projectId !== undefined) {
+        projectRef.current = projectId;
+        setActiveProjectId(projectId);
+      }
       if (id === sessionRef.current) return;
       viewEpoch.current += 1;
       clearSession();
@@ -872,6 +943,10 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         // them would show one Session's transcript under another's name.
         if (sessionRef.current !== id) return;
         setDetail(fresh);
+        // The listing the row came from is not proof: the Session's own record
+        // is what says which Project it is in.
+        projectRef.current = fresh.projectId;
+        setActiveProjectId(fresh.projectId);
         setSelectedModelId(fresh.modelId ?? defaultModelRef.current);
         void refreshPanel(id);
         setLoadingSession(false);
@@ -896,6 +971,72 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       }
     },
     [buildReplays, clearSession, client, commitReplays, follow, refreshPanel, report],
+  );
+
+  /**
+   * 新增会话.
+   *
+   * The click creates the Session now rather than leaving a silent draft: the
+   * sidebar lists what the server has, so a draft that only becomes real when
+   * the first message arrives makes the button look broken and the message
+   * look like it created a Session beside the one already on screen.
+   *
+   * Unless the empty page is already there. The service names a Session from
+   * its first message, so a Session still carrying the untitled sentinel has
+   * never been written in — clicking again on it is asking for the page that
+   * one already is. Opening it is the whole answer; writing a second one buys
+   * the user a row they cannot tell from the first.
+   */
+  const newSession = useCallback(
+    (projectId?: string) => {
+      const target = projectId ?? inboxRef.current?.id;
+      if (target === undefined) {
+        toast(TEXT.errors.sessionCreate);
+        return;
+      }
+      // A creation already in flight for the same Project — a double click, or
+      // a send that had to make the session first — will open its session when
+      // it lands. Starting a draft now would only make that creation's epoch
+      // check discard it. A creation for a *different* Project is left to land
+      // on its own: this click is asking for another one.
+      if (sessionCreation.current?.projectId === target) return;
+
+      const reusable = reusableDraft(sessionsByProjectRef.current[target] ?? []);
+      if (reusable !== undefined) {
+        // The listing is a mirror, so the row may be the one already open; the
+        // open costs one read, and `openSession` returns before doing even that
+        // when the ids match.
+        void openSession(reusable.id, target);
+        return;
+      }
+
+      // Refs go before state on purpose: `projectRef` is otherwise only
+      // refreshed by a render, and `createOpenSession` below reads it now.
+      projectRef.current = target;
+      setActiveProjectId(target);
+      startDraft();
+      void createOpenSession();
+    },
+    [createOpenSession, openSession, startDraft, toast],
+  );
+
+  /**
+   * 新建项目: a Project needs nothing but a name, and the server answers with
+   * its first Session. Opening that Session is what keeps a new Project from
+   * carrying an untitled Session nobody asked for.
+   */
+  const createProjectAndOpen = useCallback(
+    async (name: string) => {
+      try {
+        const created = await createProjectRequest(client, name);
+        setProjects((current) => [...current, created.project]);
+        await openSession(created.firstSession.id, created.project.id);
+        await refreshSessionLists();
+      } catch (reason) {
+        report(reason);
+      }
+    },
+    [client, openSession, refreshSessionLists, report],
   );
 
   const selectModel = useCallback(
@@ -1060,16 +1201,16 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     if (!usable) return;
     void (async () => {
       try {
-        let known = await listProjects(client);
-        if (known.length === 0) {
-          // No Project means no place for a Session, and this UI never asks
-          // about one — so it makes the Project it needs.
-          const created = await createProject(client, TEXT.project.defaultName);
-          known = [created.project];
-        }
-        setActiveProjectId((current) => current ?? known[0]!.id);
-        projectRef.current = projectRef.current ?? known[0]!.id;
-        setActiveProjectName((current) => current ?? known[0]!.name);
+        // The inbox is where a launch with no Project begins. It is created
+        // here rather than a Project invented for the user: a fresh install
+        // now opens with no Projects at all, and 最近会话 is simply where the
+        // first conversation lands.
+        const inbox = await ensureInbox(client);
+        inboxRef.current = inbox;
+        setInboxProject(inbox);
+        setProjects(await listProjects(client));
+        setActiveProjectId((current) => current ?? inbox.id);
+        projectRef.current = projectRef.current ?? inbox.id;
         const listed = await refreshSessionLists();
         // The sidebar now shows Sessions while the composer is still a draft
         // with none behind it. Sending from there would create a second
@@ -1082,8 +1223,6 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
           adoptProject: (projectId) => {
             setActiveProjectId(projectId);
             projectRef.current = projectId;
-            const project = known.find((entry) => entry.id === projectId);
-            if (project) setActiveProjectName(project.name);
           },
           listed,
           open: sessionRef.current,
@@ -1121,24 +1260,45 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     [],
   );
 
-  // The list is the whole list: the sidebar gives it the height that is left
-  // and scrolls it, rather than deciding on the user's behalf that everything
-  // past some number is not worth showing.
-  const recent = useMemo(() => byRecency(Object.values(sessionsByProject).flat()), [sessionsByProject]);
+  // 最近会话 is the inbox's own list, not every Session in the workspace: the
+  // user's Projects show their Sessions under their own fold.
+  const recent = useMemo(
+    () => (inboxProject === undefined ? [] : byRecency(sessionsByProject[inboxProject.id] ?? [])),
+    [inboxProject, sessionsByProject],
+  );
+
+  // Which Project the open Session is in, or the inbox while none is open. The
+  // name is derived rather than stored so a rename, a switch and a language
+  // change all reach it without a second piece of state to keep in step. The
+  // inbox is never shown under its stored name: it is a server label, and the
+  // interface has its own word for it.
+  const activeProject = activeProjectId === undefined
+    ? inboxProject
+    : (inboxProject?.id === activeProjectId ? inboxProject : undefined)
+      ?? projects.find((project) => project.id === activeProjectId);
+  const activeProjectName = activeProject === undefined
+    ? undefined
+    : activeProject.id === inboxProject?.id
+      ? TEXT.sidebar.recent
+      : activeProject.name;
 
   const actions: WorkspaceActions = useMemo(
     () => ({
       addPanelTab,
       closeTab,
       confirmAction,
+      createProject: createProjectAndOpen,
       deleteSession: (session) =>
         confirmAction({
           accept: TEXT.menu.delete,
-          body: TEXT.errors.deleteWarning(session.title),
+          // The name the user is looking at, not the one the service stored:
+          // an unnamed Session is filed under an English sentinel, and the
+          // dialog asking to delete it is interface text.
+          body: TEXT.errors.deleteWarning(sessionTitle(session.title)),
           eyebrow: TEXT.menu.delete,
           onAccept: () =>
             mutate({ dropIfCurrent: true, id: session.id, operation: () => deleteSession(client, session.id) }),
-          title: session.title,
+          title: sessionTitle(session.title),
         }),
       decidePermission,
       dismissConfirm,
@@ -1154,6 +1314,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       retryBoot,
       selectModel,
       selectPanelTab,
+      selectProject,
       send,
       setApprovalMode,
       setDefaultModel,
@@ -1165,6 +1326,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       addPanelTab,
       closeTab,
       confirmAction,
+      createProjectAndOpen,
       decidePermission,
       dismissConfirm,
       dismissToast,
@@ -1178,6 +1340,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       retryBoot,
       selectModel,
       selectPanelTab,
+      selectProject,
       send,
       setApprovalMode,
       setDefaultModel,
@@ -1188,6 +1351,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   );
 
   const state: WorkspaceState = {
+    activeProject,
     activeProjectId,
     activeProjectName,
     connection,
@@ -1195,12 +1359,14 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     defaultModelId,
     detail,
     draftEpoch,
+    inboxProject,
     loadingSession,
     models,
     outputs,
     panelFiles,
     pendingMessage,
     presets,
+    projects,
     providers,
     recent,
     replays,
@@ -1208,6 +1374,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     running,
     selectedModelId,
     sessionId,
+    sessionsByProject,
     tabs,
     toasts,
     uploadLimit,

@@ -15,11 +15,24 @@
 import type { RuntimeSettingsOverrides } from "./runtime-settings.js";
 import type { Session } from "./session.js";
 
+/** The one Project that holds standalone conversations. */
+export const INBOX_PROJECT_KIND = "inbox";
+
+/**
+ * The Inbox's stored name. It is never shown as a Project name: each client
+ * labels it in its own language, and the stored value is only what usage
+ * summaries and deletion-impact reports have to print.
+ */
+export const INBOX_PROJECT_NAME = "Recent sessions";
+
 export interface Project {
   createdAt: string;
   /** Optional free-form research description. */
   description?: string;
   id: string;
+  /** Server-owned. The single standalone-conversation bucket: never listed as
+   *  a user Project, never renamed, never deleted. */
+  kind?: typeof INBOX_PROJECT_KIND;
   name: string;
   /** Default remote hosts for inheriting Sessions; not a ceiling on Session overrides. */
   remoteRunnerHostIds: string[];

@@ -48,7 +48,16 @@ export const ZH = {
     githubStar: "在 GitHub 上加星",
     newTask: "新建会话",
     project: "项目",
-    tasks: "会话",
+    /** The standalone-conversation section, and the title the app shows
+     *  wherever a Session outside a Project has to name one. */
+    recent: "最近会话",
+    noRecent: "还没有最近会话",
+    noProjects: "还没有项目",
+    newProject: "新建项目",
+    projectName: "项目名称",
+    /** The `+` on a Project fold; the name is in it because a row of several
+     *  identical buttons is not distinguishable to a screen reader. */
+    newSessionInProject: (name: string) => `在「${name}」中新建会话`,
     noTasks: "暂无会话",
     showMore: "显示更多",
     collapseSidebar: "收起侧栏",
@@ -63,7 +72,6 @@ export const ZH = {
     sessionMenu: "会话菜单",
     sessionTitle: "会话名称",
     renameHint: "双击改名",
-    home: "新会话",
     /** Stands in for a Session the server created without a title. */
     untitled: "未命名会话",
   },
@@ -213,6 +221,15 @@ export const ZH = {
     placeholder: "有什么需要我帮忙的…",
     /** The ✕ on the category chip inside the composer. */
     clearCategory: "取消分类",
+    /** The strip's folder item while no Project is chosen — the invitation
+     *  the chip shows in place of a name. */
+    projectDirectory: "选择项目",
+    /** The strip's project reads as a label but is a button; this is what it
+     *  announces, since the name alone does not say it opens anything. */
+    chooseProject: "选择项目",
+    /** The entry that files the next conversation outside every Project. */
+    noProject: "不在任何项目中",
+    noProjectNote: "这个会话会出现在「最近会话」里",
     categories: {
       research: "文献调研",
       experiment: "实验设计",
@@ -879,11 +896,6 @@ export const ZH = {
     expand: "放大到全屏",
     /** The ✕ in the corner of that view. Esc does the same thing. */
     close: "退出全屏",
-  },
-
-  /** The one Project this UI keeps, which it creates when none exists. */
-  project: {
-    defaultName: "我的工作区",
   },
 
   errors: {

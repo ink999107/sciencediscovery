@@ -12,12 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export interface MenuItem {
-  /** A single glyph; the design has no icon font. */
-  icon: string;
+  /** A single glyph, or a small element where a glyph would be the wrong
+   *  picture — the design has no icon font, and a Project is drawn with the
+   *  same folder mark everywhere else in the app. */
+  icon: ReactNode;
   label: string;
+  /** Marks the entry the screen is already on, with a ✓. For menus that are a
+   *  choice among several — the landing page's project picker — rather than a
+   *  list of commands. */
+  checked?: boolean;
+  /** A hairline above this entry, to separate a list from what acts on it. */
+  separatorBefore?: boolean;
   onSelect: () => void;
 }
 
@@ -27,6 +36,9 @@ export interface MenuItem {
  * button alike, and it needs no measurement of the trigger.
  */
 export interface MenuState {
+  /** The button the menu hangs from, when there is one. A press on it is the
+   *  trigger's own business — see `leavesMenu`. */
+  anchor?: HTMLElement | null;
   items: MenuItem[];
   /** Sentence shown under the items, for a consequence the label cannot hold. */
   note?: string;
@@ -47,8 +59,17 @@ export interface MenuState {
  * Only pointer and scroll targets reach this, and both are Nodes, so the cast
  * inside `contains` is the real shape of the argument.
  */
-export function leavesMenu(target: EventTarget | null, menu: Element | null): boolean {
-  if (menu === null || target === null) return true;
+export function leavesMenu(
+  target: EventTarget | null,
+  menu: Element | null,
+  anchor?: Element | null,
+): boolean {
+  if (target === null) return true;
+  // The trigger is not "somewhere else": pressing it again is how the same
+  // menu is put away, and its click runs *after* this listener. Dismissing
+  // here would only make the trigger reopen what it has just closed.
+  if (anchor != null && anchor.contains(target as Node)) return false;
+  if (menu === null) return true;
   return !menu.contains(target as Node);
 }
 
@@ -64,7 +85,7 @@ export function RowMenu({ menu, onClose }: { menu?: MenuState; onClose: () => vo
   useEffect(() => {
     if (!menu) return;
     const dismiss = (event: Event) => {
-      if (leavesMenu(event.target, ref.current)) onClose();
+      if (leavesMenu(event.target, ref.current, menu.anchor)) onClose();
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -97,24 +118,36 @@ export function RowMenu({ menu, onClose }: { menu?: MenuState; onClose: () => vo
   }, [menu]);
 
   if (!menu) return null;
-  return (
+  const list = (
     <div className="ctx-menu" ref={ref} role="menu" style={{ left: menu.x, top: menu.y }}>
-      {menu.items.map((item) => (
-        <button
-          className="ctx-item"
-          key={item.label}
-          onClick={() => {
-            onClose();
-            item.onSelect();
-          }}
-          role="menuitem"
-          type="button"
-        >
-          <span className="ctx-item-icon">{item.icon}</span>
-          <span>{item.label}</span>
-        </button>
+      {menu.items.map((item, index) => (
+        // By position: two Projects may share a name, and the label was the
+        // key before this menu listed anything the user names.
+        <Fragment key={index}>
+          {item.separatorBefore ? <div className="ctx-divider" /> : null}
+          <button
+            aria-current={item.checked ? "true" : undefined}
+            className="ctx-item"
+            onClick={() => {
+              onClose();
+              item.onSelect();
+            }}
+            role="menuitem"
+            type="button"
+          >
+            <span aria-hidden="true" className="ctx-item-icon">{item.icon}</span>
+            <span className="ctx-item-label">{item.label}</span>
+            {item.checked ? <span aria-hidden="true" className="ctx-item-check">✓</span> : null}
+          </button>
+        </Fragment>
       ))}
       {menu.note ? <div className="ctx-note">{menu.note}</div> : null}
     </div>
   );
+  // Into the body, not beside the trigger: `position: fixed` only measures from
+  // the window while no ancestor is transformed — and the welcome page's column
+  // keeps a `translateY(0)` from its entrance animation. Under it the menu was
+  // drawn at its coordinates *inside that column*, half a screen from the chip.
+  // The tests render on the server, where there is no body to portal into.
+  return typeof document === "undefined" ? list : createPortal(list, document.body);
 }

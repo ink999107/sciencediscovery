@@ -471,6 +471,10 @@ body.is-resizing * {
 .ctx-item.is-danger { color: var(--danger-bright); }
 .ctx-item.is-danger:hover { background: var(--danger-soft); }
 .ctx-item-icon { width: 14px; display: grid; place-items: center; font-size: 12px; }
+/* The label takes the room the ✓ needs, so every row's check lines up in the
+   same column whether or not the row is the one chosen. */
+.ctx-item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-item-check { flex: 0 0 auto; color: var(--text); font-size: 12px; }
 .ctx-divider { height: 1px; margin: 4px 6px; background: var(--border-soft); }
 /* The reason a disabled entry is disabled, spelled out rather than hidden. */
 .ctx-note {

@@ -426,7 +426,11 @@ async function removeTestRoot(root: string): Promise<void> {
     // A completed foreground request may have queued a completion turn. Close
     // the Session gates before removing files that those turns still own.
     const projects = await jsonRequest<Project[]>(`${origin}/api/projects`, { headers: authorization });
-    for (const project of projects.body) {
+    // `/api/projects` leaves the inbox out, so a fixture that used it would be
+    // drained through the one call that names it. It is idempotent and the data
+    // root is removed at the end, so asking every time costs one catalog write.
+    const inbox = await jsonRequest<Project>(`${origin}/api/inbox`, { headers: authorization, method: "POST" });
+    for (const project of [...projects.body, inbox.body]) {
       const sessions = await jsonRequest<Session[]>(`${origin}/api/projects/${project.id}/sessions`, { headers: authorization });
       for (const session of sessions.body) {
         await jsonRequest(`${origin}/api/sessions/${session.id}/run/cancel`, { headers: authorization, method: "POST" });
@@ -8240,4 +8244,53 @@ test("CLI approval flags, explicit Projects and existing Sessions preserve inten
   const project = await jsonRequest<RuntimeSettingsDetails>(`${origin}/api/projects/${projectId}/settings`,{headers:authorization});
   assert.equal(global.body.overrides.defaultApprovalMode,"always_allow");
   assert.equal(project.body.overrides.defaultApprovalMode,undefined);
+});
+
+test("the recent-sessions Project is reachable by name, absent from the project list, and protected", async (context) => {
+  const tempRoot = resolve(process.cwd(), ".tmp", `inbox-project-api-${Date.now()}-${process.pid}`);
+  await mkdir(tempRoot, { recursive: true });
+  context.after(() => removeTestRoot(tempRoot));
+  const { origin } = await startTestApi(context, tempRoot);
+
+  const created = await jsonRequest<Project>(`${origin}/api/inbox`, { headers: authorization, method: "POST" });
+  assert.equal(created.response.status, 200);
+  assert.equal(created.body.kind, "inbox");
+  const again = await jsonRequest<Project>(`${origin}/api/inbox`, { headers: authorization, method: "POST" });
+  assert.equal(again.body.id, created.body.id);
+
+  const project = await jsonRequest<CreateProjectResponse>(`${origin}/api/projects`, {
+    body: JSON.stringify({ name: "Visible" }),
+    headers: authorization,
+    method: "POST",
+  });
+  const listed = await jsonRequest<Project[]>(`${origin}/api/projects`, { headers: authorization });
+  assert.deepEqual(listed.body.map((entry) => entry.id), [project.body.project.id]);
+
+  const session = await jsonRequest<Session>(`${origin}/api/projects/${created.body.id}/sessions`, {
+    body: JSON.stringify({ title: "Standalone" }),
+    headers: authorization,
+    method: "POST",
+  });
+  assert.equal(session.response.status, 201);
+  const sessions = await jsonRequest<Session[]>(`${origin}/api/projects/${created.body.id}/sessions`, { headers: authorization });
+  assert.deepEqual(sessions.body.map((entry) => entry.id), [session.body.id]);
+
+  const rename = await jsonRequest<ApiError>(`${origin}/api/projects/${created.body.id}`, {
+    body: JSON.stringify({ name: "Renamed" }),
+    headers: authorization,
+    method: "PATCH",
+  });
+  assert.equal(rename.response.status, 409);
+  const runners = await jsonRequest<Project>(`${origin}/api/projects/${created.body.id}`, {
+    body: JSON.stringify({ runnerIds: ["local"] }),
+    headers: authorization,
+    method: "PATCH",
+  });
+  assert.deepEqual(runners.body.runnerIds, ["local"]);
+  assert.equal((await fetch(`${origin}/api/projects/${created.body.id}/deletion-impact`, { headers: authorization })).status, 409);
+  assert.equal((await fetch(`${origin}/api/projects/${created.body.id}`, {
+    body: JSON.stringify({ confirmationId: created.body.id }),
+    headers: authorization,
+    method: "DELETE",
+  })).status, 409);
 });

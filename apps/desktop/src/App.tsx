@@ -50,7 +50,6 @@ import { SessionBar } from "./views/SessionBar.js";
 import { SetupWizard } from "./views/SetupWizard.js";
 import { SystemSettingsDialog, type SettingsGroup } from "./views/SystemSettingsDialog.js";
 import { Sidebar } from "./views/Sidebar.js";
-import { sessionTitle } from "./views/session-title.js";
 import { Toasts } from "./views/Toasts.js";
 import { WorkspacePanel, type PanelGroup } from "./views/WorkspacePanel.js";
 
@@ -309,18 +308,26 @@ export function App({ initialToken }: Props) {
   /** The composer is one component in two places — under the transcript, and
    *  in the middle of the welcome page — so its props are assembled once. */
   const composerProps: Omit<ComponentProps<typeof Composer>, "landing" | "seed" | "tag"> = {
+    activeProjectId: state.activeProjectId,
     approvalMode: state.detail?.approvalMode,
     attachBlocked: canUpload ? undefined : TEXT.composer.attachArchived,
     attachLimit,
     models: state.models,
     onApprovalMode: (mode) => void actions.setApprovalMode(mode),
+    onCreateProject: (name) => void actions.createProject(name),
     onOpenSettings: () => openSettings("models"),
     onOpenSpecialists: () => openSettings("specialists"),
     onSelectModel: (modelId) => void actions.selectModel(modelId),
+    onSelectProject: (projectId) => actions.selectProject(projectId),
     onSend: (content) => void actions.send(content),
     onStop: () => void actions.stop(),
     onUpload: (files) => void upload(files),
-    projectName: state.activeProjectName ?? TEXT.project.defaultName,
+    // No name when the next conversation goes into no Project: the strip then
+    // shows its invitation to choose one, which is what the inbox means from
+    // the welcome page — 最近会话 is the column's word for the result, not a
+    // place the user would pick.
+    projectName: state.activeProject?.kind === "inbox" ? undefined : state.activeProjectName,
+    projects: state.projects,
     providers: state.providers,
     running: state.running,
     selectedModelId: state.selectedModelId,
@@ -358,12 +365,13 @@ export function App({ initialToken }: Props) {
         {taskSidebar ? (
           <Sidebar
             actions={actions}
+            activeProjectId={state.activeProjectId}
             activeSessionId={state.sessionId}
             onToggleSidebar={() => setSidebarOpen(false)}
-            projectName={state.activeProjectName ?? TEXT.project.defaultName}
+            projects={state.projects}
             recent={state.recent}
             running={state.running}
-            taskTitle={state.detail ? sessionTitle(state.detail.title) : undefined}
+            sessionsByProject={state.sessionsByProject}
           />
         ) : null}
 
@@ -373,7 +381,10 @@ export function App({ initialToken }: Props) {
             detail={state.detail}
             onExpandSidebar={expandSidebar}
             onToggleWorkspace={() => setWorkspaceOpen(true)}
-            projectName={state.activeProjectName}
+            // A Session outside every Project is not "in 最近会话": that is
+            // the column's name for the list, not a place to print beside the
+            // title, so the bar carries no Project at all for one.
+            projectName={state.activeProject?.kind === "inbox" ? undefined : state.activeProjectName}
             sidebarCollapsed={showExpand}
             workspaceOpen={workspaceOpen}
           />

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 import type { ApiClient } from "../../api/client.js";
-import { listProjects } from "../../api/sessions.js";
 import { listRunners } from "../../api/settings.js";
 import type { Project, RunnerTarget } from "../../api/types.js";
 import { remoteHosts } from "../../app/remote-format.js";
@@ -24,14 +23,17 @@ import { ProjectRunnerAllowlist, RunnerSection } from "./RemoteHosts.js";
 import { Group, LoadGate } from "./rows.js";
 
 interface Props {
-  activeProjectId?: string;
   client: ApiClient;
   onConfirm: (request: ConfirmRequest) => void;
+  /** The Project the open Session is in. Absent before the workspace has
+   *  loaded one, in which case there is nothing to scope the allowlist to.
+   *  It is the whole Project rather than an id because the allowlist has to
+   *  render its current value, and looking the id up in `GET /api/projects`
+   *  would miss the inbox — the Project standalone Sessions live in. */
+  project?: Project;
 }
 
 interface RuntimePage {
-  /** The Project whose allowlist is edited here; absent when none exists yet. */
-  project?: Project;
   /** Every Runner, the local one included: the allowlist can toggle it. */
   runners: RunnerTarget[];
   /** The same catalog without the local entry, which is what the cards show. */
@@ -54,15 +56,14 @@ interface RuntimePage {
  * the catalog: this page reads it and hands it down, so a machine registered
  * above reaches the allowlist below in the same reload.
  */
-export function RuntimeSettings({ activeProjectId, client, onConfirm }: Props) {
+export function RuntimeSettings({ client, onConfirm, project }: Props) {
   const loaded = useLoaded<RuntimePage>(async () => {
-    const [runners, projects] = await Promise.all([listRunners(client), listProjects(client)]);
-    const project = projects.find((candidate) => candidate.id === activeProjectId) ?? projects[0];
+    const runners = await listRunners(client);
     // The cards leave the local entry out: it always exists, needs no
     // registration, and nothing on this page can act on it. The allowlist still
     // receives it — the local machine is a valid answer to "may this Project
     // run here", and the list is explicit rather than a set of defaults.
-    return { ...(project ? { project } : {}), remote: remoteHosts(runners), runners };
+    return { remote: remoteHosts(runners), runners };
   });
 
   return (
@@ -76,8 +77,8 @@ export function RuntimeSettings({ activeProjectId, client, onConfirm }: Props) {
       </Group>
       <LoadGate loaded={loaded}>
         {(page) =>
-          page.project ? (
-            <ProjectRunnerAllowlist client={client} hosts={page.runners} onReload={loaded.reload} project={page.project} />
+          project ? (
+            <ProjectRunnerAllowlist client={client} hosts={page.runners} onReload={loaded.reload} project={project} />
           ) : null
         }
       </LoadGate>

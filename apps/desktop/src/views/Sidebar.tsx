@@ -15,27 +15,34 @@
 import { useState } from "react";
 
 import type { WorkspaceActions } from "../app/use-workspace.js";
+import { byRecency } from "../app/session-order.js";
 import { formatStars, REPO_URL, useGithubStars } from "../app/use-github-stars.js";
-import type { Session } from "../api/types.js";
+import type { Project, Session } from "../api/types.js";
 import { TEXT } from "../text.js";
+import { PromptDialog } from "./PromptDialog.js";
 import { RowMenu, type MenuState } from "./RowMenu.js";
-import { sessionTitle } from "./session-title.js";
+import { sessionTitle } from "../app/session-title.js";
 import { SidebarToggle } from "./SidebarToggle.js";
 
 interface Renaming {
-  id: string;
+  session: Session;
   value: string;
 }
 
 interface Props {
   actions: WorkspaceActions;
+  /** The Project of the open Session, for the fold's highlight. */
+  activeProjectId?: string;
   activeSessionId?: string;
   onToggleSidebar?: () => void;
-  projectName: string;
+  /** The Projects the user made, oldest first. The inbox is not among them:
+   *  its Sessions are the `recent` list, and it gets no fold. */
+  projects: Project[];
+  /** The Sessions that belong to no Project, newest first. */
   recent: Session[];
-  /** The task the open session is running, if it is running one. */
-  taskTitle?: string;
+  /** Whether the open Session is running a task, which its row shows. */
   running?: boolean;
+  sessionsByProject: Record<string, Session[]>;
 }
 
 function basename(session: Session): string {
@@ -59,28 +66,43 @@ function stamp(session: Session): string {
 const PAGE_SIZE = 6;
 
 /**
- * The session column: 科研会话, one way in, and the sessions under the one
- * Project this app creates for itself.
+ * The session column: 科研会话, one way in, then two lists that say what a
+ * Session belongs to.
  *
- * Two sections, as the handoff draws them: the project's sessions, then the
- * session whose run is going. This product has no separate queue, so the
- * second section says 暂无会话 unless a run is in flight — the row there is the
- * running session, and pretending otherwise would invent a second object to
- * keep in step.
+ * 项目 comes first — every Project the user made is a fold with its own `+`,
+ * which starts a Session inside it. Below it, 最近会话 holds the conversations
+ * that belong to no Project: the inbox's Sessions, where the top button and the
+ * first message land. That distinction is the point of the screen: a
+ * conversation is standalone until someone puts it in a Project, and a Project
+ * exists because someone named one. Until now the app invented a single
+ * 我的工作区 and filed everything under it, so the column could not say either
+ * thing.
+ *
+ * This column used to end with a 会话 section that held nothing but a running
+ * Session, if any. 最近会话 takes its place, and the running Session keeps its
+ * spinner on its own row instead of being listed twice.
  */
 export function Sidebar({
   actions,
+  activeProjectId,
   activeSessionId,
   onToggleSidebar,
-  projectName,
+  projects,
   recent,
   running,
-  taskTitle,
+  sessionsByProject,
 }: Props) {
   const [menu, setMenu] = useState<MenuState>();
   const [renaming, setRenaming] = useState<Renaming>();
-  const [projectOpen, setProjectOpen] = useState(true);
-  const [expanded, setExpanded] = useState(false);
+  const [creating, setCreating] = useState(false);
+  /** Folded-up Projects, by id. Empty means every fold is open — the state a
+   *  column of two or three Projects should start in — and a Project created
+   *  later inherits it without being added anywhere. */
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  /** Which lists have been asked to show past their first page, keyed by the
+   *  list (`recent` or a Project id), so one long list does not unfold the
+   *  others. */
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const stars = useGithubStars();
 
   const anchor = (event: { clientX: number; clientY: number }) => ({
@@ -88,11 +110,28 @@ export function Sidebar({
     y: event.clientY,
   });
 
+  const toggleFold = (id: string) =>
+    setFolded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const showAll = (key: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
+
   const commitRename = (next: Renaming) => {
     const name = next.value.trim();
     setRenaming(undefined);
-    const session = recent.find((candidate) => candidate.id === next.id);
-    if (session && name !== "" && name !== session.title) void actions.renameSession(session, name);
+    // Compared against what the field showed, not what the service stored: an
+    // untouched field on an unnamed Session holds 未命名会话, and Enter without
+    // an edit is not a rename to that phrase.
+    if (name !== "" && name !== sessionTitle(next.session.title)) void actions.renameSession(next.session, name);
   };
 
   const renameField = (next: Renaming) => (
@@ -109,23 +148,24 @@ export function Sidebar({
     />
   );
 
-  const shown = expanded ? recent : recent.slice(0, PAGE_SIZE);
-
   const sessionRow = (session: Session) => {
     const active = session.id === activeSessionId;
-    const editing = renaming !== undefined && renaming.id === session.id;
+    const editing = renaming !== undefined && renaming.session.id === session.id;
     return (
       <div className={`side-row side-sub${active ? " is-active" : ""}`} key={session.id}>
         <button
           className="side-session"
-          onClick={() => void actions.openSession(session.id)}
+          onClick={() => void actions.openSession(session.id, session.projectId)}
           // Double-click is the design's own rename gesture; the `⋯` menu
           // beside the name opens the same field, which keeps it discoverable.
-          onDoubleClick={() => setRenaming({ id: session.id, value: session.title })}
+          onDoubleClick={() => setRenaming({ session, value: sessionTitle(session.title) })}
           title={`${basename(session)} · ${TEXT.sidebar.renameHint}`}
           type="button"
         >
           {editing ? renameField(renaming) : <span className="side-session-name">{basename(session)}</span>}
+          {/* The run belongs to this Session, not to a section of its own: a
+              second row for it would be the same conversation listed twice. */}
+          {running && active ? <span aria-hidden="true" className="side-spinner" /> : null}
           {editing ? null : <span className="side-session-time">{stamp(session)}</span>}
         </button>
         <div className="side-actions">
@@ -139,7 +179,7 @@ export function Sidebar({
                   {
                     icon: "✎",
                     label: TEXT.menu.rename,
-                    onSelect: () => setRenaming({ id: session.id, value: session.title }),
+                    onSelect: () => setRenaming({ session, value: sessionTitle(session.title) }),
                   },
                   {
                     icon: "🗑",
@@ -159,6 +199,23 @@ export function Sidebar({
     );
   };
 
+  /** A page of Sessions, then 显示更多 — the rule in every list here, so a
+   *  Project with a year of history cannot bury the one below it. */
+  const sessionList = (key: string, sessions: readonly Session[]) => {
+    const open = expanded.has(key);
+    const shown = open ? sessions : sessions.slice(0, PAGE_SIZE);
+    return (
+      <>
+        {shown.map((session) => sessionRow(session))}
+        {!open && sessions.length > PAGE_SIZE ? (
+          <button className="side-more" onClick={() => showAll(key)} type="button">
+            {TEXT.sidebar.showMore}
+          </button>
+        ) : null}
+      </>
+    );
+  };
+
   return (
     <aside className="sidebar">
       <div className="side-head">
@@ -166,46 +223,79 @@ export function Sidebar({
         {onToggleSidebar ? <SidebarToggle onClick={onToggleSidebar} open /> : null}
       </div>
 
-      <button className="side-new" onClick={actions.newSession} type="button">
+      <button className="side-new" onClick={() => actions.newSession()} type="button">
         <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24" width="16">
           <path d="M12 5v14M5 12h14" />
         </svg>
         <span>{TEXT.sidebar.newTask}</span>
       </button>
 
-      <div className="side-label">{TEXT.sidebar.project}</div>
       <div className="side-scroll">
-        <div className={`side-row side-project${projectOpen ? " is-open" : ""}`}>
+        <div className="side-label side-label-row">
+          <span>{TEXT.sidebar.project}</span>
           <button
-            aria-expanded={projectOpen}
-            className="side-project-toggle"
-            onClick={() => setProjectOpen((current) => !current)}
+            aria-label={TEXT.sidebar.newProject}
+            className="side-mini-button is-add"
+            onClick={() => setCreating(true)}
+            title={TEXT.sidebar.newProject}
             type="button"
           >
-            <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="15">
-              <path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
-            </svg>
-            <span className="label">{projectName}</span>
-            <svg aria-hidden="true" className="chev" fill="none" height="14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="14">
-              <path d="M6 9l6 6 6-6" />
-            </svg>
+            +
           </button>
         </div>
-        {projectOpen ? shown.map((session) => sessionRow(session)) : null}
-        {!expanded && recent.length > PAGE_SIZE ? (
-          <button className="side-more" onClick={() => setExpanded(true)} type="button">
-            {TEXT.sidebar.showMore}
-          </button>
-        ) : null}
+        {projects.length === 0 ? <div className="side-empty">{TEXT.sidebar.noProjects}</div> : null}
+        {projects.map((project) => {
+          const open = !folded.has(project.id);
+          const sessions = byRecency(sessionsByProject[project.id] ?? []);
+          return (
+            <div key={project.id}>
+              <div
+                className={`side-row side-project${open ? " is-open" : ""}${project.id === activeProjectId ? " is-active" : ""}`}
+              >
+                <button
+                  aria-expanded={open}
+                  className="side-project-toggle"
+                  onClick={() => toggleFold(project.id)}
+                  type="button"
+                >
+                  <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="15">
+                    <path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
+                  </svg>
+                  <span className="label">{project.name}</span>
+                  <svg aria-hidden="true" className="chev" fill="none" height="14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="14">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
+                <div className="side-actions">
+                  <button
+                    aria-label={TEXT.sidebar.newSessionInProject(project.name)}
+                    className="side-mini-button is-add"
+                    onClick={() => actions.newSession(project.id)}
+                    title={TEXT.sidebar.newSessionInProject(project.name)}
+                    type="button"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              {open
+                ? sessions.length === 0
+                  ? <div className="side-empty">{TEXT.sidebar.noTasks}</div>
+                  : sessionList(project.id, sessions)
+                : null}
+            </div>
+          );
+        })}
 
-        <div className="side-label side-label-spaced">{TEXT.sidebar.tasks}</div>
-        {running && taskTitle ? (
-          <button className="side-row side-task-row" onClick={() => void actions.openSession(activeSessionId ?? "")} type="button">
-            <span className="label">{taskTitle}</span>
-            <span aria-hidden="true" className="side-spinner" />
-          </button>
+        {/* The column's own answer to "where will a new conversation go": the
+            top button starts one outside any Project, and this is the list it
+            lands in. It sits last because it is the fallback, not a place the
+            user filed anything. */}
+        <div className="side-label side-label-spaced">{TEXT.sidebar.recent}</div>
+        {recent.length === 0 ? (
+          <div className="side-empty">{TEXT.sidebar.noRecent}</div>
         ) : (
-          <div className="side-empty">{TEXT.sidebar.noTasks}</div>
+          <div className="side-flat">{sessionList("recent", recent)}</div>
         )}
       </div>
 
@@ -228,6 +318,21 @@ export function Sidebar({
         </svg>
         {stars === undefined ? null : <span className="side-star-count">{formatStars(stars)}</span>}
       </a>
+
+      {creating ? (
+        <PromptDialog
+          accept={TEXT.menu.confirm}
+          eyebrow={TEXT.sidebar.project}
+          fieldLabel={TEXT.sidebar.projectName}
+          onCancel={() => setCreating(false)}
+          onSubmit={(name) => {
+            setCreating(false);
+            void actions.createProject(name);
+          }}
+          placeholder={TEXT.sidebar.projectName}
+          title={TEXT.sidebar.newProject}
+        />
+      ) : null}
 
       <RowMenu menu={menu} onClose={() => setMenu(undefined)} />
     </aside>

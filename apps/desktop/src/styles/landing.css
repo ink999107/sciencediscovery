@@ -364,6 +364,41 @@
   gap: 7px;
   min-width: 0;
   max-width: 70%;
+  /* A button that has to read as a label: no chrome until it is pointed at,
+     and the negative margin keeps the icon on the strip's own baseline now
+     that the box has padding of its own. */
+  margin: -3px -7px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.composer-strip-project:hover,
+.composer-strip-project[aria-expanded="true"] {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* No Project chosen. The chip is then not a name but an invitation, and it
+   says so in the placeholder grey. The fill belongs to the pointer: the chip
+   stays flat until it is hovered or open, so a resting page is not drawing a
+   button that nothing is pointing at. */
+.composer-strip-project.is-placeholder {
+  color: var(--text-faint);
+}
+
+.composer-strip-project.is-placeholder .composer-strip-icon {
+  color: var(--text-faint);
+}
+
+.composer-strip-project.is-placeholder:hover,
+.composer-strip-project.is-placeholder[aria-expanded="true"] {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
 }
 
 .composer-strip-project .composer-strip-label {
@@ -376,6 +411,26 @@
   width: 16px;
   height: 16px;
   color: #4d4d4d;
+}
+
+.composer-strip-project:hover .composer-strip-icon,
+.composer-strip-project[aria-expanded="true"] .composer-strip-icon {
+  color: inherit;
+}
+
+.composer-strip-chev {
+  flex: 0 0 auto;
+  opacity: 0.55;
+}
+
+/* The folder mark inside the picker's menu, in the row's own icon column. */
+.ctx-folder {
+  display: block;
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  -webkit-mask: url("../assets/landing/folder.svg") center / contain no-repeat;
+  mask: url("../assets/landing/folder.svg") center / contain no-repeat;
 }
 
 @media (max-width: 900px) {

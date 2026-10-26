@@ -28,28 +28,34 @@ import { modelLabel } from "../src/views/provider-name.js";
 function render(
   running = false,
   options: {
+    activeProjectId?: string;
     blocked?: string;
     landing?: boolean;
     limit?: string;
     projectName?: string;
+    projects?: { id: string; name: string }[];
     tag?: { kind: "research" | "experiment" | "analysis"; label: string };
     uploading?: boolean;
   } = {},
 ): string {
   return renderToStaticMarkup(
     <Composer
+      activeProjectId={options.activeProjectId}
       attachBlocked={options.blocked}
       attachLimit={options.limit}
       landing={options.landing}
       models={[{ id: "m1", name: "测试模型" } as never]}
       onApprovalMode={() => {}}
+      onCreateProject={() => {}}
       onOpenSettings={() => {}}
       onOpenSpecialists={() => {}}
       onSelectModel={() => {}}
+      onSelectProject={() => {}}
       onSend={() => {}}
       onStop={() => {}}
       onUpload={() => {}}
-      projectName={options.projectName ?? "我的工作区"}
+      projectName={options.projectName}
+      projects={(options.projects ?? []) as never}
       running={running}
       selectedModelId="m1"
       tag={options.tag === undefined ? undefined : { ...options.tag, onClear: () => {} }}
@@ -152,13 +158,21 @@ test("permission cannot be switched mid-run", () => {
 });
 
 test("the landing arrangement carries the project and the approval mode under the card", () => {
-  const markup = render(false, { landing: true, projectName: "蛋白质组学" });
+  const chosen = {
+    activeProjectId: "p1",
+    landing: true,
+    projectName: "蛋白质组学",
+    projects: [{ id: "p1", name: "蛋白质组学" }],
+  };
+  const markup = render(false, chosen);
   assert.match(markup, /class="composer is-landing"/);
   assert.match(markup, /有什么需要我帮忙的/u);
   assert.match(markup, /class="composer-strip-project"[\s\S]*蛋白质组学/u);
-  // The name is always there: the strip names the Project it belongs to, and
-  // does not invite the reader to choose one it has no control to offer.
-  assert.match(render(false, { landing: true }), /class="composer-strip-label">我的工作区/u);
+  // With no project chosen, the item is the invitation rather than a blank —
+  // and it reads as one at rest, in the placeholder's own grey.
+  const unchosen = render(false, { landing: true });
+  assert.match(unchosen, /class="composer-strip-project is-placeholder"/);
+  assert.match(unchosen, /选择项目/u);
   // The strip is the landing page's, not the transcript composer's.
   assert.doesNotMatch(render(), /composer-strip/);
 });

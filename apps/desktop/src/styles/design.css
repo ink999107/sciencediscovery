@@ -279,11 +279,60 @@ body.is-resizing {
   transform: rotate(180deg);
 }
 
+/* A Project row carries a `+` beside its toggle. The toggle keeps `width:
+   100%` everywhere else, so only here is it made shrinkable. */
+.side-row.side-project {
+  padding-right: 8px;
+}
+
+.side-row.side-project .side-project-toggle {
+  flex: 1;
+  width: auto;
+}
+
+.side-row.side-project.is-active {
+  background: rgba(25, 25, 25, 0.05);
+}
+
+/* The `+` is a Project-level action, like the session row's `⋯`: present on
+   hover, on keyboard focus, or in the open Project, not competing with the
+   fold's own name. `:focus-within` is what keeps it reachable without a mouse:
+   focusing the fold reveals the button beside it. */
+.side-row.side-project .side-actions {
+  display: none;
+}
+
+.side-row.side-project:hover .side-actions,
+.side-row.side-project:focus-within .side-actions,
+.side-row.side-project.is-active .side-actions {
+  display: flex;
+}
+
+.side-mini-button.is-add {
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* A section label with an action on its right: 项目 and its 新建项目 button. */
+.side-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .side-row.side-sub {
   display: flex;
   align-items: center;
   gap: 2px;
   padding: 0 8px 0 0;
+}
+
+/* Sessions outside a Project sit at the column's own indent: there is no fold
+   above them to indent under. */
+.side-flat .side-session,
+.side-flat .side-more {
+  padding-left: 12px;
 }
 
 .side-session {
@@ -386,26 +435,6 @@ body.is-resizing {
 .side-more:hover {
   background: rgba(25, 25, 25, 0.04);
   color: #191919;
-}
-
-.side-task-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  color: #4d4d4d;
-  font-size: 13px;
-  text-align: left;
-}
-
-.side-task-row:hover {
-  background: rgba(25, 25, 25, 0.04);
-}
-
-.side-task-row .side-spinner {
-  margin-left: auto;
 }
 
 /* The repository's star pill, pinned to the column's bottom corner. */

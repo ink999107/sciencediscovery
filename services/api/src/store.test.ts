@@ -24,6 +24,7 @@ import { VersionStore, RefStore, workspaceHeadName, withWorkspaceMutation } from
 
 import type { ArtifactJob, ComposerReference, Environment, EnvironmentRevision, ExecutionRun, ModelInvocationUsage, Subagent } from "@sciencediscovery/schema";
 import {
+  INBOX_PROJECT_NAME,
   lookupModelCatalog,
   resolveModelFacts,
   reviewerSpecialistSupportsLevel,
@@ -37,6 +38,7 @@ import {
 
 import {
   SessionStore,
+  SessionStoreHttpError,
 } from "./store.js";
 import { listWorkspaceFiles, workspaceFileProvenance } from "./artifacts/index.js";
 import { API_TEST_CATALOG_RECORDS, installApiTestModelCatalog } from "./model-catalog.fixture.js";
@@ -4689,4 +4691,42 @@ test("direct consent is separate from sandbox Always Allow and matching grants a
   assert.equal((await store.requestPermission(session.id, "direct_code", "direct:scope-b", "Changed scope", { executionId: "run" })).allowed, false);
   await store.revokePermissionGrant(decision.grant!.id);
   assert.equal((await store.requestPermission(session.id, "direct_code", "direct:scope-a", "Revoked", { executionId: "run" })).allowed, false);
+});
+
+test("the recent-sessions Project is created once, hidden from user listings, and cannot be renamed or deleted", async (context) => {
+  const root = resolve(process.cwd(), ".tmp", `inbox-project-${Date.now()}-${process.pid}`);
+  await mkdir(root, { recursive: true });
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const store = new SessionStore(root);
+  store.setAvailableSkillIds([]);
+  await store.load();
+
+  const inbox = await store.ensureInboxProject();
+  assert.equal(inbox.kind, "inbox");
+  assert.equal(inbox.name, INBOX_PROJECT_NAME);
+  assert.equal((await store.ensureInboxProject()).id, inbox.id);
+  assert.equal(store.listProjects().filter((project) => project.kind === "inbox").length, 1);
+
+  const project = await store.createProject("Bench");
+  assert.deepEqual(store.listUserProjects().map((entry) => entry.id), [project.id]);
+  assert.ok(store.listProjects().some((entry) => entry.id === inbox.id));
+
+  const conflict = (reason: unknown) => reason instanceof SessionStoreHttpError && reason.statusCode === 409;
+  await assert.rejects(store.updateProject(inbox.id, { name: "Renamed" }), conflict);
+  await assert.rejects(store.updateProject(inbox.id, { description: "Standalone" }), conflict);
+  assert.throws(() => store.getProjectDeletionImpact(inbox.id), conflict);
+  await assert.rejects(store.deleteProject(inbox.id, inbox.id), conflict);
+  assert.ok(store.getProject(inbox.id));
+
+  // 设置 › 远程 configures whichever Project the open Session belongs to, so
+  // the inbox's runner allowlist has to stay writable.
+  assert.deepEqual((await store.updateProject(inbox.id, { runnerIds: ["local"] })).runnerIds, ["local"]);
+
+  const session = await store.createSession(inbox.id, "Standalone", {}, {}, { allowUnconfiguredModel: true });
+  assert.equal(store.listSessions(inbox.id, "all")[0]?.id, session.id);
+
+  const reopened = new SessionStore(root);
+  await reopened.load();
+  assert.equal(reopened.listProjects().find((entry) => entry.id === inbox.id)?.kind, "inbox");
+  assert.equal(reopened.listSessions(inbox.id, "all")[0]?.id, session.id);
 });

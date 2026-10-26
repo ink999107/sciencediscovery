@@ -29,11 +29,23 @@ import type {
   WorkspaceUploadResult,
 } from "./types.js";
 
-/** Every Session belongs to a Project, and there is no Project picker in this
- *  UI, so the app keeps exactly one. `listProjects` is ordered by creation
- *  time, which makes the first entry the one to reuse. */
+/** The Projects the user made, oldest first. The server keeps one more Project
+ *  than it lists — the inbox that holds standalone conversations — and hands it
+ *  out through `ensureInbox` instead. */
 export function listProjects(client: ApiClient): Promise<Project[]> {
   return client.request<Project[]>("/api/projects");
+}
+
+/**
+ * The Project standalone conversations live in.
+ *
+ * Idempotent: the server creates it on the first call and returns the same one
+ * afterwards. Its id is the only way to reach it, because it is deliberately
+ * missing from `GET /api/projects`; `/api/projects/:id/sessions` then works for
+ * it like for any other Project.
+ */
+export function ensureInbox(client: ApiClient): Promise<Project> {
+  return client.request<Project>("/api/inbox", { method: "POST" });
 }
 
 /**

@@ -855,7 +855,9 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
 
       if (await handleExecutionReadiness(request, response, url, store, runnerClient, remoteCompute, () => readJson(request))) return;
       if (request.method === "GET" && url.pathname === "/api/projects") {
-        sendJson(response, 200, store.listProjects());
+        // The inbox is a Project, not one the user made. Its id is handed out
+        // by `POST /api/inbox` instead, so it never appears in a picker.
+        sendJson(response, 200, store.listUserProjects());
         return;
       }
       if (await handlePluginRequest(request, response, url, store.plugins, () => readJson(request))) return;
@@ -2111,6 +2113,13 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
           ...(label !== undefined ? { label } : {}),
           ...(vision !== undefined ? { vision } : {}),
         }));
+        return;
+      }
+      // The one way to reach the inbox. It creates it on first call and is a
+      // no-op afterwards, so a client can call it on every start; the id it
+      // returns then works with `/api/projects/:id/sessions` like any other.
+      if (request.method === "POST" && url.pathname === "/api/inbox") {
+        sendJson(response, 200, await store.ensureInboxProject());
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/projects") {

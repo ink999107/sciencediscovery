@@ -41,6 +41,16 @@ describe("a pointerdown and the row menu", () => {
     assert.equal(leavesMenu({} as EventTarget, menuHolding({})), true);
   });
 
+  it("leaves the menu up for a press on the button it hangs from", () => {
+    // The welcome page's project chip is a toggle: its own click runs after
+    // this listener, so closing on the way down would make every second press
+    // reopen the menu it had just put away.
+    const chip = {};
+    const trigger = menuHolding(chip);
+    assert.equal(leavesMenu(chip as EventTarget, menuHolding({}), trigger), false);
+    assert.equal(leavesMenu({} as EventTarget, menuHolding({}), trigger), true);
+  });
+
   it("ends the menu when there is no menu element to test against", () => {
     assert.equal(leavesMenu({} as EventTarget, null), true);
   });

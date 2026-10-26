@@ -154,6 +154,8 @@ import type {
 } from "@sciencediscovery/schema";
 import {
   LOCAL_RUNNER_ID,
+  INBOX_PROJECT_KIND,
+  INBOX_PROJECT_NAME,
   DEFAULT_ENABLED_CONNECTOR_IDS,
   DEFAULT_SANDBOX_NETWORK_SETTINGS,
   DEFAULT_SKILL_SELECTION_MODE,
@@ -2706,27 +2708,83 @@ export class SessionStore {
     runnerIds?: string[],
     description?: string,
   ): Promise<Project> {
-    const settingsOverrides = this.normalizeSettings(withDefaultProjectSkillSettings(input));
-    const allowedRunners = runnerIds === undefined ? undefined : this.validateRunnerIds(runnerIds);
-    const allowedHosts = this.validateProjectRemoteRunnerHosts(allowedRunners?.filter((id) => id !== "local") ?? remoteRunnerHostIds);
-    const trimmedDescription = normalizeProjectDescription(description);
-    const project: Project = {
-      createdAt: new Date().toISOString(),
-      ...(trimmedDescription ? { description: trimmedDescription } : {}),
-      id: randomUUID(),
-      name: cleanLabel(name, "Untitled project"),
-      remoteRunnerHostIds: allowedHosts,
-      ...(allowedRunners ? { runnerIds: allowedRunners } : {}),
-      settingsOverrides,
-    };
+    const project = this.buildProject(name, input, remoteRunnerHostIds, runnerIds, description);
     this.catalog.projects.push(project);
     await this.saveCatalog();
     return project;
   }
 
+  /**
+   * The single Project that holds standalone conversations.
+   *
+   * It is a real Project — settings, runner allowlist, workspace directory —
+   * so everything that keys on `projectId` keeps working, but it is server
+   * owned: `kind` is set here and never by a request, it is left out of
+   * `GET /api/projects`, it cannot be renamed and it cannot be deleted.
+   *
+   * Idempotent, and serialized on the settings queue so two first calls in one
+   * process cannot create two. `kind` is part of the record before the first
+   * write, so a concurrent reader never sees a kind-less Project that would
+   * list like a user's.
+   */
+  async ensureInboxProject(): Promise<Project> {
+    return this.withSettingsMutation(async () => {
+      const existing = this.catalog.projects
+        .filter((project) => project.kind === INBOX_PROJECT_KIND)
+        .toSorted((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
+      if (existing) return existing;
+      const project = this.buildProject(INBOX_PROJECT_NAME, {}, [], undefined, undefined, INBOX_PROJECT_KIND);
+      // Pushed inside the write, so a failed save cannot leave a Project that
+      // every later call returns but the next process start has never heard of.
+      await this.saveCatalog(() => this.catalog.projects.push(project));
+      return project;
+    });
+  }
+
+  /**
+   * The Projects a client may list. `listProjects` still returns every Project,
+   * including the inbox: recovery, runtime status, runner binding and usage all
+   * have to see it.
+   */
+  listUserProjects(): Project[] {
+    return this.listProjects().filter((project) => project.kind !== INBOX_PROJECT_KIND);
+  }
+
+  /** The shared record builder: one place that applies every default a Project
+   *  needs, so the inbox cannot be a partial object. */
+  private buildProject(
+    name: string,
+    input: RuntimeSettingsOverrides,
+    remoteRunnerHostIds: string[],
+    runnerIds?: string[],
+    description?: string,
+    kind?: Project["kind"],
+  ): Project {
+    const settingsOverrides = this.normalizeSettings(withDefaultProjectSkillSettings(input));
+    const allowedRunners = runnerIds === undefined ? undefined : this.validateRunnerIds(runnerIds);
+    const allowedHosts = this.validateProjectRemoteRunnerHosts(allowedRunners?.filter((id) => id !== "local") ?? remoteRunnerHostIds);
+    const trimmedDescription = normalizeProjectDescription(description);
+    return {
+      createdAt: new Date().toISOString(),
+      ...(trimmedDescription ? { description: trimmedDescription } : {}),
+      id: randomUUID(),
+      ...(kind ? { kind } : {}),
+      name: cleanLabel(name, "Untitled project"),
+      remoteRunnerHostIds: allowedHosts,
+      ...(allowedRunners ? { runnerIds: allowedRunners } : {}),
+      settingsOverrides,
+    };
+  }
+
   async updateProject(projectId: string, changes: UpdateProjectRequest): Promise<Project> {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
+    // The inbox's name is a server label, not a user's. Its runner allowlist
+    // and settings stay writable: 设置 › 远程 configures whichever Project the
+    // open Session belongs to, and that can be the inbox.
+    if (project.kind === INBOX_PROJECT_KIND && (changes.name !== undefined || changes.description !== undefined)) {
+      throw new SessionStoreHttpError("The recent-sessions Project cannot be renamed or described", 409);
+    }
     const name = changes.name === undefined ? undefined : requiredLabel(changes.name, "Project name");
     const description = normalizeProjectDescription(changes.description);
     if (changes.runnerIds !== undefined) {
@@ -4306,6 +4364,7 @@ export class SessionStore {
   getProjectDeletionImpact(projectId: string): DeletionImpact {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
+    if (project.kind === INBOX_PROJECT_KIND) throw new SessionStoreHttpError("The recent-sessions Project cannot be deleted", 409);
     const sessions = this.listSessions(projectId, "all");
     return {
       activeSessionCount: sessions.filter((session) => !session.archivedAt).length,
@@ -4358,6 +4417,7 @@ export class SessionStore {
   async deleteProject(projectId: string, confirmationId: string): Promise<void> {
     const project = this.getProject(projectId);
     if (!project) throw new Error("Project not found");
+    if (project.kind === INBOX_PROJECT_KIND) throw new SessionStoreHttpError("The recent-sessions Project cannot be deleted", 409);
     if (confirmationId !== project.id) throw new Error("Project deletion confirmation does not match the target");
     let sessions: Session[] = [];
     return this.withDeletionBoundary(() => {

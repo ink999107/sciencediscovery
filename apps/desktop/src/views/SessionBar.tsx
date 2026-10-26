@@ -18,7 +18,7 @@ import type { WorkspaceActions } from "../app/use-workspace.js";
 import type { SessionDetail } from "../api/types.js";
 import { TEXT } from "../text.js";
 import { PromptDialog } from "./PromptDialog.js";
-import { sessionTitle } from "./session-title.js";
+import { sessionTitle } from "../app/session-title.js";
 import { SidebarToggle } from "./SidebarToggle.js";
 
 interface Props {
@@ -62,7 +62,10 @@ export function SessionBar({
   workspaceOpen,
 }: Props) {
   const [renaming, setRenaming] = useState(false);
-  const title = detail ? sessionTitle(detail.title) : TEXT.sessionBar.home;
+  // A Session that has been started but not read back yet has no detail; it
+  // then carries the same name the sidebar gives it, not a second word for
+  // the same state.
+  const title = detail ? sessionTitle(detail.title) : TEXT.sessionBar.untitled;
 
   return (
     <header className="task-head">
@@ -124,10 +127,12 @@ export function SessionBar({
           onCancel={() => setRenaming(false)}
           onSubmit={(next) => {
             setRenaming(false);
-            void actions.renameSession(detail, next);
+            // The field opens on the name the user can see; confirming it
+            // unchanged is not a rename to that phrase.
+            if (next !== title) void actions.renameSession(detail, next);
           }}
           title={TEXT.menu.rename}
-          value={detail.title}
+          value={title}
         />
       ) : null}
     </header>
