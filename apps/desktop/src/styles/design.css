@@ -2956,25 +2956,12 @@ body.is-resizing {
   color: #191919;
 }
 
-/* The subagent mode of the panel: a back arrow and the task, in the place the
- *  group tabs normally occupy. 团队 is deliberately not one of those tabs. */
+/* The subagent mode of the panel: the task, in the place the group tabs
+ *  normally occupy. 团队 is deliberately not one of those tabs, and the head
+ *  carries no back arrow: the transcript line that opened the child is the way
+ *  back out. */
 .panel-head.is-subagent {
   gap: 8px;
-}
-
-.panel-back {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 6px;
-  color: #4d4d4d;
-}
-
-.panel-back:hover {
-  background: #f7f7f7;
-  color: #191919;
 }
 
 .panel-subagent-title {
@@ -3012,38 +2999,6 @@ body.is-resizing {
   width: 100%;
   max-width: 760px;
   margin: 0 auto;
-}
-
-.subagent-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0 14px;
-  border-bottom: 1px solid #ececec;
-  color: #4d4d4d;
-  font-size: 13px;
-}
-
-.subagent-status-icon {
-  display: inline-grid;
-  place-items: center;
-  color: #1476ff;
-}
-
-.subagent-status.is-failed .subagent-status-icon,
-.subagent-status.is-timed_out .subagent-status-icon {
-  color: #d84a3a;
-}
-
-.subagent-status-meta {
-  color: #9a9a9a;
-  font-size: 12px;
-}
-
-.subagent-status-meta::before {
-  margin-right: 8px;
-  color: #b3b3b3;
-  content: "·";
 }
 
 .subagent-error {
@@ -3145,35 +3100,22 @@ body.is-resizing {
 }
 
 /* A tool's result sits in a box of its own, as the child's final answer does,
- *  so a long result cannot be mistaken for the timeline around it. The task the
- *  child was handed uses the same frame at the top of the panel, with a firmer
- *  edge and a tint: it is the question everything below answers. */
-.subagent-tool-output,
-.subagent-task-block {
+ *  so a long result cannot be mistaken for the timeline around it. */
+.subagent-tool-output {
   margin-top: 8px;
   padding: 10px 14px;
+  border: 1px solid #e6e6e6;
   border-radius: 8px;
+  background: #fbfbfb;
   font-size: 13px;
   line-height: 22px;
 }
 
-.subagent-tool-output {
-  border: 1px solid #e6e6e6;
-  background: #fbfbfb;
-}
-
-.subagent-task-block {
-  border: 1px solid #dedede;
-  background: #f6f6f6;
-}
-
-.subagent-tool-output > :first-child,
-.subagent-task-block > :first-child {
+.subagent-tool-output > :first-child {
   margin-top: 0;
 }
 
-.subagent-tool-output > :last-child,
-.subagent-task-block > :last-child {
+.subagent-tool-output > :last-child {
   margin-bottom: 0;
 }
 
@@ -3194,14 +3136,67 @@ body.is-resizing {
   letter-spacing: 0.02em;
 }
 
-.subagent-task {
-  margin-top: 18px;
+/* The brief and the timeline are cards that start closed: the panel opens on
+ *  what the child concluded, and each card is a fold the reader opens when the
+ *  answer raises a question. The card is the frame, so what it holds needs no
+ *  box of its own. */
+.subagent-card {
+  margin-top: 14px;
+  border: 1px solid #ececec;
+  border-radius: 10px;
+  background: #fff;
 }
 
-.subagent-execution {
-  margin-top: 22px;
-  padding-top: 16px;
-  border-top: 1px solid #ececec;
+.subagent-card > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: 9px;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.subagent-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.subagent-card > summary:hover {
+  background: #fafafa;
+}
+
+.subagent-card[open] > summary {
+  border-bottom: 1px solid #f0f0f0;
+  border-radius: 9px 9px 0 0;
+}
+
+.subagent-card > summary .subagent-section-title {
+  margin-bottom: 0;
+}
+
+.subagent-card > summary .collapse-chev {
+  margin-left: auto;
+  color: #b3b3b3;
+  font-size: 14px;
+  transition: transform 0.15s ease;
+}
+
+.subagent-card[open] > summary .collapse-chev {
+  transform: rotate(90deg);
+}
+
+.subagent-card-body {
+  padding: 12px 14px 14px;
+}
+
+.subagent-card-body > :first-child {
+  margin-top: 0;
+}
+
+.subagent-card-body > :last-child {
+  margin-bottom: 0;
 }
 
 .subagent-task-paths {
@@ -3213,6 +3208,13 @@ body.is-resizing {
   padding-top: 10px;
   border-top: 1px dashed #e0e0e0;
   font-size: 12px;
+}
+
+/* The path row opens the card body when there is no prompt to separate it from. */
+.subagent-task-paths:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .subagent-task-paths-label {

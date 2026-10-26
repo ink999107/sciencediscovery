@@ -193,7 +193,6 @@ export const ZH = {
       timed_out: "已超时",
     },
     /** The right panel's subagent mode. */
-    back: "返回",
     detail: "执行详情",
     output: "输出",
     task: "任务",
@@ -202,8 +201,6 @@ export const ZH = {
     loading: "正在加载执行记录…",
     thinking: "思考",
     tool: "工具",
-    turns: (count: number) => `${count} 轮`,
-    tokens: (count: number) => `${count} tokens`,
     failedTitle: "执行失败",
     timedOutTitle: "执行超时",
     cancelledTitle: "执行已取消",

@@ -47,7 +47,6 @@ function render(tabs: TabState, over: Partial<Parameters<typeof WorkspacePanel>[
       actions={actions}
       activeGroup="files"
       files={[]}
-      onCloseSubagent={() => {}}
       onCollapse={() => {}}
       onSelectGroup={() => {}}
       outputs={[]}
@@ -280,12 +279,12 @@ function subagent(overrides: Partial<Subagent> = {}): Subagent {
 test("a subagent replaces the panel's groups rather than becoming a third tab", () => {
   const markup = render(initialTabState(), { subagent: subagent() });
   // No 团队 tab, and no group tabs at all while the child is open: the panel
-  // shows the child's record, and the back arrow is the way out.
+  // shows the child's record. There is no back arrow either — the transcript
+  // line that opened the child is the way back.
   assert.doesNotMatch(markup, /role="tab"/u);
   assert.doesNotMatch(markup, /<span>团队<\/span>/);
   assert.doesNotMatch(markup, /当前活跃/u);
-  assert.match(markup, /class="panel-back"/);
-  assert.match(markup, /aria-label="返回"/);
+  assert.doesNotMatch(markup, /class="panel-back"/u);
   assert.match(markup, /read the literature/);
   assert.match(markup, /class="subagent-detail"/);
 });
@@ -310,6 +309,9 @@ test("the child's execution and its final output are both shown", () => {
   assert.match(markup, /weighing the options/);
   assert.match(markup, /literature_search/);
   assert.match(markup, /three papers found/);
+  // The timeline is a card that starts closed, so the panel opens on the
+  // answer rather than on a screen of steps.
+  assert.match(markup, /<details class="subagent-card subagent-execution">/u);
   // The final answer is the output section, not a row in the timeline as well.
   assert.equal(count(markup, "CONCLUSION-TEXT"), 1);
   assert.match(markup, /class="subagent-output"/);
@@ -348,7 +350,8 @@ test("the task the child was handed is shown above its steps", () => {
       },
     }),
   });
-  assert.match(markup, /class="subagent-task"/u);
+  // The brief is a card as well, and it starts closed like the timeline.
+  assert.match(markup, /<details class="subagent-card subagent-task">/u);
   assert.match(markup, /PROMPT-BODY/u);
   assert.match(markup, /subagent-section-title">任务</u);
   // A path is shown as a chip of its own, not folded into the prose.
@@ -369,13 +372,11 @@ test("a reply is shown in full rather than folded", () => {
   });
   const replyAt = markup.indexOf("INTERIM-REPLY");
   assert.ok(replyAt >= 0);
-  // No <details> is open around it: an earlier reply is prose in the timeline,
-  // while the last one is the output section.
+  // The only fold above it is the execution card the reader opened to get here:
+  // an earlier reply is prose in the timeline, not a fold of its own, while the
+  // last one is the output section.
   const before = markup.slice(0, replyAt);
-  assert.ok(
-    before.lastIndexOf("<details") <= before.lastIndexOf("</details>"),
-    "the reply should not be inside a fold",
-  );
+  assert.equal(before.lastIndexOf("<details"), before.lastIndexOf('<details class="subagent-card subagent-execution"'));
 });
 
 test("the runtime's own system steps are left out of the timeline", () => {
@@ -391,9 +392,32 @@ test("the runtime's own system steps are left out of the timeline", () => {
   assert.match(markup, /looked around/);
 });
 
+test("a child that timed out has no output, only what it had said so far", () => {
+  // Nobody delivered anything here. The last thing the child said is a progress
+  // note it was interrupted in the middle of, so calling it 输出 would report a
+  // result the child never produced; it stays in the timeline instead.
+  const markup = render(initialTabState(), {
+    subagent: subagent({
+      error: "Subagent wall-clock timeout after 5400 seconds",
+      status: "timed_out",
+      steps: [{
+        content: "MOST-NUMBERS-HOLD",
+        createdAt: "2026-01-01T00:00:01.000Z",
+        id: "s1",
+        kind: "assistant",
+      }],
+    }),
+  });
+  assert.doesNotMatch(markup, /class="subagent-output"/u);
+  assert.match(markup, /MOST-NUMBERS-HOLD/u);
+  assert.equal(count(markup, "MOST-NUMBERS-HOLD"), 1);
+});
+
 test("a child that has not run anything yet says so", () => {
   const markup = render(initialTabState(), { subagent: subagent({ status: "running" }) });
-  assert.match(markup, /执行中/);
+  // There is no status row of its own: the transcript line carries the status,
+  // and an empty timeline says the rest.
+  assert.doesNotMatch(markup, /class="subagent-status"/u);
   assert.match(markup, /class="workspace-empty"/);
 });
 
@@ -411,12 +435,17 @@ test("a replayed child says it is loading instead of claiming it recorded nothin
   assert.doesNotMatch(markup, /还没有留下可展示的执行记录/u);
 });
 
-test("a failed child keeps the reason beside its status", () => {
+test("a failed child's reason sits below its execution", () => {
   const markup = render(initialTabState(), {
     subagent: subagent({ error: "the provider refused the request", status: "failed" }),
   });
   assert.match(markup, /执行失败|失败/);
   assert.match(markup, /the provider refused the request/);
+  // The reason belongs to how the child ran, so it follows the timeline card
+  // rather than opening the panel above the brief.
+  const reasonAt = markup.indexOf("the provider refused the request");
+  const cardAt = markup.indexOf('class="subagent-card subagent-execution"');
+  assert.ok(cardAt >= 0 && cardAt < reasonAt, "the reason should follow the execution card");
 });
 
 test("the panel's left edge is a separator that reports the width it is at", () => {

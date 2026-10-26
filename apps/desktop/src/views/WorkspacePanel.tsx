@@ -36,8 +36,6 @@ interface Props {
   actions: WorkspaceActions;
   activeGroup: PanelGroup;
   files: WorkspaceFile[];
-  /** Return from a subagent's execution to the panel's normal groups. */
-  onCloseSubagent: () => void;
   onCollapse: () => void;
   onSelectGroup: (group: PanelGroup) => void;
   outputs: SessionArtifactOutput[];
@@ -268,7 +266,6 @@ export function WorkspacePanel({
   actions,
   activeGroup,
   files,
-  onCloseSubagent,
   onCollapse,
   onSelectGroup,
   outputs,
@@ -433,23 +430,10 @@ export function WorkspacePanel({
             ))}
           </div>
         ) : (
-          <>
-            <button
-              aria-label={TEXT.subagent.back}
-              className="panel-back"
-              onClick={onCloseSubagent}
-              title={TEXT.subagent.back}
-              type="button"
-            >
-              <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24" width="15">
-                <path d="M15 5l-7 7 7 7" />
-              </svg>
-            </button>
-            <div className="panel-subagent-title" title={subagentDescription}>
-              <span className="panel-subagent-label">{TEXT.subagent.lineLabel}</span>
-              <span className="panel-subagent-text">{subagentDescription}</span>
-            </div>
-          </>
+          <div className="panel-subagent-title" title={subagentDescription}>
+            <span className="panel-subagent-label">{TEXT.subagent.lineLabel}</span>
+            <span className="panel-subagent-text">{subagentDescription}</span>
+          </div>
         )}
         <div className="panel-head-actions">
           <button

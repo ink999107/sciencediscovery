@@ -181,11 +181,13 @@ export function App({ initialToken }: Props) {
     setSubagentCatalog([]);
   }, [state.sessionId]);
 
+  // The line that opens a child is also the way out: pressing the open line
+  // again returns the panel to its groups. The panel has no back arrow of its
+  // own, so the toggle is the only way back.
   const openSubagentDetails = useCallback((id: string) => {
-    setOpenSubagentId(id);
+    setOpenSubagentId((current) => (current === id ? undefined : id));
     setWorkspaceOpen(true);
   }, []);
-  const closeSubagentDetails = useCallback(() => setOpenSubagentId(undefined), []);
 
   /**
    * Upload, then show where the file went.
@@ -400,7 +402,6 @@ export function App({ initialToken }: Props) {
           actions={actions}
           activeGroup={panelGroup}
           files={state.panelFiles}
-          onCloseSubagent={closeSubagentDetails}
           onCollapse={collapsePanel}
           onSelectGroup={setPanelGroup}
           outputs={state.outputs}

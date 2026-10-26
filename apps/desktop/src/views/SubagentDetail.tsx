@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import type { ReactNode } from "react";
+
 import type { Subagent, SubagentStep } from "../api/types.js";
 import { Markdown } from "../Markdown.js";
 import { TEXT } from "../text.js";
@@ -143,6 +145,28 @@ function StepRow({ step }: { step: SubagentStep }) {
   );
 }
 
+/** A named part of the child's record that starts closed.
+ *
+ * The brief and the timeline answer questions the answer itself raises, so they
+ * sit behind a summary: the panel opens on what the child concluded, and the
+ * reader opens a card when they want to check how it got there. A card that
+ * starts open would push the answer below the fold on every visit. */
+function FoldCard({ children, className, title }: {
+  children: ReactNode;
+  className?: string;
+  title: string;
+}) {
+  return (
+    <details className={`subagent-card${className === undefined ? "" : ` ${className}`}`}>
+      <summary>
+        <span className="subagent-section-title">{title}</span>
+        <span aria-hidden="true" className="collapse-chev">›</span>
+      </summary>
+      <div className="subagent-card-body">{children}</div>
+    </details>
+  );
+}
+
 /**
  * One subagent's execution and output, as the right panel shows it.
  *
@@ -162,7 +186,11 @@ export function SubagentDetail({
   // revisions — not work the child did, and in a long run they are the
   // loudest part of the timeline. The panel leaves them out.
   const recorded = subagent.steps.filter((step) => step.kind !== "system");
-  const final = finalStep(recorded);
+  // 输出 is the child's deliverable, and only a completed child has one. What a
+  // running or timed-out child last said is a progress note, not its answer —
+  // labelling that as output would claim it delivered something it never
+  // finished. Those replies stay where they were said: in the timeline.
+  const final = subagent.status === "completed" ? finalStep(recorded) : undefined;
   const steps = final === undefined
     ? recorded
     : recorded.filter((step) => step !== final);
@@ -176,54 +204,25 @@ export function SubagentDetail({
 
   return (
     <div className="subagent-detail">
-      <div className={`subagent-status is-${subagent.status}`}>
-        <span aria-hidden="true" className="subagent-status-icon">
-          {subagent.status === "running" ? <span className="spinner" /> : failed ? "!" : "✓"}
-        </span>
-        <span>{TEXT.subagent.status[subagent.status]}</span>
-        {subagent.turnCount > 0 ? (
-          <span className="subagent-status-meta">{TEXT.subagent.turns(subagent.turnCount)}</span>
-        ) : null}
-        {subagent.usage === undefined ? null : (
-          <span className="subagent-status-meta">{TEXT.subagent.tokens(subagent.usage.totalTokens)}</span>
-        )}
-      </div>
-      {failed && subagent.error !== undefined ? (
-        <div className="subagent-error">
-          <div className="subagent-error-title">
-            {subagent.status === "timed_out"
-              ? TEXT.subagent.timedOutTitle
-              : subagent.status === "cancelled"
-                ? TEXT.subagent.cancelledTitle
-                : TEXT.subagent.failedTitle}
-          </div>
-          <div>{subagent.error}</div>
-        </div>
-      ) : null}
-
       {prompt === "" && inputPaths.length === 0 ? null : (
-        <section className="subagent-task">
-          <div className="subagent-section-title">{TEXT.subagent.task}</div>
-          <div className="subagent-task-block">
-            {prompt === "" ? null : (
-              <div className="text">
-                <Markdown>{prompt}</Markdown>
-              </div>
-            )}
-            {inputPaths.length === 0 ? null : (
-              <div className="subagent-task-paths">
-                <span className="subagent-task-paths-label">{TEXT.subagent.inputFiles}</span>
-                {inputPaths.map((path) => (
-                  <span className="subagent-task-path" key={path} title={path}>{path}</span>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
+        <FoldCard className="subagent-task" title={TEXT.subagent.task}>
+          {prompt === "" ? null : (
+            <div className="text">
+              <Markdown>{prompt}</Markdown>
+            </div>
+          )}
+          {inputPaths.length === 0 ? null : (
+            <div className="subagent-task-paths">
+              <span className="subagent-task-paths-label">{TEXT.subagent.inputFiles}</span>
+              {inputPaths.map((path) => (
+                <span className="subagent-task-path" key={path} title={path}>{path}</span>
+              ))}
+            </div>
+          )}
+        </FoldCard>
       )}
 
-      <section className="subagent-execution">
-        <div className="subagent-section-title">{TEXT.subagent.detail}</div>
+      <FoldCard className="subagent-execution" title={TEXT.subagent.detail}>
         {steps.length === 0 && final === undefined ? (
           loading ? (
             <div className="workspace-empty subagent-loading">
@@ -238,7 +237,23 @@ export function SubagentDetail({
             {steps.map((step) => <StepRow key={step.id} step={step} />)}
           </div>
         )}
-      </section>
+      </FoldCard>
+
+      {/* The reason a child stopped is part of how it ran, so it sits with the
+       *  execution rather than as a banner above the brief. The transcript line
+       *  already says the child failed; this says why. */}
+      {failed && subagent.error !== undefined ? (
+        <div className="subagent-error">
+          <div className="subagent-error-title">
+            {subagent.status === "timed_out"
+              ? TEXT.subagent.timedOutTitle
+              : subagent.status === "cancelled"
+                ? TEXT.subagent.cancelledTitle
+                : TEXT.subagent.failedTitle}
+          </div>
+          <div>{subagent.error}</div>
+        </div>
+      ) : null}
 
       {final === undefined ? null : (
         <section className="subagent-output">
