@@ -240,8 +240,6 @@ export const EN: Text = {
         { label: "Proteomics", prompt: "Analyze this proteomics data: preprocessing, differential analysis, enrichment, and how to read the results." },
         { label: "Material formulas", prompt: "Analyze this set of material formula data and find the ingredients that drive performance and how they interact." },
         { label: "Single-cell sequencing", prompt: "Plan a single-cell sequencing analysis: quality control, clustering, cell annotation, and differential expression." },
-        { label: "Customer value", prompt: "Analyze customer value from this transaction data: how to segment, which metrics matter, and what to do about it." },
-        { label: "Financial risk", prompt: "Build a framework for financial risk analysis: feature selection, model evaluation, and how to set the threshold." },
       ],
     },
   },
