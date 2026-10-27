@@ -78,6 +78,14 @@ export interface ServerConfig {
   /** URL the gateway's proxy tools call back into to run Node tool handlers. */
   /** Multipart upload and Session workspace quotas. */
   workspaceUpload: WorkspaceUploadLimits;
+  /**
+   * Seed one finished Session into a data directory that has no conversation
+   * of its own, so a first install opens on something to read rather than an
+   * empty sidebar. `loadServerConfig` turns this on unless
+   * `SCIENCE_AGENT_SAMPLE_SESSION` says otherwise; absent means off, which is
+   * what a config built by hand — every test config — wants.
+   */
+  sampleSession?: boolean;
   usageExchangeRates?: {
     enabled: boolean;
     sourceUrl: string;
@@ -224,6 +232,7 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
     runnerMaxWorkspaceBytes,
     runnerToken: env.SCIENCE_AGENT_RUNNER_TOKEN?.trim() || "sciencediscovery-runner-local",
     runnerUrl: env.SCIENCE_AGENT_RUNNER_URL?.trim().replace(/\/$/, "") || "http://127.0.0.1:4311",
+    sampleSession: parseBooleanFlag(env.SCIENCE_AGENT_SAMPLE_SESSION, true),
     sshConfigPath: resolve(env.SCIENCE_AGENT_SSH_CONFIG_PATH?.trim() || resolve(homedir(), ".ssh/config")),
     staticDir: resolve(repositoryRoot, env.SCIENCE_AGENT_WEB_DIR?.trim() || "apps/web/dist"),
     workspaceUpload: {

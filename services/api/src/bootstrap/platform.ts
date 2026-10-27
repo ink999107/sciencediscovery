@@ -49,6 +49,7 @@ import { EvolutionStore } from "../evolution/store.js";
 import { startProposedRun, summariseRun } from "../evolution/proposal.js";
 import type { EvolveRuntimeFactory } from "../runs/index.js";
 import { recoverSessionRuns, scheduleSessionRuns } from "../runs/index.js";
+import { seedSampleSession } from "../sample-session/index.js";
 import type { SkillLibraryCatalog } from "../skill-library-catalog.js";
 import { SkillCatalog } from "@sciencediscovery/specialist";
 import { SessionStore } from "../store.js";
@@ -521,6 +522,17 @@ export async function initializePlatformServices(
   store.setAvailableSkillIds(skillCatalog.ids());
   await initializeComponent("custom_mcp_servers", () => services.customMcpServers.load());
   await initializeComponent("session_store", () => store.load());
+  // A first install opens on one real Session rather than an empty sidebar.
+  // It goes in before run recovery so the sample's own runs are read from
+  // disk like any other; both are finished, so recovery leaves them alone.
+  // A sample that cannot be written costs the user a convenience, not the
+  // service, so it never propagates out of the boot. A config built by hand —
+  // every test's — leaves the flag off and gets an empty catalog.
+  if (config.sampleSession) {
+    await seedSampleSession(store).catch((error: unknown) => {
+      apiLog.warn("sample_session_failed", { reason: shortErrorMessage(error) });
+    });
+  }
   store.shellExecutions.describeRunnerConnections((runnerId) =>
     runnerId === "local" ? "local" : remoteCompute.runnerStatus(runnerId).state);
   await mcpCatalog.refresh().catch((error) => {
