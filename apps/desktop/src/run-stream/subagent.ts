@@ -36,6 +36,33 @@ export function subagentTask(subagent: Subagent): string {
 }
 
 /**
+ * The steps that make up the child's closing message — its answer.
+ *
+ * A reply is not always one step. The runtime ends a step every time it
+ * records an event in the middle of one, so a single message can arrive as two
+ * adjacent assistant steps that read as one sentence. Taking only the last of
+ * them cut the answer in half: its opening stayed in the timeline while its
+ * tail was shown as the result. The trailing run is joined, exactly as the
+ * server joins it when it hands the child's text to result validation. A final
+ * message with no text is not an answer, so an earlier run is still the best
+ * account of what the child concluded.
+ */
+export function finalSteps(steps: readonly SubagentStep[]): SubagentStep[] {
+  let last = -1;
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    const step = steps[index]!;
+    if (step.kind === "assistant" && step.content.trim() !== "") {
+      last = index;
+      break;
+    }
+  }
+  if (last < 0) return [];
+  let first = last;
+  while (first > 0 && steps[first - 1]!.kind === "assistant") first -= 1;
+  return steps.slice(first, last + 1);
+}
+
+/**
  * Fold one snapshot's steps onto the ones already shown.
  *
  * A step keeps the position it first appeared in: the coordinator emits a

@@ -16,18 +16,8 @@ import type { ReactNode } from "react";
 
 import type { Subagent, SubagentStep } from "../api/types.js";
 import { Markdown } from "../Markdown.js";
+import { finalSteps } from "../run-stream/subagent.js";
 import { TEXT } from "../text.js";
-
-/** The step that stands as the child's answer: its last assistant prose. An
- *  empty final message is not an answer, so an earlier one is still the best
- *  account of what the child concluded. */
-function finalStep(steps: readonly SubagentStep[]): SubagentStep | undefined {
-  for (let index = steps.length - 1; index >= 0; index -= 1) {
-    const step = steps[index]!;
-    if (step.kind === "assistant" && step.content.trim() !== "") return step;
-  }
-  return undefined;
-}
 
 function pretty(value: unknown): string {
   if (typeof value === "string") return value;
@@ -190,10 +180,14 @@ export function SubagentDetail({
   // running or timed-out child last said is a progress note, not its answer —
   // labelling that as output would claim it delivered something it never
   // finished. Those replies stay where they were said: in the timeline.
-  const final = subagent.status === "completed" ? finalStep(recorded) : undefined;
-  const steps = final === undefined
-    ? recorded
-    : recorded.filter((step) => step !== final);
+  //
+  // The answer can be several steps — a message is ended and started again
+  // whenever the runtime records something mid-stream — so it is the trailing
+  // run of assistant steps joined, not the last one alone. See `finalSteps`.
+  const final = subagent.status === "completed" ? finalSteps(recorded) : [];
+  const answer = final.map((step) => step.content).join("").trim();
+  const inAnswer = new Set(final);
+  const steps = recorded.filter((step) => !inAnswer.has(step));
   const failed = subagent.status === "failed"
     || subagent.status === "timed_out"
     || subagent.status === "cancelled";
@@ -248,7 +242,7 @@ export function SubagentDetail({
       )}
 
       <FoldCard className="subagent-execution" title={TEXT.subagent.detail}>
-        {steps.length === 0 && final === undefined ? (
+        {steps.length === 0 && answer === "" ? (
           loading ? (
             <div className="workspace-empty subagent-loading">
               <span className="spinner" />
@@ -264,11 +258,11 @@ export function SubagentDetail({
         )}
       </FoldCard>
 
-      {final === undefined ? null : (
+      {answer === "" ? null : (
         <section className="subagent-output">
           <div className="subagent-section-title">{TEXT.subagent.output}</div>
           <div className="text">
-            <Markdown>{final.content}</Markdown>
+            <Markdown>{answer}</Markdown>
           </div>
         </section>
       )}

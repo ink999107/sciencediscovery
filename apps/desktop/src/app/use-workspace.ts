@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { artifactName } from "./artifact-labels.js";
 import { resolveCatalog, resolveConnection } from "./bootstrap.js";
+import { changedFiles } from "./file-changes.js";
 import { changesPanel, createPanelRefresh, type PanelRefresh } from "./panel-refresh.js";
 import { fileName } from "./paths.js";
 import { byRecency, reusableDraft, resumeOnBoot } from "./session-order.js";
@@ -284,6 +285,9 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   const [outputs, setOutputs] = useState<SessionArtifactOutput[]>([]);
   const [panelFiles, setPanelFiles] = useState<WorkspaceFile[]>([]);
   const [tabs, setTabs] = useState<TabState>(initialTabState);
+  /** The documents on screen, for the refresh that runs outside a render. */
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [confirm, setConfirm] = useState<ConfirmRequest>();
   const [uploading, setUploading] = useState(false);
@@ -671,24 +675,66 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     return createOpenSession();
   }, [createOpenSession]);
 
-  const refreshPanel = useCallback(
-    async (target: string) => {
-      try {
-        const [nextOutputs, nextFiles] = await Promise.all([
-          listArtifactOutputs(client, target),
-          listWorkspaceFiles(client, target),
-        ]);
-        // The panel belongs to the Session it was read for; a read that lands
-        // after the user has left it must not fill another Session's panel.
-        if (sessionRef.current !== target) return;
-        artifactsBySession.current[target] = nextOutputs;
-        publishArtifacts();
-        setPanelFiles(nextFiles);
-      } catch {
-        // The panel is secondary; a failure here must not disturb the run.
+  const settleTab = useCallback((id: string, patch: Partial<PreviewSlot>) => {
+    setTabs((current) => ({
+      ...current,
+      tabs: current.tabs.map((tab) => (tab.id === id ? { ...tab, ...patch } : tab)),
+    }));
+  }, []);
+
+  /** The workspace listing the panel showed last, and which Session it was
+   *  read for. A refresh compares against it to tell which documents on screen
+   *  are out of date. */
+  const panelListing = useRef<{ files: WorkspaceFile[]; sessionId: string } | undefined>(undefined);
+
+  /** Read an open workspace document again after the run rewrote it.
+   *
+   * The tree is only the index: a document the user has open in the panel
+   * showed the text it had when they opened it, so a run that rewrites that
+   * file in place left the document behind the list beside it. Only the files
+   * whose size or modification time moved are read, and a read that lands
+   * after the tab was closed or replaced finds no tab to fill.
+   */
+  const reloadOpenFiles = useCallback(
+    (target: string, files: readonly WorkspaceFile[]) => {
+      if (files.length === 0) return;
+      const changed = new Set(files.map((file) => file.path));
+      for (const tab of tabsRef.current.tabs) {
+        // `loading` means the reader's own click is still fetching this one;
+        // its answer is newer than this listing is.
+        if (tab.source !== "file" || tab.loading || !changed.has(tab.path)) continue;
+        void readWorkspaceFile(client, target, tab.path)
+          .then((content) => settleTab(tab.id, { content, error: undefined, loading: false }))
+          .catch(() => {
+            // The document keeps what it had; the next write reads it again.
+          });
       }
     },
-    [client, publishArtifacts],
+    [client, settleTab],
+  );
+
+  const refreshPanel = useCallback(
+    async (target: string) => {
+      // The two halves are independent: an artifact listing that fails must not
+      // leave the workspace tree on the files it had before the run.
+      const [listed, files] = await Promise.allSettled([
+        listArtifactOutputs(client, target),
+        listWorkspaceFiles(client, target),
+      ]);
+      // The panel belongs to the Session it was read for; a read that lands
+      // after the user has left it must not fill another Session's panel.
+      if (sessionRef.current !== target) return;
+      if (listed.status === "fulfilled") {
+        artifactsBySession.current[target] = listed.value;
+        publishArtifacts();
+      }
+      if (files.status === "rejected") return;
+      const previous = panelListing.current?.sessionId === target ? panelListing.current.files : [];
+      panelListing.current = { files: files.value, sessionId: target };
+      setPanelFiles(files.value);
+      reloadOpenFiles(target, changedFiles(previous, files.value));
+    },
+    [client, publishArtifacts, reloadOpenFiles],
   );
 
   // A run publishes artifacts and writes workspace files while it streams, and
@@ -975,6 +1021,10 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     // that Session's group — the others keep their rows without a re-read.
     publishArtifacts();
     setPanelFiles([]);
+    // The listing belonged to the Session being left, so the next one starts
+    // with nothing to compare against rather than reading its documents as
+    // rewritten because the paths happen to collide.
+    panelListing.current = undefined;
     // A read waiting for its window to close was scheduled for the Session
     // being left; firing it would only be refused, and leaving it armed would
     // fire it for whichever Session is open by then.
@@ -1244,13 +1294,6 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     },
     [refreshSessionLists, report, startDraft],
   );
-
-  const settleTab = useCallback((id: string, patch: Partial<PreviewSlot>) => {
-    setTabs((current) => ({
-      ...current,
-      tabs: current.tabs.map((tab) => (tab.id === id ? { ...tab, ...patch } : tab)),
-    }));
-  }, []);
 
   /** The same write, gated on the version the read was made for: a pick that
    *  replaces one still in flight must not be overwritten by the older answer. */
