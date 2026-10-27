@@ -25,7 +25,7 @@ import type {
   Specialist,
 } from "../api/types.js";
 import type { LandingCategory, LandingSeed } from "../app/landing.js";
-import { skillChoices, skillDraft, slashQuery } from "../app/slash.js";
+import { skillChoices, skillDraft, skillMark, slashQuery } from "../app/slash.js";
 import { TEXT } from "../text.js";
 import { filterExperts } from "./expert-catalog.js";
 import { modelBrand } from "./model-brand.js";
@@ -753,7 +753,7 @@ export function Composer({
               role="option"
               type="button"
             >
-              <span className="expert-mark is-skill" aria-hidden="true">/</span>
+              <span className="expert-mark is-skill" aria-hidden="true">{skillMark(skill)}</span>
               <span className="expert-text">
                 <span className="expert-name">{skill.name}</span>
                 {skill.description === "" ? null : (

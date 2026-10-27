@@ -17,6 +17,7 @@ import { useState } from "react";
 import type { ApiClient } from "../../api/client.js";
 import { getProjectSettings, getSkill, listSkills, setEnabledSkills } from "../../api/settings.js";
 import type { RuntimeSettingsOverrides, SkillDescriptor, SkillDetail, SkillSource } from "../../api/types.js";
+import { skillMark } from "../../app/slash.js";
 import { useLoaded } from "../../app/use-loaded.js";
 import { TEXT } from "../../text.js";
 import { SettingsModal } from "./SettingsModal.js";
@@ -218,7 +219,7 @@ export function SkillsSettings({ activeProjectId, adding, client, onAddingChange
                   const open = openId === skill.id;
                   return (
                     <div className={`settings-card is-expandable${open ? " is-open" : ""}`} key={skill.id}>
-                      <span className="settings-card-mark">{skill.name.slice(0, 1).toUpperCase()}</span>
+                      <span className="settings-card-mark">{skillMark(skill)}</span>
                       <button
                         className="settings-card-main"
                         onClick={() => reveal(skill)}

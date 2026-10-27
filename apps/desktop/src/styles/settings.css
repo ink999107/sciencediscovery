@@ -18,12 +18,44 @@
    Settings: general, model, skills, network, runtime
    ============================================================================ */
 .settings-list { display: grid; gap: 8px; }
-/* 全部开启 / 全部关闭: the two writes that act on the list below them. */
+/* 一键启用 / 一键关闭: the two writes that act on the list below them, drawn as
+   one segmented control because they are one choice about it. Two bare links
+   read as a caption; the joined border makes the pair a control. */
 .settings-bulk {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
   margin-bottom: 8px;
+}
+.settings-bulk .bulk-button {
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.45;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.settings-bulk .bulk-button:first-child {
+  border-radius: var(--radius-s) 0 0 var(--radius-s);
+}
+.settings-bulk .bulk-button:last-child {
+  border-left: none;
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+}
+.settings-bulk .bulk-button:hover:not(:disabled) {
+  background: var(--surface-soft);
+  color: var(--text-strong);
+}
+.settings-bulk .bulk-button:active:not(:disabled) { background: var(--surface-subtle); }
+.settings-bulk .bulk-button:disabled {
+  color: var(--text-faint);
+  cursor: progress;
+}
+.settings-bulk .bulk-button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--primary-border-soft);
+  outline-offset: 1px;
 }
 .settings-card {
   display: flex;

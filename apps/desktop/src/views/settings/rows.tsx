@@ -95,6 +95,10 @@ export function Switch({
  * wants none of them should not have to press each one. The buttons sit above
  * the list and say what they will do to it; the page decides what "all" means,
  * because only the page knows which of its rows have a switch of their own.
+ *
+ * They are drawn as one segmented control rather than two loose links: the
+ * pair is a single choice about the list below — on or off — and a border
+ * around them says so before either is read.
  */
 export function BulkToggles({
   busy,
@@ -105,10 +109,10 @@ export function BulkToggles({
 }) {
   return (
     <div className="settings-bulk">
-      <button className="link-button" disabled={busy} onClick={() => onAll(true)} type="button">
+      <button className="bulk-button" disabled={busy} onClick={() => onAll(true)} type="button">
         {TEXT.settings.enableAll}
       </button>
-      <button className="link-button" disabled={busy} onClick={() => onAll(false)} type="button">
+      <button className="bulk-button" disabled={busy} onClick={() => onAll(false)} type="button">
         {TEXT.settings.disableAll}
       </button>
     </div>

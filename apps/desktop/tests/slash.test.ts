@@ -15,7 +15,7 @@
 import assert from "node:assert/strict";
 
 import { createTest } from "../../../test/support/tagged/compat.mjs";
-import { skillChoices, skillDraft, slashQuery } from "../src/app/slash.js";
+import { skillChoices, skillDraft, skillMark, slashQuery } from "../src/app/slash.js";
 import type { SkillDescriptor } from "../src/api/types.js";
 
 const { describe, it } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
@@ -65,5 +65,12 @@ describe("the palette offers the skills the filter names", () => {
 describe("picking a skill writes the command, not the description", () => {
   it("leaves the caret ready for the request", () => {
     assert.equal(skillDraft(SKILLS[0] as SkillDescriptor), "/skill-creator ");
+  });
+});
+
+describe("a skill's mark is its initial, as 设置 › 技能 draws it", () => {
+  it("takes the first letter, upper-cased", () => {
+    assert.equal(skillMark({ name: "antibody-design" }), "A");
+    assert.equal(skillMark({ name: "RNA-seq reviewer" }), "R");
   });
 });

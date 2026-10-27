@@ -52,3 +52,13 @@ export function skillChoices(skills: SkillDescriptor[], query: string): SkillDes
 export function skillDraft(skill: SkillDescriptor): string {
   return `/${skill.id} `;
 }
+
+/**
+ * The mark a skill is drawn with wherever a list of skills appears: its
+ * initial, in the same box 设置 › 技能 gives it. Shared rather than repeated,
+ * because two lists of the same catalog should not disagree about what a
+ * skill looks like.
+ */
+export function skillMark(skill: { name: string }): string {
+  return skill.name.slice(0, 1).toUpperCase();
+}

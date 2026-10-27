@@ -2224,11 +2224,12 @@ body.is-resizing {
   color: #8c8c8c;
 }
 
-/* A skill's mark is the slash that opened the palette. */
+/* A skill's mark is the tile 设置 › 技能 draws: the skill's initial on the soft
+   surface, so the same catalog looks the same in both lists. */
 .expert-mark.is-skill {
-  background: #eef2ff;
-  color: #4a7cf5;
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  font-weight: 700;
 }
 
 /* The `/` palette, anchored to the input it belongs to: it floats above the
