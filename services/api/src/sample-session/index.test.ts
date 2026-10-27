@@ -14,6 +14,7 @@
 
 import { createTest } from "../../../../test/support/tagged/compat.mjs";
 const { test } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
+import { CasStore } from "@sciencediscovery/cas";
 import assert from "node:assert/strict";
 import { readFile, rm, stat } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -41,7 +42,7 @@ test("an install with no conversation of its own opens on the sample Session", a
   assert.equal(sessions.length, 1);
   const [session] = sessions;
   assert.ok(session);
-  assert.equal(session.title, "Session 10-26 01:40");
+  assert.equal(session.title, "脓毒症亚型聚类分析");
 
   // The files landed under this install's own ids, not the originals: the
   // conversation is readable through the same path the store looks in, and
@@ -57,6 +58,25 @@ test("an install with no conversation of its own opens on the sample Session", a
   const figure = await readFile(resolve(workspace, "out", "fig_corr_heatmap.png"));
   assert.deepEqual([...figure.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   await assert.rejects(stat(resolve(workspace, "__pycache__")), /ENOENT/);
+
+  // The 产物 tab reads the catalog, not the workspace, so the sample has to
+  // publish its artifacts the way the run did. Both versions of trace.md are
+  // there — the analysis rewrote the file, and the picker beside the open
+  // document is what shows that history.
+  const outputs = store.listSessionArtifactOutputs(session.id);
+  assert.deepEqual(
+    outputs.map((output) => `${output.artifact.name}@v${output.version.version}`).toSorted(),
+    ["app/answer.txt@v1", "app/trace.md@v1", "app/trace.md@v2", "audit_report.md@v1"],
+  );
+  assert.equal(new Set(outputs.map((output) => output.artifact.id)).size, 3);
+  assert.ok(outputs.every((output) => output.version.turnId), "every row can attach to a turn");
+  // The bytes are in the content store, at the size the version records — a
+  // row that opens on nothing is worse than no row.
+  const cas = new CasStore(root, "data");
+  for (const output of outputs) {
+    assert.equal((await cas.read(output.version.content.hash)).length, output.version.content.size);
+  }
+
   assert.ok((await stat(resolve(root, SAMPLE_SESSION_MARKER))).isFile());
 });
 

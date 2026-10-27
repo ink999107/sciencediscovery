@@ -710,7 +710,7 @@ test("a first start seeds the sample Session, and a later one does not repeat it
   const sample = projects.body.find((project) => project.name === "示例项目");
   assert.ok(sample, "the sample Project is listed like any other");
   const sessions = await jsonRequest<Session[]>(`${origin}/api/projects/${sample.id}/sessions`, { headers: authorization });
-  assert.deepEqual(sessions.body.map((session) => session.title), ["Session 10-26 01:40"]);
+  assert.deepEqual(sessions.body.map((session) => session.title), ["脓毒症亚型聚类分析"]);
   // The transcript replays two finished runs, which is what makes the sample
   // worth opening: the process, not just the answer.
   const runs = await jsonRequest<unknown[]>(`${origin}/api/sessions/${sessions.body[0]!.id}/runs`, {
@@ -721,6 +721,14 @@ test("a first start seeds the sample Session, and a later one does not repeat it
     headers: authorization,
   });
   assert.ok(files.body.some((file) => file.path === "analysis_summary.md"));
+  // 产物 is served from the catalog, so the seed has to publish the artifacts
+  // too — the workspace files alone leave that tab empty.
+  const outputs = await jsonRequest<{ artifact: { name: string }; version: { version: number } }[]>(
+    `${origin}/api/sessions/${sessions.body[0]!.id}/artifact-outputs`,
+    { headers: authorization },
+  );
+  assert.deepEqual(outputs.body.map((output) => output.artifact.name).toSorted(),
+    ["app/answer.txt", "app/trace.md", "app/trace.md", "audit_report.md"]);
 
   // The marker is what makes this a one-time gift: the next boot on this
   // directory finds a user's own install, not another empty one.
