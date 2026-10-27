@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { artifactName } from "./artifact-labels.js";
 import { resolveCatalog, resolveConnection } from "./bootstrap.js";
+import { changesPanel, createPanelRefresh, type PanelRefresh } from "./panel-refresh.js";
 import { fileName } from "./paths.js";
 import { byRecency, reusableDraft, resumeOnBoot } from "./session-order.js";
 import { sessionTitle } from "./session-title.js";
@@ -690,6 +691,27 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     [client, publishArtifacts],
   );
 
+  // A run publishes artifacts and writes workspace files while it streams, and
+  // the panel used to hear about them only when the run ended. `applyEvent`
+  // asks for a read on those two events, throttled: the first one lands at
+  // once, so a new artifact is listed while the run is still writing, and the
+  // rest of the burst collapses into one read per window.
+  //
+  // The target is kept beside the throttle because `refreshPanel` is bound to
+  // one Session; a read scheduled for the Session the user is about to leave
+  // must not be fired for the one they moved to. The read itself refuses a
+  // mismatch, this is what supplies the Session to ask about.
+  const panelRefreshTarget = useRef<string | undefined>(undefined);
+  const refreshPanelRef = useRef(refreshPanel);
+  refreshPanelRef.current = refreshPanel;
+  const panelRefresh = useRef<PanelRefresh | undefined>(undefined);
+  if (panelRefresh.current === undefined) {
+    panelRefresh.current = createPanelRefresh(() => {
+      const target = panelRefreshTarget.current;
+      if (target !== undefined) void refreshPanelRef.current(target);
+    });
+  }
+
   /**
    * Send files to the open session's workspace, then re-read the panel.
    *
@@ -756,6 +778,14 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       (event, sequence) => {
         if (sessionRef.current !== target) return;
         updateRun((current) => reduceRunStream(current, event, sequence));
+        // 产物 and the workspace tree are read back from the service rather
+        // than folded in from the event: the artifact list spans Sessions and
+        // every version, and a read is what keeps it agreeing with the
+        // catalog. The event only says that the moment has changed.
+        if (changesPanel(event.type)) {
+          panelRefreshTarget.current = target;
+          panelRefresh.current?.request();
+        }
       },
     [updateRun],
   );
@@ -945,6 +975,11 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     // that Session's group — the others keep their rows without a re-read.
     publishArtifacts();
     setPanelFiles([]);
+    // A read waiting for its window to close was scheduled for the Session
+    // being left; firing it would only be refused, and leaving it armed would
+    // fire it for whichever Session is open by then.
+    panelRefresh.current?.cancel();
+    panelRefreshTarget.current = undefined;
     resetRun();
   }, [publishArtifacts, resetRun]);
 

@@ -32,6 +32,11 @@ import { applySubagentEvent, type SubagentEvent } from "./subagent.js";
  * cannot draw" means an actual surprise rather than a phase-two backlog.
  * Everything here is an artifact, plan or orchestration surface with no
  * placeholder in the current design.
+ *
+ * `artifact.upserted` and `workspace.changed` are the exception in one
+ * respect: the transcript draws nothing for them, but the right panel re-reads
+ * its artifact list and workspace tree when they arrive — see
+ * `app/panel-refresh.ts`.
  */
 const DEFERRED_EVENT_TYPES: ReadonlySet<string> = new Set([
   "agent.phase",
