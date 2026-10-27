@@ -20,6 +20,7 @@ import type {
   ModelProfile,
   ModelProvider,
   ProviderCatalog,
+  ProviderModelList,
   ProviderModelPreview,
   RuntimeSettingsOverrides,
 } from "./types.js";
@@ -48,6 +49,40 @@ export function listProviders(client: ApiClient): Promise<ProviderCatalog> {
 
 export function listModels(client: ApiClient): Promise<ModelProfile[]> {
   return client.request<ModelProfile[]>("/api/models");
+}
+
+/**
+ * Point one profile at a model, and name it.
+ *
+ * `PUT /api/models/:id` is a whole-record write, not a patch: the body goes
+ * through the same validation a new profile does, so an omitted field falls
+ * back to its default rather than to its stored value — an absent `vision`
+ * would turn vision off, and an absent protocol would be re-derived from the
+ * URL. Everything whose default differs from what is stored is therefore sent
+ * back as it was read. `facts`, the token and the proxy policy are left out on
+ * purpose: absent keeps the stored value for each of them.
+ *
+ * The service locks `baseUrl` and the protocol to the provider, so a provider
+ * model can change which model it calls but not where it calls it.
+ */
+export function updateModel(
+  client: ApiClient,
+  profile: ModelProfile,
+  change: { model: string; name: string },
+): Promise<ModelProfile> {
+  return client.request<ModelProfile>(`/api/models/${encodeURIComponent(profile.id)}`, {
+    body: JSON.stringify({
+      apiProtocol: profile.apiProtocol,
+      apiVariant: profile.apiVariant,
+      baseUrl: profile.baseUrl,
+      model: change.model,
+      name: change.name,
+      thinkingEffort: profile.thinkingEffort,
+      thinkingMode: profile.thinkingMode,
+      vision: profile.vision,
+    }),
+    method: "PUT",
+  });
 }
 
 export function createProvider(
@@ -99,6 +134,33 @@ export function addProviderModel(
   return client.request<ModelProfile>(`/api/providers/${encodeURIComponent(providerId)}/models`, {
     body: JSON.stringify(body),
     method: "POST",
+  });
+}
+
+/**
+ * What a saved provider's own listing endpoint reports.
+ *
+ * The entries carry `profileId` for the models this installation has already
+ * added, which is what lets a row say 已添加 rather than 添加模型. `refresh`
+ * bypasses the server's short-lived cache; the cache exists so two reads in one
+ * visit do not spend a request on the vendor.
+ */
+export function listProviderModels(
+  client: ApiClient,
+  providerId: string,
+  refresh = false,
+): Promise<ProviderModelList> {
+  const query = refresh ? "?refresh=1" : "";
+  return client.request<ProviderModelList>(
+    `/api/providers/${encodeURIComponent(providerId)}/models${query}`,
+  );
+}
+
+/** Remove one model profile. The service refuses while any settings or session
+ *  still names it, which comes back as an error rather than a silent no-op. */
+export function deleteModel(client: ApiClient, modelId: string): Promise<{ deleted: string }> {
+  return client.request<{ deleted: string }>(`/api/models/${encodeURIComponent(modelId)}`, {
+    method: "DELETE",
   });
 }
 

@@ -417,6 +417,11 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   useEffect(() => {
     let cancelled = false;
     setBoot("loading");
+    // With no credential there is nothing to check: the app is showing the
+    // gate, and firing a request only to be refused would turn "paste your
+    // token" into "the token was rejected" — the wrong thing to ask of a
+    // first visit. Health is public, but everything behind it is not.
+    if (client.token === "") return undefined;
     void (async () => {
       try {
         const health = await getHealth(client);

@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ApiClient } from "../api/client.js";
 import type { WorkspaceActions, WorkspaceState } from "../app/use-workspace.js";
 import { TEXT } from "../text.js";
+import { claimsEscape } from "./dialog-escape.js";
+import { SidebarToggle } from "./SidebarToggle.js";
 import { GeneralSettings } from "./settings/GeneralSettings.js";
 import { ModelSettings } from "./settings/ModelSettings.js";
 import { NetworkSettings } from "./settings/NetworkSettings.js";
 import { RuntimeSettings } from "./settings/RuntimeSettings.js";
 import { SkillsSettings } from "./settings/SkillsSettings.js";
 import { McpServers } from "./settings/system/McpServers.js";
-import { SettingsSaveContext, type SettingsSaveHandler } from "./settings/system/save.js";
 import { SpecialistsSettings } from "./settings/system/Specialists.js";
 import { TimeoutSettings } from "./settings/system/Timeouts.js";
 
@@ -64,11 +65,10 @@ interface Props {
  * 设置, in the original desktop app's shape: 系统 › 通用, 智能 › 模型/技能 plus
  * MCP 服务器 and 专家, 连接 › 网络/远程, and the new 工作区 › 超时.
  *
- * The footer is shared, but the panes are not all written the same way. 超时
- * stages a draft and registers a save handler; the ones built around immediate
- * actions (技能, MCP, 专家, 网络, 远程) write on the press and register nothing,
- * so the footer's save buttons are disabled rather than pretending there is
- * something to commit.
+ * There is no footer and no save button: every pane writes on the press — a
+ * language, a model, a switch, a card's own 保存 — so a shared commit would
+ * only ever be disabled. 超时, the last page that staged a draft, now commits
+ * its own fields as they are left.
  */
 export function SystemSettingsDialog({
   actions,
@@ -79,15 +79,13 @@ export function SystemSettingsDialog({
   state,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Partial<Record<CategoryId, boolean>>>({});
-  const [saveHandler, setSaveHandler] = useState<SettingsSaveHandler>();
-  const [busy, setBusy] = useState(false);
+  /** The directory folds away like the session sidebar it sits where of; the
+   *  pane keeps the width rather than reflowing around a zero column. */
+  const [navOpen, setNavOpen] = useState(true);
   const [addingModel, setAddingModel] = useState(false);
-  const [failure, setFailure] = useState<string>();
-
-  const register = useCallback((handler?: SettingsSaveHandler) => {
-    setSaveHandler(handler === undefined ? undefined : () => handler);
-  }, []);
-  const saveContext = useMemo(() => ({ register }), [register]);
+  const [addingSkill, setAddingSkill] = useState(false);
+  const [addingMcp, setAddingMcp] = useState(false);
+  const [addingSpecialist, setAddingSpecialist] = useState(false);
 
   // A group picked from the directory opens its category, so a collapsed one
   // never hides the choice the user just made.
@@ -95,37 +93,25 @@ export function SystemSettingsDialog({
     setCollapsed((current) => ({ ...current, [categoryOf(group)]: false }));
   }, [group]);
 
-  // Switching panes drops the previous pane's unsaved draft with it; the form
+  // Switching panes closes whatever form the previous one had open; the form
   // state lives in the pane and unmounts here.
   useEffect(() => {
     setAddingModel(false);
-    setFailure(undefined);
+    setAddingSkill(false);
+    setAddingMcp(false);
+    setAddingSpecialist(false);
   }, [group]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      // A modal form over this surface claims Escape first; the settings
+      // surface closes only when nothing above it wanted the key.
+      if (!claimsEscape(event)) return;
+      onClose();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
-
-  const save = async (close: boolean) => {
-    if (saveHandler === undefined) {
-      if (close) onClose();
-      return;
-    }
-    setBusy(true);
-    setFailure(undefined);
-    try {
-      const saved = await saveHandler();
-      if (saved && close) onClose();
-    } catch (reason) {
-      setFailure(reason instanceof Error ? reason.message : TEXT.settings.saveFailed);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const meta = TEXT.settings.system.groups[group];
 
@@ -144,17 +130,33 @@ export function SystemSettingsDialog({
           />
         );
       case "skills":
-        return <SkillsSettings activeProjectId={state.activeProjectId} client={client} />;
+        return (
+          <SkillsSettings
+            activeProjectId={state.activeProjectId}
+            adding={addingSkill}
+            client={client}
+            onAddingChange={setAddingSkill}
+          />
+        );
       case "mcp":
         return (
           <McpServers
+            adding={addingMcp}
             client={client}
+            onAddingChange={setAddingMcp}
             onConfirm={actions.confirmAction}
             onToast={(message) => actions.toast(message)}
           />
         );
       case "specialists":
-        return <SpecialistsSettings client={client} onConfirm={actions.confirmAction} />;
+        return (
+          <SpecialistsSettings
+            adding={addingSpecialist}
+            client={client}
+            onAddingChange={setAddingSpecialist}
+            onConfirm={actions.confirmAction}
+          />
+        );
       case "sandbox-network":
         return (
           <NetworkSettings
@@ -186,23 +188,13 @@ export function SystemSettingsDialog({
       <section
         aria-label={TEXT.settings.system.title}
         aria-modal="true"
-        className="config-panel"
+        className={`config-panel${navOpen ? "" : " is-nav-collapsed"}`}
         role="dialog"
       >
         <nav aria-label={TEXT.settings.system.navLabel} className="settings-group-nav">
           <div className="settings-nav-head">
             <h2>{TEXT.settings.system.title}</h2>
-            <button
-              aria-label={TEXT.settings.close}
-              className="settings-nav-close"
-              onClick={onClose}
-              title={TEXT.settings.close}
-              type="button"
-            >
-              <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" viewBox="0 0 24 24" width="18">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
+            <SidebarToggle onClick={() => setNavOpen(false)} open />
           </div>
           <div className="settings-nav-scroll">
             {CATEGORIES.map((entry) => {
@@ -242,6 +234,14 @@ export function SystemSettingsDialog({
         </nav>
 
         <div className="settings-main">
+          {/* Folded, the directory's folder moves to the pane's top-left,
+              where the session bar keeps its own: outside the scrolling
+              detail, so a long page cannot carry it away. */}
+          {navOpen ? null : (
+            <div className="settings-main-fold">
+              <SidebarToggle onClick={() => setNavOpen(true)} open={false} />
+            </div>
+          )}
           <div className="settings-group-detail" key={group}>
             <header className="settings-detail-header">
               <div>
@@ -252,38 +252,22 @@ export function SystemSettingsDialog({
                 <button className="pill-button is-dark" onClick={() => setAddingModel(true)} type="button">
                   {TEXT.settings.model.add}
                 </button>
+              ) : group === "skills" ? (
+                <button className="pill-button is-dark" onClick={() => setAddingSkill(true)} type="button">
+                  {TEXT.settings.skills.add}
+                </button>
+              ) : group === "mcp" ? (
+                <button className="pill-button is-dark" onClick={() => setAddingMcp(true)} type="button">
+                  {TEXT.settings.system.mcp.add}
+                </button>
+              ) : group === "specialists" ? (
+                <button className="pill-button is-dark" onClick={() => setAddingSpecialist(true)} type="button">
+                  {TEXT.settings.system.specialists.add}
+                </button>
               ) : null}
             </header>
 
-            <SettingsSaveContext.Provider value={saveContext}>
-              {pane}
-            </SettingsSaveContext.Provider>
-
-            {failure ? <small className="row-note is-error">{failure}</small> : null}
-          </div>
-
-          <div className="system-config-footer">
-            <button className="secondary-button" disabled={busy} onClick={onClose} type="button">
-              {TEXT.settings.system.cancelAndClose}
-            </button>
-            <button
-              className="secondary-button"
-              disabled={busy || saveHandler === undefined}
-              onClick={() => void save(false)}
-              title={saveHandler === undefined ? TEXT.settings.system.autoSaved : undefined}
-              type="button"
-            >
-              {busy ? TEXT.settings.system.saving : TEXT.settings.system.save}
-            </button>
-            <button
-              className="primary-button"
-              disabled={busy}
-              onClick={() => void save(true)}
-              title={saveHandler === undefined ? TEXT.settings.system.autoSaved : undefined}
-              type="button"
-            >
-              {busy ? TEXT.settings.system.saving : TEXT.settings.system.saveAndClose}
-            </button>
+            {pane}
           </div>
         </div>
       </section>

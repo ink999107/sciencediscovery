@@ -14,7 +14,8 @@
 
 import { useLanguage } from "../../app/use-language.js";
 import { setLanguage, TEXT } from "../../text.js";
-import { Group, Row, Select } from "./rows.js";
+import { ListSelect } from "./ListSelect.js";
+import { Group, Row } from "./rows.js";
 
 /**
  * 设置 › 通用.
@@ -24,6 +25,11 @@ import { Group, Row, Select } from "./rows.js";
  * nothing to save. Picking a language applies it immediately — the same
  * behaviour as `apps/web`, and the only one that lets the user judge the
  * choice without pressing anything else.
+ *
+ * The picker is the app's own list rather than a native `<select>`: this is
+ * the setting that decides what every other label on the page says, and an
+ * OS-drawn popup in the system's own type and colours reads as a piece of the
+ * operating system that wandered in.
  */
 export function GeneralSettings() {
   const language = useLanguage();
@@ -32,13 +38,14 @@ export function GeneralSettings() {
   return (
     <Group heading={text.heading}>
       <Row title={text.field}>
-        <Select
-          label={text.field}
-          onChange={(next) => setLanguage(next === "en" ? "en" : "zh-CN")}
-          options={[
+        <ListSelect
+          caption={false}
+          choices={[
             { label: text.chinese, value: "zh-CN" },
             { label: text.english, value: "en" },
           ]}
+          label={text.field}
+          onChange={(next) => setLanguage(next === "en" ? "en" : "zh-CN")}
           value={language}
         />
       </Row>

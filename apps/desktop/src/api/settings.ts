@@ -23,6 +23,7 @@
 import type { ApiClient } from "./client.js";
 import type {
   ConnectorManifest,
+  CreateSkillPackageRequest,
   CreateSpecialistRequest,
   CustomMcpServerDetails,
   CustomMcpServerInput,
@@ -42,6 +43,7 @@ import type {
   RuntimeStatus,
   SandboxNetworkSettings,
   SkillDescriptor,
+  SkillDetail,
   Specialist,
   SystemQuotaSettings,
   SystemTimeoutSettings,
@@ -123,6 +125,18 @@ export function updateEnvironmentSource(
 
 export function listSkills(client: ApiClient): Promise<SkillDescriptor[]> {
   return client.request<SkillDescriptor[]>("/api/skills");
+}
+
+/** Author a new skill package from the form. The server turns the fields into
+ *  SKILL.md and installs the first revision. */
+export function createSkill(
+  client: ApiClient,
+  body: CreateSkillPackageRequest,
+): Promise<SkillDetail> {
+  return client.request<SkillDetail>("/api/skills", {
+    body: JSON.stringify(body),
+    method: "POST",
+  });
 }
 
 /**

@@ -20,13 +20,32 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { createTest } from "../../../test/support/tagged/compat.mjs";
 import type { ApiClient } from "../src/api/client.js";
-import type { RunnerTarget } from "../src/api/types.js";
+import type {
+  ConnectorManifest,
+  ModelProfile,
+  ModelProvider,
+  ProviderModelList,
+  RunnerTarget,
+  SkillDescriptor,
+  Specialist,
+} from "../src/api/types.js";
+import type { WorkspaceActions, WorkspaceState } from "../src/app/use-workspace.js";
 import { TEXT } from "../src/text.js";
+import { GeneralSettings } from "../src/views/settings/GeneralSettings.js";
 import { ModelForm } from "../src/views/ModelForm.js";
+import { ModelPicker, ModelSettings, providerChoices } from "../src/views/settings/ModelSettings.js";
+import { ListSelect } from "../src/views/settings/ListSelect.js";
+import { SystemSettingsDialog } from "../src/views/SystemSettingsDialog.js";
 import { RunnerSection } from "../src/views/settings/RemoteHosts.js";
 import { NetworkSettings } from "../src/views/settings/NetworkSettings.js";
 import { RuntimeSettings } from "../src/views/settings/RuntimeSettings.js";
+import { SkillForm } from "../src/views/settings/SkillForm.js";
 import { SkillsSettings } from "../src/views/settings/SkillsSettings.js";
+import { AbilityPicker } from "../src/views/settings/system/AbilityPicker.js";
+import { McpServers } from "../src/views/settings/system/McpServers.js";
+import { SpecialistForm } from "../src/views/settings/system/SpecialistForm.js";
+import { SpecialistsSettings } from "../src/views/settings/system/Specialists.js";
+import { TimeoutSettings } from "../src/views/settings/system/Timeouts.js";
 
 const { describe, it } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
 
@@ -151,6 +170,422 @@ describe("the add-model form", () => {
   });
 });
 
+describe("a configured model row", () => {
+  const profile = {
+    baseUrl: "https://api.example.com/v1",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    hasApiToken: true,
+    id: "model-1",
+    model: "deepseek-chat",
+    name: "自定义网关 · DeepSeek",
+    proxyPolicy: "direct",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    vision: false,
+  } as unknown as ModelProfile;
+  const actions = {
+    refreshCatalog: async () => {},
+    setDefaultModel: async () => {},
+  } as unknown as WorkspaceActions;
+  const state = {
+    defaultModelId: "model-1",
+    models: [profile],
+    presets: [],
+    providers: [],
+  } as unknown as WorkspaceState;
+
+  const markup = renderToStaticMarkup(
+    <ModelSettings actions={actions} adding={false} client={client} onAddingChange={noConfirm} state={state} />,
+  );
+
+  it("opens in place, so its name can be changed", () => {
+    // The identity is a button that reports whether it is open; the editor it
+    // opens is what carries the rename field, so it must be closed here.
+    assert.ok(markup.includes('class="model-row-main"'), "the row identity is not an expand control");
+    assert.ok(markup.includes('aria-expanded="false"'), "the row does not say it can open");
+    assert.ok(markup.includes(TEXT.settings.model.expand), "the row has no expand affordance");
+    assert.ok(!markup.includes(TEXT.settings.model.nameHint), "the rename editor is open with nothing asked for");
+  });
+
+  it("still shows the profile it was read as", () => {
+    assert.ok(markup.includes("deepseek-chat"), "the model id is gone");
+    assert.ok(markup.includes(TEXT.settings.model.default), "the primary tag is gone");
+  });
+});
+
+describe("the settings directory", () => {
+  const markup = renderToStaticMarkup(
+    <SystemSettingsDialog
+      actions={{} as unknown as WorkspaceActions}
+      client={client}
+      group="general"
+      onClose={noConfirm}
+      onGroupChange={noConfirm}
+      state={{} as unknown as WorkspaceState}
+    />,
+  );
+
+  it("folds away with the session sidebar's toggle instead of closing 设置", () => {
+    assert.ok(markup.includes(TEXT.sidebar.collapseSidebar), "the directory has no fold control");
+    assert.ok(markup.includes('aria-expanded="true"'), "the fold control does not say the directory is open");
+    // The X that closed the whole surface is what this replaced.
+    assert.ok(!markup.includes("settings-nav-close"), "the close-X is still in the directory head");
+  });
+
+  it("has no footer: every page writes on the press", () => {
+    // 通用, 模型, 技能, MCP, 专家, 网络 and 远程 all write as they are changed,
+    // and 超时 now commits its own fields; a shared save bar would only ever
+    // have been disabled. 设置 is left through the rail's 会话 or Escape.
+    assert.ok(!markup.includes("system-config-footer"), "the footer is back");
+    assert.ok(!markup.includes(TEXT.settings.system.save), "a footer save button is back");
+    assert.ok(!markup.includes("保存并关闭"), "a save-and-close button is back");
+  });
+});
+
+describe("the model field of a provider-backed profile", () => {
+  // The web front end's provider row lists the provider's models; here that
+  // list is the dropdown the row opens onto, so a model is switched by picking
+  // it rather than by retyping its id.
+  const profile = {
+    baseUrl: "https://api.minimax.com/v1",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    hasApiToken: true,
+    id: "model-1",
+    model: "MiniMax-M2",
+    name: "MiniMax · MiniMax-M2",
+    providerId: "provider-1",
+    proxyPolicy: "direct",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    vision: false,
+  } as unknown as ModelProfile;
+  const provider = {
+    baseUrl: "https://api.minimax.com/v1",
+    id: "provider-1",
+    name: "MiniMax",
+  } as unknown as ModelProvider;
+
+  const markup = renderToStaticMarkup(
+    <ModelPicker
+      client={client}
+      onChanged={async () => {}}
+      profile={profile}
+      provider={provider}
+    />,
+  );
+
+  it("is a dropdown, not a free-text name", () => {
+    assert.ok(markup.includes('aria-haspopup="listbox"'), "the model field is not a dropdown");
+    assert.ok(!markup.includes("<input"), "the free-text name field is back");
+    // While the listing loads the saved model is the one option, so the field
+    // never shows a blank line where the current model should be.
+    assert.ok(markup.includes("MiniMax-M2"), "the saved model is offered on the closed field");
+  });
+
+  it("says where the options come from and can refresh them", () => {
+    assert.ok(markup.includes(TEXT.settings.model.pickHint), "the field explains nothing");
+    assert.ok(markup.includes(TEXT.settings.model.providerRefreshHint), "the list cannot be refreshed");
+    assert.ok(markup.includes(TEXT.settings.model.providerSource), "the field does not say where options came from");
+  });
+
+  it("keeps the refresh beside the field", () => {
+    const field = markup.indexOf('class="model-pick-row"');
+    const refresh = markup.indexOf('class="model-refresh"');
+    const hint = markup.indexOf('class="field-help"');
+    assert.ok(field >= 0, "the field and its refresh are not on one line");
+    assert.ok(refresh > field && refresh < hint, "刷新列表 is not beside the model field");
+    // At rest the refresh is plain type; blue would make it look like an action.
+    assert.ok(!markup.includes("link-button"), "the refresh still looks like a link");
+  });
+
+  it("shows that a refresh is running instead of looking untouched", () => {
+    // The static render never resolves the listing, which is also what a click
+    // on 刷新列表 looks like until the provider answers.
+    assert.ok(markup.includes(TEXT.settings.model.refreshing), "a refresh has no visible state");
+  });
+
+  it("has no buttons of its own: picking a model is the save", () => {
+    // The hint mentions saving; what must not come back is the pair of buttons
+    // that used to ask the same question a second time.
+    assert.ok(!markup.includes("primary-button"), "保存 came back beside the dropdown");
+    assert.ok(!markup.includes("secondary-button"), "取消 came back beside the dropdown");
+  });
+});
+
+describe("the language picker", () => {
+  const markup = renderToStaticMarkup(<GeneralSettings />);
+
+  it("draws its own list instead of the platform's popup", () => {
+    assert.ok(markup.includes("list-select-trigger"), "界面语言 went back to a native <select>");
+    assert.ok(!markup.includes("<select"), "a native <select> is back");
+  });
+
+  it("does not repeat the row's label above the control", () => {
+    // The row already says 界面语言; a caption would say it a second time and
+    // push the control down a line.
+    assert.ok(!markup.includes("list-select-caption"), "the field is named twice");
+  });
+});
+
+describe("the model dropdown", () => {
+  const markup = renderToStaticMarkup(
+    <ListSelect
+      choices={[
+        { label: "MiniMax-M2", value: "MiniMax-M2" },
+        { badge: TEXT.settings.model.addedOption, disabled: true, label: "abab-6.5", value: "abab-6.5" },
+      ]}
+      label={TEXT.settings.model.name}
+      onChange={() => {}}
+      value="MiniMax-M2"
+    />,
+  );
+
+  it("names the field and shows the chosen model on the trigger", () => {
+    assert.ok(markup.includes(TEXT.settings.model.name), "the dropdown has no label");
+    assert.ok(markup.includes("MiniMax-M2"), "the chosen model is not on the trigger");
+    assert.match(markup, /aria-expanded="false"/);
+  });
+});
+
+describe("the choices a provider profile offers", () => {
+  const listing = {
+    fetchedAt: "2026-01-01T00:00:00.000Z",
+    models: [
+      { displayName: "MiniMax M2", id: "MiniMax-M2", profileId: "model-1" },
+      { displayName: "abab 6.5", id: "abab-6.5", profileId: "model-2" },
+      { id: "MiniMax-Text-01" },
+    ],
+    providerId: "provider-1",
+    source: "remote",
+  } as unknown as ProviderModelList;
+  const profile = { id: "model-1", model: "MiniMax-M2" } as ModelProfile;
+  const choices = providerChoices(listing, profile);
+
+  it("marks a model another entry already uses and keeps it unselectable", () => {
+    const taken = choices.find((choice) => choice.value === "abab-6.5");
+    assert.equal(taken?.disabled, true);
+    assert.equal(taken?.badge, TEXT.settings.model.addedOption);
+    assert.equal(choices.find((choice) => choice.value === "MiniMax-Text-01")?.disabled, undefined);
+  });
+
+  it("labels an option with both names when the provider gives them", () => {
+    assert.equal(choices.find((choice) => choice.value === "abab-6.5")?.label, "abab 6.5 · abab-6.5");
+    assert.equal(choices.find((choice) => choice.value === "MiniMax-Text-01")?.label, "MiniMax-Text-01");
+  });
+
+  it("keeps the saved model when the listing has dropped it", () => {
+    const dropped = providerChoices(listing, { ...profile, model: "retired-model" } as ModelProfile);
+    assert.equal(dropped[0]?.value, "retired-model");
+    // And while the listing is still loading there is nothing else to show.
+    assert.deepEqual(providerChoices(undefined, profile).map((choice) => choice.value), ["MiniMax-M2"]);
+  });
+});
+
+describe("the specialist form", () => {
+  const existing: Specialist = {
+    connectorIds: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    description: "审阅初稿",
+    enabledSkillIds: [],
+    id: "spec-1",
+    instructions: "先读再评。",
+    name: "审稿人",
+    runtime: { kind: "native" },
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+
+  const skill = (id: string, name: string) => ({
+    description: `${name} 的说明`,
+    id,
+    name,
+  }) as unknown as SkillDescriptor;
+  const connector = (id: string, displayName: string) => ({ displayName, id }) as unknown as ConnectorManifest;
+
+  const form = (
+    specialist?: Specialist,
+    options: { connectors?: ConnectorManifest[]; skills?: SkillDescriptor[] } = {},
+  ) =>
+    renderToStaticMarkup(
+      <SpecialistForm
+        client={client}
+        connectors={options.connectors ?? []}
+        onCancel={noConfirm}
+        onSaved={noConfirm}
+        skills={options.skills ?? []}
+        specialist={specialist}
+      />,
+    );
+
+  it("keeps 保存 disabled until the specialist has a name", () => {
+    assert.match(form(), /disabled=""[^>]*>保存<\/button>/, "保存 is enabled with no name");
+  });
+
+  it("fills the form from the specialist it edits", () => {
+    const markup = form(existing);
+    assert.ok(markup.includes(`value="${existing.name}"`), "the name is not filled in");
+    assert.ok(markup.includes(`value="${existing.description}"`), "the description is not filled in");
+    assert.ok(markup.includes(existing.instructions), "the instructions are not filled in");
+    assert.doesNotMatch(markup, /disabled=""[^>]*>保存<\/button>/, "保存 is disabled for a named specialist");
+  });
+
+  it("shows the counters and placeholders the design asks for", () => {
+    const markup = form().replaceAll("<!-- -->", "");
+    assert.ok(markup.includes("0 / 80"), "the name counter is missing");
+    assert.ok(markup.includes("0 / 1000"), "the description counter is missing");
+    assert.ok(markup.includes("0 / 32,768"), "the instructions counter is missing");
+    assert.ok(markup.includes(TEXT.settings.system.specialists.namePlaceholder), "the name placeholder is missing");
+    assert.ok(
+      markup.includes(TEXT.settings.system.specialists.descriptionPlaceholder),
+      "the description placeholder is missing",
+    );
+    assert.ok(
+      markup.includes(`>${TEXT.settings.system.specialists.instructions}</span>`),
+      "the instructions title is missing",
+    );
+    assert.ok(
+      markup.includes(TEXT.settings.system.specialists.instructionsHint),
+      "the instructions hint is missing",
+    );
+    assert.ok(
+      markup.includes(TEXT.settings.system.specialists.instructionsPlaceholder),
+      "the instructions placeholder is missing",
+    );
+    assert.match(markup, /maxlength="80"/iu);
+    assert.match(markup, /maxlength="1000"/iu);
+    assert.match(markup, /maxlength="32768"/iu);
+  });
+
+  it("only asks for a model name on an external runtime", () => {
+    assert.ok(
+      !form(existing).includes(TEXT.settings.system.specialists.modelHint),
+      "a native specialist is asked for a model",
+    );
+    const external = form({ ...existing, runtime: { kind: "codex", model: "gpt-5" } });
+    assert.ok(external.includes(TEXT.settings.system.specialists.modelHint), "the model row is missing");
+    assert.ok(external.includes('value="gpt-5"'), "the runtime's model is not filled in");
+  });
+
+  it("puts 取消 before 保存", () => {
+    const markup = form(existing);
+    const cancel = markup.indexOf(`>${TEXT.settings.cancel}</button>`);
+    const save = markup.indexOf(`>${TEXT.settings.system.save}</button>`);
+    assert.ok(cancel >= 0 && save >= 0 && cancel < save, "the buttons are out of order");
+  });
+
+  it("starts a new specialist on 完全访问 with an empty 技能 list", () => {
+    const markup = form();
+    const copy = TEXT.settings.system.specialists;
+    assert.ok(markup.includes(copy.capabilities), "the 能力 title is missing");
+    assert.ok(markup.includes(copy.capabilitiesHint), "the 能力 hint is missing");
+    assert.ok(markup.includes(copy.fullAccess), "完全访问 is missing");
+    assert.ok(markup.includes(copy.defaultTag), "the 默认 tag is missing");
+    assert.ok(markup.includes(copy.fullAccessHint), "完全访问's hint is missing");
+    assert.ok(markup.includes(copy.orSpecific), "the divider is missing");
+    assert.ok(markup.includes(copy.addSkill), "添加技能 is missing");
+    assert.ok(markup.includes(copy.noSkills), "the empty 技能 list is missing");
+    assert.ok(markup.includes(copy.skillsNote), "the empty-list warning is missing");
+    assert.match(markup, /type="radio"[^>]*checked=""/, "完全访问 is not selected by default");
+  });
+
+  it("shows the specific skills a specialist already has", () => {
+    const markup = form(
+      { ...existing, enabledSkillIds: ["draft-review"] },
+      { skills: [skill("draft-review", "初稿审阅")] },
+    );
+    assert.ok(markup.includes("初稿审阅"), "the chosen skill is not listed");
+    assert.ok(markup.includes(`${TEXT.settings.system.specialists.remove} 初稿审阅`), "the skill has no remove control");
+    assert.ok(!markup.includes(TEXT.settings.system.specialists.noSkills), "the empty state is still shown");
+    assert.doesNotMatch(markup, /type="radio"[^>]*checked=""/, "完全访问 is still selected for a specific list");
+  });
+
+  it("lists every capability in the picker", () => {
+    const pick = (tab: "skills" | "connectors") =>
+      renderToStaticMarkup(
+        <AbilityPicker
+          connectors={[connector("arxiv", "arXiv")]}
+          initialTab={tab}
+          onApply={noConfirm}
+          onClose={noConfirm}
+          selectedConnectorIds={[]}
+          selectedSkillIds={[]}
+          skills={[skill("draft-review", "初稿审阅")]}
+        />,
+      );
+
+    const skills = pick("skills");
+    assert.ok(skills.includes("初稿审阅"), "the picker does not list the skill");
+    assert.ok(skills.includes("初稿审阅 的说明"), "the picker does not describe the skill");
+    assert.ok(skills.includes(TEXT.settings.system.specialists.addSelected), "the picker has no 添加");
+
+    const connectors = pick("connectors");
+    assert.ok(connectors.includes("arXiv"), "the picker does not list the connector");
+  });
+});
+
+describe("the add-skill form", () => {
+  const form = () =>
+    renderToStaticMarkup(
+      <SkillForm client={client} onCancel={noConfirm} onSaved={noConfirm} />,
+    );
+
+  it("asks for the authored fields and starts with 创建 disabled", () => {
+    const markup = form();
+    const copy = TEXT.settings.skills;
+    for (const placeholder of [
+      copy.namePlaceholder,
+      copy.descriptionPlaceholder,
+      copy.licensePlaceholder,
+      copy.versionPlaceholder,
+      copy.compatibilityPlaceholder,
+      copy.instructionsPlaceholder,
+    ]) {
+      assert.ok(markup.includes(placeholder), `the form is missing ${placeholder}`);
+    }
+    // The runtime never enforced SKILL.md's allowed-tools, so the authoring
+    // form no longer offers a field that would only write an inert declaration.
+    assert.ok(!markup.includes("允许的工具"), "the unenforced allowed-tools field is back");
+    assert.ok(markup.includes(copy.nameHint), "the skill-name rule is missing");
+    assert.ok(markup.includes("0 / 64"), "the name counter is missing");
+    assert.ok(markup.includes("0 / 1024"), "the description counter is missing");
+    assert.match(markup, /maxlength="64"/iu);
+    assert.match(markup, /maxlength="1024"/iu);
+    assert.match(markup, /disabled=""[^>]*>创建<\/button>/, "创建 is enabled with an empty form");
+  });
+
+  it("is what 新增技能 opens", () => {
+    const markup = renderToStaticMarkup(
+      <SkillsSettings adding client={client} onAddingChange={noConfirm} />,
+    );
+    assert.ok(markup.includes(TEXT.settings.skills.add), "the modal is not labelled 新增技能");
+    assert.ok(markup.includes(TEXT.settings.skills.namePlaceholder), "the authoring form is not open");
+  });
+});
+
+describe("the MCP servers page", () => {
+  const page = (adding: boolean) =>
+    renderToStaticMarkup(
+      <McpServers
+        adding={adding}
+        client={client}
+        onAddingChange={noConfirm}
+        onConfirm={noConfirm}
+        onToast={noConfirm}
+      />,
+    );
+
+  it("reads one card list, not the custom/built-in tabs", () => {
+    const markup = page(false);
+    assert.ok(markup.includes("settings-section"), "MCP 服务器 rendered no section");
+    assert.ok(markup.includes(loading), "MCP 服务器 did not start a read");
+    assert.ok(!markup.includes('role="tablist"'), "the custom/built-in tabs are back");
+    assert.ok(markup.includes(TEXT.settings.system.mcp.help), "the page does not say what 内置 means");
+  });
+
+  it("is what 新增服务器 opens", () => {
+    const markup = page(true);
+    assert.ok(markup.includes(TEXT.settings.system.mcp.add), "the modal is not labelled 新增服务器");
+    assert.ok(markup.includes(TEXT.settings.system.mcp.name), "the server form is not open");
+  });
+});
+
 describe("each settings page", () => {
   // The registrations are written out rather than looped: the CI collector
   // audits every test declaration, and a title assembled at runtime is a
@@ -162,7 +597,10 @@ describe("each settings page", () => {
   };
 
   it("技能 renders and asks for its data", () => {
-    asksForItsData("技能", <SkillsSettings client={client} />);
+    asksForItsData(
+      "技能",
+      <SkillsSettings adding={false} client={client} onAddingChange={noConfirm} />,
+    );
   });
 
   it("网络 renders and asks for its data", () => {
@@ -173,11 +611,26 @@ describe("each settings page", () => {
     asksForItsData("远程", <RuntimeSettings client={client} onConfirm={noConfirm} />);
   });
 
+  it("专家 renders and asks for its data", () => {
+    asksForItsData(
+      "专家",
+      <SpecialistsSettings adding={false} client={client} onAddingChange={noConfirm} onConfirm={noConfirm} />,
+    );
+  });
+
+  it("超时 renders and asks for its data", () => {
+    // The one page that used to wait for the footer's 保存. It now owns the
+    // commit, so it has to stand on its own without a dialog around it.
+    asksForItsData("超时", <TimeoutSettings client={client} />);
+  });
+
   it("技能 says why it cannot read a choice when there is no project yet", () => {
     // The skill selection lives in the project layer, so a page without a
     // project has nothing to read — and says so rather than showing a list of
     // switches that would write nowhere.
-    const markup = renderToStaticMarkup(<SkillsSettings client={client} />);
+    const markup = renderToStaticMarkup(
+      <SkillsSettings adding={false} client={client} onAddingChange={noConfirm} />,
+    );
     assert.ok(markup.includes(loading));
   });
 

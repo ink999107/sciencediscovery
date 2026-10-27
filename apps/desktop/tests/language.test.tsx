@@ -137,18 +137,20 @@ test("a permission card's buttons are drawn in the language in force", () => {
 
 test("通用 offers both languages and shows the one in force", () => {
   const chinese = renderToStaticMarkup(<GeneralSettings />);
-  assert.match(chinese, /<option value="zh-CN" selected="">简体中文<\/option>/);
-  assert.match(chinese, /<option value="en">English<\/option>/);
+  assert.match(chinese, /list-select-trigger/);
+  assert.match(chinese, /简体中文/);
   assert.match(chinese, /界面语言/);
   // The sentence that used to explain the row is gone: the label says it.
   assert.doesNotMatch(chinese, /选择此浏览器中/);
 
   setLanguage("en");
   const english = renderToStaticMarkup(<GeneralSettings />);
-  assert.match(english, /<option value="en" selected="">English<\/option>/);
   assert.match(english, /Interface language/);
-  assert.match(english, /Simplified Chinese/);
+  assert.match(english, /English/);
   assert.doesNotMatch(english, /Choose the language/);
+  // The Chinese choice is not spelled in English: somebody reading the English
+  // page has to be able to find their own language without reading it first.
+  assert.equal(TEXT.settings.general.language.chinese, "简体中文");
 });
 
 test("the service's untitled sentinel is printed in the interface language", () => {

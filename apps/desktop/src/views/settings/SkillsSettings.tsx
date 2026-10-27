@@ -19,11 +19,16 @@ import { getProjectSettings, listSkills, setEnabledSkills } from "../../api/sett
 import type { RuntimeSettingsOverrides, SkillDescriptor } from "../../api/types.js";
 import { useLoaded } from "../../app/use-loaded.js";
 import { TEXT } from "../../text.js";
+import { SettingsModal } from "./SettingsModal.js";
+import { SkillForm } from "./SkillForm.js";
 import { Group, LoadGate, Switch, Tag } from "./rows.js";
 
 interface Props {
   activeProjectId?: string;
+  /** Owned by the settings surface, where the 新增技能 button lives. */
+  adding: boolean;
   client: ApiClient;
+  onAddingChange: (next: boolean) => void;
 }
 
 interface SkillPage {
@@ -41,7 +46,7 @@ interface SkillPage {
  * with what is actually installed. Showing the server's answer is the only way
  * the switches and the truth stay in step.
  */
-export function SkillsSettings({ activeProjectId, client }: Props) {
+export function SkillsSettings({ activeProjectId, adding, client, onAddingChange }: Props) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string>();
   const [openId, setOpenId] = useState<string>();
@@ -76,57 +81,72 @@ export function SkillsSettings({ activeProjectId, client }: Props) {
   };
 
   return (
-    <Group>
-      <LoadGate loaded={loaded}>
-        {(page) => {
-          if (page.skills.length === 0) {
-            return <p className="settings-empty">{TEXT.settings.skills.empty}</p>;
-          }
-          return (
-            <div className="settings-list">
-              {page.skills.map((skill) => {
-                const on = page.enabled.includes(skill.id);
-                const open = openId === skill.id;
-                return (
-                  <div className={`settings-card${open ? " is-open" : ""}`} key={skill.id}>
-                    <span className="settings-card-mark">{skill.name.slice(0, 1).toUpperCase()}</span>
-                    <button
-                      className="settings-card-main"
-                      onClick={() => setOpenId(open ? undefined : skill.id)}
-                      type="button"
-                    >
-                      <strong>
-                        {skill.name}
-                        <Tag tone={on ? "on" : "off"}>
-                          {on ? TEXT.settings.skills.on : TEXT.settings.skills.off}
-                        </Tag>
-                      </strong>
-                      <small>{skill.description}</small>
-                      {open ? (
-                        <span className="settings-detail">
-                          {skill.description}
-                          <small className="settings-detail-meta">
-                            {skill.source} · v{skill.version} · {TEXT.workspace.filesCount(skill.resourceSummary.files)}
-                          </small>
-                        </span>
-                      ) : null}
-                    </button>
-                    <div className="settings-card-actions">
-                      <Switch
-                        disabled={busy}
-                        label={TEXT.settings.skills.toggle(skill.name)}
-                        onChange={(next) => void toggle(skill, next)}
-                        value={on}
-                      />
+    <>
+      <Group>
+        <LoadGate loaded={loaded}>
+          {(page) => {
+            if (page.skills.length === 0) {
+              return <p className="settings-empty">{TEXT.settings.skills.empty}</p>;
+            }
+            return (
+              <div className="settings-list">
+                {page.skills.map((skill) => {
+                  const on = page.enabled.includes(skill.id);
+                  const open = openId === skill.id;
+                  return (
+                    <div className={`settings-card is-expandable${open ? " is-open" : ""}`} key={skill.id}>
+                      <span className="settings-card-mark">{skill.name.slice(0, 1).toUpperCase()}</span>
+                      <button
+                        className="settings-card-main"
+                        onClick={() => setOpenId(open ? undefined : skill.id)}
+                        type="button"
+                      >
+                        <strong>
+                          {skill.name}
+                          <Tag tone={on ? "on" : "off"}>
+                            {on ? TEXT.settings.skills.on : TEXT.settings.skills.off}
+                          </Tag>
+                        </strong>
+                        <small>{skill.description}</small>
+                        {open ? (
+                          <span className="settings-detail">
+                            {skill.description}
+                            <small className="settings-detail-meta">
+                              {skill.source} · v{skill.version} · {TEXT.workspace.filesCount(skill.resourceSummary.files)}
+                            </small>
+                          </span>
+                        ) : null}
+                      </button>
+                      <div className="settings-card-actions">
+                        <Switch
+                          disabled={busy}
+                          label={TEXT.settings.skills.toggle(skill.name)}
+                          onChange={(next) => void toggle(skill, next)}
+                          value={on}
+                        />
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-              {failure ? <small className="row-note is-error">{failure}</small> : null}
-            </div>
-          );
-        }}
-      </LoadGate>
-    </Group>
+                  );
+                })}
+                {failure ? <small className="row-note is-error">{failure}</small> : null}
+              </div>
+            );
+          }}
+        </LoadGate>
+      </Group>
+
+      {adding ? (
+        <SettingsModal label={TEXT.settings.skills.add} onClose={() => onAddingChange(false)} wide>
+          <SkillForm
+            client={client}
+            onCancel={() => onAddingChange(false)}
+            onSaved={() => {
+              onAddingChange(false);
+              loaded.reload();
+            }}
+          />
+        </SettingsModal>
+      ) : null}
+    </>
   );
 }

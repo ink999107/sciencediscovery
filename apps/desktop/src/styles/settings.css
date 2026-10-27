@@ -312,6 +312,9 @@ a.secondary-button {
 
 /* An expanded row keeps the hover treatment so it is clear which one is open. */
 .settings-card.is-open { border-color: var(--primary-border-soft); }
+/* A card that opens in place pins its mark and switch to the first line, so
+   neither moves when the details below grow the card. */
+.settings-card.is-expandable { align-items: flex-start; }
 .settings-detail {
   display: block;
   margin-top: 8px;

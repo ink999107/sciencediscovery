@@ -16,99 +16,32 @@ import { useState } from "react";
 
 import type { ApiClient } from "../../../api/client.js";
 import {
-  createSpecialist,
   deleteSpecialist,
   listConnectors,
   listSkills,
   listSpecialists,
   updateSpecialist,
 } from "../../../api/settings.js";
-import type {
-  ConnectorManifest,
-  CreateSpecialistRequest,
-  SkillDescriptor,
-  Specialist,
-  SpecialistRuntime,
-} from "../../../api/types.js";
+import type { ConnectorManifest, SkillDescriptor, Specialist } from "../../../api/types.js";
 import type { ConfirmRequest } from "../../../app/use-workspace.js";
 import { useLoaded } from "../../../app/use-loaded.js";
 import { TEXT } from "../../../text.js";
-import { Group, LoadGate, Row, Select, Switch, Tag } from "../rows.js";
+import { SettingsModal } from "../SettingsModal.js";
+import { Group, LoadGate, Switch, Tag } from "../rows.js";
+import { SpecialistForm } from "./SpecialistForm.js";
 
 interface Props {
+  /** Owned by the settings surface, where the 新增专家 button lives. */
+  adding: boolean;
   client: ApiClient;
+  onAddingChange: (next: boolean) => void;
   onConfirm: (request: ConfirmRequest) => void;
 }
-
-type RuntimeKind = "native" | "codex" | "claude-code" | "acp";
 
 interface Page {
   connectors: ConnectorManifest[];
   skills: SkillDescriptor[];
   specialists: Specialist[];
-}
-
-interface Draft {
-  connectorIds: string[];
-  description: string;
-  enabledSkillIds: string[];
-  id?: string;
-  instructions: string;
-  model: string;
-  name: string;
-  runtime: RuntimeKind;
-}
-
-function emptyDraft(): Draft {
-  return {
-    connectorIds: [],
-    description: "",
-    enabledSkillIds: [],
-    instructions: "",
-    model: "",
-    name: "",
-    runtime: "native",
-  };
-}
-
-function draftOf(specialist: Specialist): Draft {
-  return {
-    connectorIds: specialist.connectorIds,
-    description: specialist.description,
-    enabledSkillIds: specialist.enabledSkillIds,
-    id: specialist.id,
-    instructions: specialist.instructions,
-    model: specialist.runtime !== undefined && specialist.runtime.kind !== "native"
-      ? (specialist.runtime.model ?? "")
-      : "",
-    name: specialist.name,
-    runtime: specialist.runtime?.kind ?? "native",
-  };
-}
-
-function runtimeOf(draft: Draft): SpecialistRuntime {
-  const model = draft.model.trim();
-  switch (draft.runtime) {
-    case "codex":
-      return { kind: "codex", ...(model === "" ? {} : { model }) };
-    case "claude-code":
-      return { kind: "claude-code", ...(model === "" ? {} : { model }) };
-    case "acp":
-      return { kind: "acp", ...(model === "" ? {} : { model }) };
-    default:
-      return { kind: "native" };
-  }
-}
-
-function bodyOf(draft: Draft): CreateSpecialistRequest {
-  return {
-    connectorIds: draft.connectorIds as CreateSpecialistRequest["connectorIds"],
-    description: draft.description.trim(),
-    enabledSkillIds: draft.enabledSkillIds,
-    instructions: draft.instructions,
-    name: draft.name.trim(),
-    runtime: runtimeOf(draft),
-  };
 }
 
 /**
@@ -118,8 +51,11 @@ function bodyOf(draft: Draft): CreateSpecialistRequest {
  * field is whether they appear in the task tool's enum at all. A user-created
  * specialist is always enabled, so the switch is drawn only where it means
  * something.
+ *
+ * Creating and editing share one modal, as 添加模型 does: the list stays in
+ * place behind the scrim, and the same form serves a row's 编辑.
  */
-export function SpecialistsSettings({ client, onConfirm }: Props) {
+export function SpecialistsSettings({ adding, client, onAddingChange, onConfirm }: Props) {
   const loaded = useLoaded<Page>(async () => {
     const [specialists, connectors, skills] = await Promise.all([
       listSpecialists(client),
@@ -128,23 +64,13 @@ export function SpecialistsSettings({ client, onConfirm }: Props) {
     ]);
     return { connectors, skills, specialists };
   });
-  const [draft, setDraft] = useState<Draft>();
+  const [editing, setEditing] = useState<Specialist>();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string>();
 
-  const write = async (body: CreateSpecialistRequest, id?: string) => {
-    setBusy(true);
-    setFailure(undefined);
-    try {
-      if (id === undefined) await createSpecialist(client, body);
-      else await updateSpecialist(client, id, body);
-      setDraft(undefined);
-      loaded.reload();
-    } catch (reason) {
-      setFailure(reason instanceof Error ? reason.message : TEXT.settings.saveFailed);
-    } finally {
-      setBusy(false);
-    }
+  const close = () => {
+    onAddingChange(false);
+    setEditing(undefined);
   };
 
   const toggle = async (specialist: Specialist, next: boolean) => {
@@ -160,16 +86,13 @@ export function SpecialistsSettings({ client, onConfirm }: Props) {
     }
   };
 
+  const open = adding || editing !== undefined;
+
   return (
     <LoadGate loaded={loaded}>
       {(page) => (
         <>
           <Group>
-            <div className="settings-actions is-end">
-              <button className="pill-button is-dark" onClick={() => setDraft(emptyDraft())} type="button">
-                {TEXT.settings.system.specialists.add}
-              </button>
-            </div>
             <p className="settings-note">{TEXT.settings.system.specialists.help}</p>
             {page.specialists.length === 0 ? (
               <p className="settings-empty">{TEXT.settings.system.specialists.empty}</p>
@@ -178,7 +101,7 @@ export function SpecialistsSettings({ client, onConfirm }: Props) {
                 {page.specialists.map((specialist) => {
                   const on = specialist.enabled !== false;
                   return (
-                    <div className={`settings-card${on ? "" : " is-off"}`} key={specialist.id}>
+                    <div className={`settings-card is-expandable${on ? "" : " is-off"}`} key={specialist.id}>
                       <span className="settings-card-mark">{specialist.name.slice(0, 1).toUpperCase()}</span>
                       <div className="settings-card-main">
                         <strong>
@@ -205,7 +128,7 @@ export function SpecialistsSettings({ client, onConfirm }: Props) {
                             <button
                               className="link-button"
                               disabled={busy}
-                              onClick={() => setDraft(draftOf(specialist))}
+                              onClick={() => setEditing(specialist)}
                               type="button"
                             >
                               {TEXT.settings.edit}
@@ -240,112 +163,27 @@ export function SpecialistsSettings({ client, onConfirm }: Props) {
             )}
           </Group>
 
-          {draft ? (
-            <section className="settings-card is-form">
-              <div className="settings-card-form">
-                <Row title={TEXT.settings.system.specialists.name}>
-                  <input
-                    className="field-input"
-                    onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                    value={draft.name}
-                  />
-                </Row>
-                <Row title={TEXT.settings.system.specialists.description}>
-                  <input
-                    className="field-input"
-                    onChange={(event) => setDraft({ ...draft, description: event.target.value })}
-                    value={draft.description}
-                  />
-                </Row>
-                <Row title={TEXT.settings.system.specialists.instructions} tone="stack">
-                  <textarea
-                    className="field-textarea"
-                    onChange={(event) => setDraft({ ...draft, instructions: event.target.value })}
-                    rows={6}
-                    value={draft.instructions}
-                  />
-                </Row>
-                <Row hint={TEXT.settings.system.specialists.runtimeHint} title={TEXT.settings.system.specialists.runtime}>
-                  <Select
-                    label={TEXT.settings.system.specialists.runtime}
-                    onChange={(value) => setDraft({ ...draft, runtime: value as RuntimeKind })}
-                    options={[
-                      { label: TEXT.settings.system.specialists.runtimeNative, value: "native" },
-                      { label: "Codex", value: "codex" },
-                      { label: "Claude Code", value: "claude-code" },
-                      { label: "ACP", value: "acp" },
-                    ]}
-                    value={draft.runtime}
-                  />
-                </Row>
-                {draft.runtime === "native" ? null : (
-                  <Row hint={TEXT.settings.system.specialists.modelHint} title={TEXT.settings.system.specialists.model}>
-                    <input
-                      className="field-input"
-                      onChange={(event) => setDraft({ ...draft, model: event.target.value })}
-                      value={draft.model}
-                    />
-                  </Row>
-                )}
-                <div className="settings-choice">
-                  <strong>{TEXT.settings.system.specialists.connectors}</strong>
-                  {page.connectors.length === 0 ? (
-                    <small className="row-note">{TEXT.settings.system.specialists.none}</small>
-                  ) : (
-                    page.connectors.map((connector) => (
-                      <label className="settings-check" key={connector.id}>
-                        <input
-                          checked={draft.connectorIds.includes(connector.id)}
-                          onChange={(event) => setDraft({
-                            ...draft,
-                            connectorIds: event.target.checked
-                              ? [...draft.connectorIds, connector.id]
-                              : draft.connectorIds.filter((id) => id !== connector.id),
-                          })}
-                          type="checkbox"
-                        />
-                        <span>{connector.displayName ?? connector.id}</span>
-                      </label>
-                    ))
-                  )}
-                </div>
-                <div className="settings-choice">
-                  <strong>{TEXT.settings.system.specialists.skills}</strong>
-                  {page.skills.length === 0 ? (
-                    <small className="row-note">{TEXT.settings.system.specialists.none}</small>
-                  ) : (
-                    page.skills.map((skill) => (
-                      <label className="settings-check" key={skill.id}>
-                        <input
-                          checked={draft.enabledSkillIds.includes(skill.id)}
-                          onChange={(event) => setDraft({
-                            ...draft,
-                            enabledSkillIds: event.target.checked
-                              ? [...draft.enabledSkillIds, skill.id]
-                              : draft.enabledSkillIds.filter((id) => id !== skill.id),
-                          })}
-                          type="checkbox"
-                        />
-                        <span>{skill.name}</span>
-                      </label>
-                    ))
-                  )}
-                </div>
-                <div className="settings-card-actions">
-                  <button className="secondary-button" onClick={() => setDraft(undefined)} type="button">
-                    {TEXT.settings.cancel}
-                  </button>
-                  <button
-                    className="primary-button"
-                    disabled={busy || draft.name.trim() === ""}
-                    onClick={() => void write(bodyOf(draft), draft.id)}
-                    type="button"
-                  >
-                    {TEXT.settings.system.save}
-                  </button>
-                </div>
-              </div>
-            </section>
+          {open ? (
+            <SettingsModal
+              label={editing === undefined
+                ? TEXT.settings.system.specialists.add
+                : TEXT.settings.system.specialists.editTitle}
+              onClose={close}
+              wide
+            >
+              <SpecialistForm
+                client={client}
+                connectors={page.connectors}
+                key={editing?.id ?? "new"}
+                onCancel={close}
+                onSaved={() => {
+                  close();
+                  loaded.reload();
+                }}
+                specialist={editing}
+                skills={page.skills}
+              />
+            </SettingsModal>
           ) : null}
 
           {failure ? <small className="row-note is-error">{failure}</small> : null}

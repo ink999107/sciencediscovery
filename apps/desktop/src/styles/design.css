@@ -3057,8 +3057,9 @@ body.is-resizing {
   cursor: default;
 }
 
-/* The add-model form lives in a modal; its own title is the modal's. */
-.model-modal {
+/* A settings form that opens over its page — 添加模型 and 新增/编辑专家. Its
+   own title is the modal's. */
+.settings-modal {
   width: min(520px, calc(100vw - 64px));
   max-height: calc(100vh - 80px);
   overflow-y: auto;
@@ -3068,19 +3069,25 @@ body.is-resizing {
   box-shadow: 0 24px 80px rgba(25, 25, 25, 0.25);
 }
 
-.model-modal-head {
+/* The specialist form stacks a textarea and two checkbox groups, so it needs
+   room the model form's five fields do not. */
+.settings-modal.is-wide {
+  width: min(640px, calc(100vw - 64px));
+}
+
+.settings-modal-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 18px;
 }
 
-.model-modal-head h2 {
+.settings-modal-head h2 {
   font-size: 17px;
   font-weight: 600;
 }
 
-.model-modal-close {
+.settings-modal-close {
   width: 28px;
   height: 28px;
   display: grid;
@@ -3090,9 +3097,423 @@ body.is-resizing {
   font-size: 18px;
 }
 
-.model-modal-close:hover {
+.settings-modal-close:hover {
   background: #f2f2f2;
   color: #191919;
+}
+
+/* The specialist form keeps the settings card's stacked rows, but inside a
+   modal the card itself is not a card — only the modal's own surface shows. */
+.settings-modal .settings-card.is-form {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* A field whose label carries a character counter, as the specialist form's
+   name and description do. */
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* A section title has to read before the sentence under it: the title carries
+   the weight and the heading colour, the hint steps back. */
+.settings-field-label {
+  color: #191919;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.settings-field-count {
+  color: #a6a6a6;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-field-hint {
+  color: #808080;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.settings-field-hint.is-error {
+  color: var(--danger);
+}
+
+/* Two short optional fields — the skill form's license and version. */
+.settings-field-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .settings-field-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The instructions box carries its counter inside the field, clear of the
+   native resize handle in the corner. */
+.settings-textarea-wrap {
+  position: relative;
+  display: block;
+}
+
+.settings-textarea-wrap .field-textarea {
+  display: block;
+  padding-bottom: 28px;
+}
+
+.settings-textarea-count {
+  position: absolute;
+  right: 18px;
+  bottom: 8px;
+  color: #a6a6a6;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* ── 能力: the options a specialist may call ─────────────────────────────── */
+
+.settings-ability {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-ability .settings-field-hint {
+  margin-top: -4px;
+}
+
+.settings-ability-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.settings-ability-option.is-selected {
+  border-color: var(--primary);
+  background: var(--primary-softer);
+}
+
+.settings-ability-option input[type="radio"] {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--primary);
+}
+
+.settings-ability-option-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-ability-option-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-ability-option-title {
+  color: #191919;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-ability-default {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.6;
+}
+
+.settings-ability-option-hint {
+  color: #808080;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.settings-ability-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #a6a6a6;
+  font-size: 12px;
+}
+
+.settings-ability-divider::before,
+.settings-ability-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.settings-ability-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-ability-tabs {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.settings-ability-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #777;
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+.settings-ability-tab:hover {
+  background: var(--surface-soft);
+  color: #191919;
+}
+
+.settings-ability-tab.is-active {
+  border-color: var(--border);
+  background: var(--surface-subtle);
+  color: #191919;
+}
+
+.settings-ability-tab-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  color: #777;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.settings-ability-tab.is-active .settings-ability-tab-count {
+  background: #e9e9e9;
+  color: #191919;
+}
+
+.settings-ability-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: #4d4d4d;
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+.settings-ability-add:hover {
+  border-color: #191919;
+  color: #191919;
+}
+
+.settings-ability-add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.settings-ability-empty {
+  margin: 0;
+  padding: 22px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  color: #a6a6a6;
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.settings-ability-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-ability-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.settings-ability-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-ability-remove {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  color: #a6a6a6;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.settings-ability-remove:hover {
+  background: var(--surface-soft);
+  color: #191919;
+}
+
+.settings-ability-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--surface-subtle);
+  color: #777;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.settings-ability-note-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #b3b3b3;
+  border-radius: 50%;
+  color: #8c8c8c;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* The picker is a settings modal nested in the specialist form. */
+.settings-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-picker .settings-ability-tab {
+  height: 32px;
+}
+
+.settings-picker .settings-card-actions {
+  justify-content: flex-end;
+}
+
+.settings-picker-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.settings-picker-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.settings-picker-option + .settings-picker-option {
+  border-top: 1px solid var(--border-soft);
+}
+
+.settings-picker-option:hover {
+  background: var(--surface-subtle);
+}
+
+.settings-picker-option input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 2px 0 0;
+  accent-color: var(--primary);
+}
+
+.settings-picker-option-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-picker-option-name {
+  color: #191919;
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+.settings-picker-option-detail {
+  color: #8c8c8c;
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.settings-picker-empty {
+  margin: 0;
+  padding: 28px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  color: #a6a6a6;
+  font-size: 12.5px;
+  text-align: center;
+}
+
+/* A picker nested inside a settings modal covers everything, including the
+   form that opened it. */
+.settings-modal .modal-scrim {
+  z-index: 90;
+  background: rgba(25, 25, 25, 0.18);
 }
 
 .modal-scrim {
@@ -3186,10 +3607,21 @@ body.is-resizing {
 .model-row-mark.tone-5 { background: #d09016; }
 .model-row-mark.tone-6 { background: #d4517d; }
 
+/* The identity of a row is also the control that opens it, so it is a button
+   that has to look like the text it replaces. */
 .model-row-main {
   flex: 1;
   min-width: 0;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
+
+.model-row-main:hover strong { color: var(--primary-strong); }
 
 .model-row-title {
   display: flex;
@@ -3234,6 +3666,233 @@ body.is-resizing {
   height: 14px;
   margin: 0 6px;
   background: #ececec;
+}
+
+/* An open row keeps its identity on the first line and takes the editor on a
+   line of its own, so the mark and the actions do not move when it opens. */
+.model-row.is-open {
+  flex-wrap: wrap;
+  border-color: var(--primary-border-soft);
+}
+
+.model-row-detail {
+  flex: 0 0 100%;
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.model-row-detail .field-input { max-width: 360px; }
+
+.model-row-detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.model-field {
+  display: grid;
+  gap: 5px;
+}
+
+.model-field > span {
+  color: var(--text-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* A row's delete can fail after its dialog has closed; the message stays on
+   the row it belongs to, on a line of its own. */
+.model-row-failure { flex: 0 0 100%; }
+
+/* The hint and the listing's age share the line under the field: the first
+   explains what the list is, the second when it was read. */
+.model-picker-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.model-picker-source { margin: 0 0 0 auto; }
+
+/* The model dropdown and its refresh share a line: refreshing only makes sense
+   next to the list it replaces, so it sits at the trigger's own baseline rather
+   than at the end of the action row. */
+.model-pick-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.list-select {
+  display: grid;
+  flex: 0 1 360px;
+  gap: 5px;
+  min-width: 0;
+}
+
+.list-select-caption {
+  color: var(--text-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* In a row whose title already names the field, as 界面语言 does. The trigger
+   takes the width its longest choice needs and no more, so it sits at the right
+   edge of the row instead of stretching the card. */
+.list-select.is-bare { flex: 0 0 200px; }
+
+.list-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e2e2e2;
+  border-radius: 8px;
+  background: #fff;
+  color: #191919;
+  font-size: 13px;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.list-select-trigger:hover:not(:disabled) { border-color: #c9c9c9; }
+
+.list-select-trigger.is-open,
+.list-select-trigger:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(20, 118, 255, 0.12);
+  outline: none;
+}
+
+.list-select-trigger:disabled {
+  background: #fafafa;
+  color: #a6a6a6;
+  cursor: default;
+}
+
+.list-select-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-select-chevron {
+  flex: 0 0 auto;
+  color: #8c8c8c;
+  transition: transform 0.15s ease;
+}
+
+.list-select-trigger.is-open .list-select-chevron { transform: rotate(180deg); }
+
+/* Portalled to the body: the settings pane scrolls, so a menu drawn inside it
+   would be cut off at the pane's edge. Above the settings surface (1200) and
+   the confirmation dialog (1300), below a toast (2000). */
+.list-select-menu {
+  position: fixed;
+  z-index: 1400;
+  max-height: 264px;
+  overflow-y: auto;
+  /* The list scrolls on its own; reaching its end should not start scrolling
+     the settings pane behind it. */
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid #ececec;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
+  outline: none;
+}
+
+.list-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  color: #2b2b2b;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.list-select-option.is-active { background: #f4f7fd; }
+
+.list-select-option.is-selected {
+  color: var(--primary-strong);
+  font-weight: 500;
+}
+
+.list-select-option.is-disabled {
+  color: #b3b3b3;
+  cursor: default;
+}
+
+.list-select-option.is-disabled.is-active { background: transparent; }
+
+.list-select-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-select-badge {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #f2f2f2;
+  color: #999;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.list-select-check {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+/* Reads the provider's list again. Neutral at rest — a blue label would claim
+   it is the row's primary action, which is 保存 — and only picks up the accent
+   under the pointer. */
+.model-refresh {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e2e2e2;
+  border-radius: 8px;
+  background: #fff;
+  color: #6b6b6b;
+  font-size: 12.5px;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.model-refresh:hover:not(:disabled) {
+  border-color: var(--primary-border-soft);
+  background: #f7f9ff;
+  color: var(--primary-strong);
+}
+
+.model-refresh:disabled {
+  background: #fafafa;
+  color: #a6a6a6;
+  cursor: progress;
+}
+
+.model-refresh .spinner {
+  width: 12px;
+  height: 12px;
+  border-color: #e0e0e0;
+  border-top-color: #8c8c8c;
 }
 
 .link-button {

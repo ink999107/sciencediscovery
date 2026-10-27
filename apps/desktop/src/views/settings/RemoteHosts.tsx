@@ -947,9 +947,11 @@ function CredentialsForm({
  *
  * This is the whole permission, not a default: the API refuses a run whose
  * runner is not in this list, and an empty list forbids everything including
- * the local machine. Only usable machines are offered, because the only thing a
- * checkbox for an unusable one could produce is a run that fails at the last
- * step; that machine stays in the list above, where the reason is stated.
+ * the local machine. Only usable remote machines are offered, because the only
+ * thing a checkbox for an unusable one could produce is a run that fails at the
+ * last step; that machine stays in the list above, where the reason is stated.
+ * The local Runner has no checkbox for the same reason it has no card: it is
+ * always there, and this page manages machines other than this one.
  *
  * The list on screen comes back from the server on every toggle rather than
  * being updated in place — the page re-reads, which is how the box the API
@@ -999,14 +1001,9 @@ export function ProjectRunnerAllowlist({
                 type="checkbox"
               />
               <span>
-                {host.id === "local" ? TEXT.settings.runtime.runner.local : host.runnerName ?? host.alias}
+                {host.runnerName ?? host.alias}
                 <small>
-                  {[
-                    hostKindLabel(host),
-                    host.id === "local"
-                      ? TEXT.settings.runtime.runner.localHelp
-                      : hostDestination(host) ?? TEXT.settings.runtime.runner.destinationUnknown,
-                  ].join(" · ")}
+                  {[hostKindLabel(host), hostDestination(host) ?? TEXT.settings.runtime.runner.destinationUnknown].join(" · ")}
                 </small>
               </span>
             </label>

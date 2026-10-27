@@ -34,9 +34,7 @@ interface Props {
 }
 
 interface RuntimePage {
-  /** Every Runner, the local one included: the allowlist can toggle it. */
-  runners: RunnerTarget[];
-  /** The same catalog without the local entry, which is what the cards show. */
+  /** The Runner catalog without the local entry, which is all this page shows. */
   remote: RunnerTarget[];
 }
 
@@ -59,11 +57,10 @@ interface RuntimePage {
 export function RuntimeSettings({ client, onConfirm, project }: Props) {
   const loaded = useLoaded<RuntimePage>(async () => {
     const runners = await listRunners(client);
-    // The cards leave the local entry out: it always exists, needs no
-    // registration, and nothing on this page can act on it. The allowlist still
-    // receives it — the local machine is a valid answer to "may this Project
-    // run here", and the list is explicit rather than a set of defaults.
-    return { remote: remoteHosts(runners), runners };
+    // The local entry is left out once, here: it always exists, needs no
+    // registration, and nothing on this page — cards or allowlist — can act on
+    // it. A stored allowlist that still names it keeps doing so.
+    return { remote: remoteHosts(runners) };
   });
 
   return (
@@ -78,7 +75,7 @@ export function RuntimeSettings({ client, onConfirm, project }: Props) {
       <LoadGate loaded={loaded}>
         {(page) =>
           project ? (
-            <ProjectRunnerAllowlist client={client} hosts={page.runners} onReload={loaded.reload} project={project} />
+            <ProjectRunnerAllowlist client={client} hosts={page.remote} onReload={loaded.reload} project={project} />
           ) : null
         }
       </LoadGate>

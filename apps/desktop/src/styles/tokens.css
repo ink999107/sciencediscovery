@@ -86,7 +86,10 @@
 
   --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
   --font-display: "Inter", "PingFang SC", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  /* Named families before `ui-monospace`: on Linux that keyword can resolve
+     to a Courier-style serif face, which is what these glyphs looked like
+     before the stack named a real sans monospace. */
+  --font-mono: "JetBrains Mono", "Source Code Pro", "SFMono-Regular", Menlo, "Cascadia Mono", Consolas, "Noto Sans Mono", "DejaVu Sans Mono", ui-monospace, monospace;
 }
 
 *, *::before, *::after { box-sizing: border-box; }

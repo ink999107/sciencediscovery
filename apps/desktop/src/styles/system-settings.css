@@ -33,13 +33,23 @@
   width: auto;
   height: auto;
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr);
+  /* The same 296px the session sidebar takes, so the two surfaces put their
+     directory's right edge on one line instead of a few pixels apart. */
+  grid-template-columns: 296px minmax(0, 1fr);
   border: 0;
   border-radius: 0;
   background: #fff;
   box-shadow: none;
   overflow: hidden;
 }
+
+/* Folded away, not squeezed: a zero-width column keeps its border and its
+   content on screen, and the pane would reflow around it mid-animation. */
+.config-panel.is-nav-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.config-panel.is-nav-collapsed .settings-group-nav { display: none; }
 
 /* ── directory ──────────────────────────────────────────────────────────── */
 
@@ -67,20 +77,6 @@
   font-weight: 600;
   letter-spacing: -.01em;
 }
-
-.settings-nav-close {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: #777;
-  cursor: pointer;
-}
-
-.settings-nav-close:hover { background: #e8e8e8; color: #191919; }
 
 .settings-nav-scroll {
   flex: 1;
@@ -178,11 +174,22 @@
 /* ── pane ───────────────────────────────────────────────────────────────── */
 
 .settings-main {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   background: #fff;
+}
+
+/* The control that brings the directory back, at the pane's top-left and level
+   with the title: outside the scrolling detail so a long page cannot carry it
+   away, and clear of the title's 48px margin. */
+.settings-main-fold {
+  position: absolute;
+  top: 44px;
+  left: 14px;
+  z-index: 1;
 }
 
 .settings-group-detail {
@@ -217,15 +224,6 @@
   color: #808080;
   font-size: 14px;
   line-height: 1.5;
-}
-
-.system-config-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 14px max(48px, calc((100% - 1120px) / 2));
-  border-top: 1px solid #ececec;
-  background: #fff;
 }
 
 /* Shared form pieces: a pane is a stack of cards on white, as in the handoff's
@@ -379,45 +377,6 @@
 
 .field-input.is-number { width: 120px; }
 
-/* A segmented switch between two views of one pane (自定义 vs 内置 MCP). */
-.settings-tabs {
-  width: fit-content;
-  display: flex;
-  gap: 2px;
-  margin-bottom: 14px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-subtle);
-}
-
-.settings-tabs button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: var(--text-faint);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.settings-tabs button[aria-selected="true"] {
-  background: var(--surface);
-  color: var(--text-strong);
-  font-weight: 600;
-  box-shadow: var(--shadow-1);
-}
-
-.settings-tabs button > span {
-  color: var(--text-faint);
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-}
-
 .mcp-secret-fields {
   display: grid;
   gap: 6px;
@@ -438,48 +397,15 @@
 .mcp-secret-row .field-input { flex: 1; min-width: 0; }
 .mcp-secret-fields > .secondary-button { justify-self: start; }
 
-.settings-builtin {
-  padding: 11px 13px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
-  background: var(--surface);
-}
-
-.settings-builtin > summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.settings-builtin > summary::-webkit-details-marker { display: none; }
-
-.settings-builtin > summary::after {
-  content: "▸";
-  margin-left: auto;
-  color: var(--text-faint);
-  font-size: 10px;
-}
-
-.settings-builtin[open] > summary::after { content: "▾"; }
-
-.settings-builtin > summary strong {
-  color: var(--text-strong);
-  font-size: 13px;
-}
-
-.settings-builtin .settings-note { margin: 8px 0 0; }
-
+/* The tool list a built-in card expands to. It lives inside the card's main
+   button, so every part is phrasing content. */
 .settings-builtin-tools {
   display: grid;
   gap: 5px;
-  margin: 9px 0 0;
-  padding: 0;
-  list-style: none;
+  margin: 0;
 }
 
-.settings-builtin-tools li {
+.settings-builtin-tools > span {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -548,5 +474,4 @@
   }
 
   .settings-group-detail { padding: 28px 24px 40px; }
-  .system-config-footer { padding: 14px 24px; }
 }

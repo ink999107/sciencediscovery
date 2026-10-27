@@ -17,8 +17,10 @@ import { useEffect, useState } from "react";
 import type { ApiClient } from "../../../api/client.js";
 import {
   deleteMcpServer,
+  getGlobalSettings,
   listMcpServers,
   listMcpSources,
+  putGlobalSettings,
   saveMcpServer,
   testMcpServer,
 } from "../../../api/settings.js";
@@ -26,16 +28,30 @@ import type {
   CustomMcpServerDetails,
   CustomMcpServerInput,
   McpSource,
+  RuntimeSettingsOverrides,
 } from "../../../api/types.js";
 import type { ConfirmRequest } from "../../../app/use-workspace.js";
 import { useLoaded } from "../../../app/use-loaded.js";
 import { TEXT } from "../../../text.js";
-import { Group, LoadGate, Row, Select, Tag } from "../rows.js";
+import { SettingsModal } from "../SettingsModal.js";
+import { Group, LoadGate, Row, Select, Switch, Tag } from "../rows.js";
 
 interface Props {
+  /** Owned by the settings surface, where the 新增服务器 button lives. */
+  adding: boolean;
   client: ApiClient;
+  onAddingChange: (next: boolean) => void;
   onConfirm: (request: ConfirmRequest) => void;
   onToast: (message: string) => void;
+}
+
+interface Page {
+  /** The product's own servers; read-only here, tools come from the catalog. */
+  builtins: McpSource[];
+  /** Effective plugin switches, which decide whether a built-in server is on. */
+  plugins: Record<string, { enabled?: boolean }>;
+  overrides: RuntimeSettingsOverrides;
+  servers: CustomMcpServerDetails[];
 }
 
 /** One secret slot. A saved key keeps `originalKey` and an empty value, which
@@ -197,23 +213,57 @@ function catalogTone(status: string): string {
   return "warn";
 }
 
+function initialOf(name: string): string {
+  return name.slice(0, 1).toUpperCase();
+}
+
 /**
  * MCP 服务器: the custom servers registered on this machine and the built-in
- * catalog the product ships with.
+ * catalog the product ships with, in the same card list 专家 and 技能 use.
  *
  * A server is written whole, so enabling one resends the record with `enabled`
  * flipped. Secrets are write-only: saved slots come back as keys with null
  * values, and this form sends them back untouched unless a value is typed.
+ *
+ * Creating and editing share one modal, as 添加模型 does: the list stays in
+ * place behind the scrim, and a built-in entry expands in place because it has
+ * nothing to edit.
  */
-export function McpServers({ client, onConfirm, onToast }: Props) {
-  const loaded = useLoaded<CustomMcpServerDetails[]>(async () => listMcpServers(client));
-  const sources = useLoaded<McpSource[]>(async () => listMcpSources(client));
-  const [tab, setTab] = useState<"custom" | "builtin">("custom");
+export function McpServers({ adding, client, onAddingChange, onConfirm, onToast }: Props) {
+  const loaded = useLoaded<Page>(async () => {
+    const [servers, sources, settings] = await Promise.all([
+      listMcpServers(client),
+      listMcpSources(client),
+      getGlobalSettings(client),
+    ]);
+    const effective = settings.effective as
+      | { plugins?: Record<string, { enabled?: boolean }> }
+      | undefined;
+    return {
+      builtins: sources.filter((source) => !source.manifest.id.startsWith("custom-")),
+      overrides: settings.overrides,
+      plugins: effective?.plugins ?? {},
+      servers,
+    };
+  });
   const [draft, setDraft] = useState<Draft>();
+  const [openId, setOpenId] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string>();
 
-  useEffect(() => setFailure(undefined), [draft]);
+  useEffect(() => setFailure(undefined), [adding, draft]);
+
+  // 新增服务器 lives on the page header, so its empty draft is derived from
+  // `adding` rather than stored twice.
+  const current = draft ?? (adding ? emptyDraft() : undefined);
+  const editing = current?.id !== undefined;
+  const change = (patch: Partial<Draft>) =>
+    setDraft((previous) => ({ ...(previous ?? emptyDraft()), ...patch }));
+
+  const closeForm = () => {
+    setDraft(undefined);
+    onAddingChange(false);
+  };
 
   const write = async (server: CustomMcpServerDetails, body: CustomMcpServerInput) => {
     setBusy(true);
@@ -229,9 +279,35 @@ export function McpServers({ client, onConfirm, onToast }: Props) {
     }
   };
 
+  /** Built-in servers have no record of their own: their switch is the plugin
+   *  override, which starts on because the runtime only hides an explicit
+   *  `enabled: false`. The global layer is where the catalog lives. */
+  const toggleSource = async (source: McpSource, next: boolean) => {
+    const key = `connector.${source.manifest.id}`;
+    const overrides = loaded.value?.overrides ?? {};
+    setBusy(true);
+    setFailure(undefined);
+    try {
+      await putGlobalSettings(client, {
+        ...overrides,
+        plugins: {
+          ...overrides.plugins,
+          [key]: { ...(overrides.plugins?.[key] ?? {}), enabled: next },
+        },
+      });
+      loaded.reload();
+    } catch (reason) {
+      setFailure(reason instanceof Error ? reason.message : TEXT.settings.saveFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async () => {
-    if (!draft || draft.name.trim() === "") return;
-    const problem = draft.transport === "stdio" ? secretProblem(draft.envRows) : secretProblem(draft.headerRows);
+    if (!current || current.name.trim() === "") return;
+    const problem = current.transport === "stdio"
+      ? secretProblem(current.envRows)
+      : secretProblem(current.headerRows);
     if (problem !== undefined) {
       setFailure(problem);
       return;
@@ -239,8 +315,8 @@ export function McpServers({ client, onConfirm, onToast }: Props) {
     setBusy(true);
     setFailure(undefined);
     try {
-      await saveMcpServer(client, inputOf(draft), draft.id);
-      setDraft(undefined);
+      await saveMcpServer(client, inputOf(current), current.id);
+      closeForm();
       loaded.reload();
       onToast(TEXT.settings.system.mcp.saved);
     } catch (reason) {
@@ -250,338 +326,342 @@ export function McpServers({ client, onConfirm, onToast }: Props) {
     }
   };
 
-  const builtins = (sources.value ?? []).filter((source) => !source.manifest.id.startsWith("custom-"));
-  const change = (patch: Partial<Draft>) => setDraft((current) => current ? { ...current, ...patch } : current);
-
   return (
     <>
-      <div aria-label={TEXT.settings.system.mcp.heading} className="settings-tabs" role="tablist">
-        <button
-          aria-selected={tab === "custom"}
-          onClick={() => setTab("custom")}
-          role="tab"
-          type="button"
-        >
-          {TEXT.settings.system.mcp.custom} <span>{loaded.value?.length ?? 0}</span>
-        </button>
-        <button
-          aria-selected={tab === "builtin"}
-          onClick={() => setTab("builtin")}
-          role="tab"
-          type="button"
-        >
-          {TEXT.settings.system.mcp.builtin} <span>{builtins.length}</span>
-        </button>
-      </div>
+      <p className="settings-note">{TEXT.settings.system.mcp.help}</p>
 
-      {tab === "custom" ? (
-        <>
+      <LoadGate loaded={loaded}>
+        {(page) => (
           <Group>
-            <LoadGate loaded={loaded}>
-              {(servers) => (
-                <>
-                  {servers.length === 0 ? (
-                    <p className="settings-empty">{TEXT.settings.system.mcp.empty}</p>
-                  ) : (
-                    <div className="settings-list">
-                      {servers.map((server) => (
-                        <div className="settings-card" key={server.id}>
-                          <span className="settings-card-mark">{server.name.slice(0, 1).toUpperCase()}</span>
-                          <div className="settings-card-main">
-                            <strong>
-                              {server.name}
-                              <Tag tone={STATUS_TONE[server.status]}>{statusLabel(server.status)}</Tag>
-                              <Tag tone="off">{TEXT.settings.system.mcp.toolCount(server.tools.length)}</Tag>
-                            </strong>
-                            <small>
-                              {server.transport} · {server.transport === "stdio" ? server.command : server.url}
-                              {server.error ? ` · ${server.error}` : ""}
-                            </small>
-                          </div>
-                          <div className="settings-card-actions">
-                            <button
-                              className="link-button"
-                              disabled={busy}
-                              onClick={() => void write(server, { ...inputOf(draftOf(server)), enabled: !server.enabled })}
-                              type="button"
-                            >
-                              {server.enabled ? TEXT.settings.system.mcp.disable : TEXT.settings.system.mcp.enable}
-                            </button>
-                            <button
-                              className="link-button"
-                              disabled={busy}
-                              onClick={() => {
-                                setBusy(true);
-                                void testMcpServer(client, server.id)
-                                  .then((next) => {
-                                    loaded.reload();
-                                    onToast(next.error ?? TEXT.settings.system.mcp.tested(next.status));
-                                  })
-                                  .catch((reason: unknown) => {
-                                    setFailure(reason instanceof Error ? reason.message : TEXT.errors.generic);
-                                  })
-                                  .finally(() => setBusy(false));
-                              }}
-                              type="button"
-                            >
-                              {TEXT.settings.system.mcp.test}
-                            </button>
-                            <button
-                              className="link-button"
-                              disabled={busy}
-                              onClick={() => setDraft(draftOf(server))}
-                              type="button"
-                            >
-                              {TEXT.settings.edit}
-                            </button>
-                            <button
-                              className="link-button is-danger"
-                              disabled={busy}
-                              onClick={() => onConfirm({
-                                accept: TEXT.menu.delete,
-                                body: TEXT.settings.system.mcp.deleteBody(server.name),
-                                eyebrow: TEXT.settings.system.mcp.heading,
-                                onAccept: () => {
-                                  void deleteMcpServer(client, server.id)
-                                    .then(() => loaded.reload())
-                                    .catch((reason: unknown) => {
-                                      setFailure(reason instanceof Error ? reason.message : TEXT.errors.generic);
-                                    });
-                                },
-                                title: TEXT.settings.system.mcp.deleteTitle(server.name),
-                              })}
-                              type="button"
-                            >
-                              {TEXT.menu.delete}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+            {page.servers.length === 0 && page.builtins.length === 0 ? (
+              <p className="settings-empty">{TEXT.settings.system.mcp.empty}</p>
+            ) : (
+              <div className="settings-list">
+                {page.servers.map((server) => (
+                  <div className="settings-card" key={server.id}>
+                    <span className="settings-card-mark">{initialOf(server.name)}</span>
+                    <div className="settings-card-main">
+                      <strong>
+                        {server.name}
+                        <Tag tone={STATUS_TONE[server.status]}>{statusLabel(server.status)}</Tag>
+                        <Tag tone="off">{TEXT.settings.system.mcp.toolCount(server.tools.length)}</Tag>
+                      </strong>
+                      {server.description ? <small>{server.description}</small> : null}
+                      <small className={server.description ? "settings-detail-meta" : undefined}>
+                        {server.transport} · {server.transport === "stdio" ? server.command : server.url}
+                        {server.error ? ` · ${server.error}` : ""}
+                      </small>
                     </div>
-                  )}
+                    <div className="settings-card-actions">
+                      <button
+                        className="link-button"
+                        disabled={busy}
+                        onClick={() => {
+                          setBusy(true);
+                          void testMcpServer(client, server.id)
+                            .then((next) => {
+                              loaded.reload();
+                              onToast(next.error ?? TEXT.settings.system.mcp.tested(next.status));
+                            })
+                            .catch((reason: unknown) => {
+                              setFailure(reason instanceof Error ? reason.message : TEXT.errors.generic);
+                            })
+                            .finally(() => setBusy(false));
+                        }}
+                        type="button"
+                      >
+                        {TEXT.settings.system.mcp.test}
+                      </button>
+                      <button
+                        className="link-button"
+                        disabled={busy}
+                        onClick={() => setDraft(draftOf(server))}
+                        type="button"
+                      >
+                        {TEXT.settings.edit}
+                      </button>
+                      <button
+                        className="link-button is-danger"
+                        disabled={busy}
+                        onClick={() => onConfirm({
+                          accept: TEXT.menu.delete,
+                          body: TEXT.settings.system.mcp.deleteBody(server.name),
+                          eyebrow: TEXT.settings.system.mcp.heading,
+                          onAccept: () => {
+                            void deleteMcpServer(client, server.id)
+                              .then(() => loaded.reload())
+                              .catch((reason: unknown) => {
+                                setFailure(reason instanceof Error ? reason.message : TEXT.errors.generic);
+                              });
+                          },
+                          title: TEXT.settings.system.mcp.deleteTitle(server.name),
+                        })}
+                        type="button"
+                      >
+                        {TEXT.menu.delete}
+                      </button>
+                      <Switch
+                        disabled={busy}
+                        label={`${server.name} · ${TEXT.settings.system.mcp.enable}`}
+                        onChange={(next) => void write(server, {
+                          ...inputOf(draftOf(server)),
+                          enabled: next,
+                        })}
+                        value={server.enabled}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                {page.builtins.map((source) => {
+                  const open = openId === source.manifest.id;
+                  const on = page.plugins[`connector.${source.manifest.id}`]?.enabled !== false;
+                  const tools = Object.values(source.manifest.tools ?? {});
+                  const meta = [
+                    source.manifest.publisher,
+                    source.manifest.version ? `v${source.manifest.version}` : undefined,
+                  ].filter((part) => part !== undefined && part !== "").join(" · ");
+                  return (
+                    <div
+                      className={`settings-card is-expandable${open ? " is-open" : ""}${on ? "" : " is-off"}`}
+                      key={source.manifest.id}
+                    >
+                      <span className="settings-card-mark">
+                        {initialOf(source.manifest.displayName || source.manifest.id)}
+                      </span>
+                      <button
+                        className="settings-card-main"
+                        onClick={() => setOpenId(open ? undefined : source.manifest.id)}
+                        type="button"
+                      >
+                        <strong>
+                          {source.manifest.displayName || source.manifest.id}
+                          <Tag tone="off">{TEXT.settings.system.mcp.builtin}</Tag>
+                          {on ? (
+                            <Tag tone={catalogTone(source.status.status)}>
+                              {statusLabel(source.status.status)}
+                            </Tag>
+                          ) : (
+                            <Tag tone="off">{TEXT.settings.system.mcp.statusDisabled}</Tag>
+                          )}
+                          <Tag tone="off">{TEXT.settings.system.mcp.toolCount(tools.length)}</Tag>
+                        </strong>
+                        <small>{source.manifest.description || source.manifest.id}</small>
+                        {open ? (
+                          <span className="settings-detail">
+                            {tools.length === 0 ? null : (
+                              <span className="settings-builtin-tools">
+                                {tools.map((tool) => (
+                                  <span key={tool.id}>
+                                    <code>{tool.id}</code>
+                                    {tool.description ? <small>{tool.description}</small> : null}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
+                            {meta === "" ? null : (
+                              <small className="settings-detail-meta">{meta}</small>
+                            )}
+                          </span>
+                        ) : null}
+                      </button>
+                      <div className="settings-card-actions">
+                        <Switch
+                          disabled={busy}
+                          label={`${source.manifest.displayName || source.manifest.id} · ${TEXT.settings.system.mcp.enable}`}
+                          onChange={(next) => void toggleSource(source, next)}
+                          value={on}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Group>
+        )}
+      </LoadGate>
+
+      {current ? (
+        <SettingsModal
+          label={editing
+            ? TEXT.settings.system.mcp.editTitle
+            : TEXT.settings.system.mcp.add}
+          onClose={closeForm}
+          wide
+        >
+          <section className="settings-card is-form">
+            <div className="settings-card-form">
+              <Row title={TEXT.settings.system.mcp.enable}>
+                <label className="settings-check">
+                  <input
+                    checked={current.enabled}
+                    onChange={(event) => change({ enabled: event.target.checked })}
+                    type="checkbox"
+                  />
+                  <span>{TEXT.settings.system.mcp.enabled}</span>
+                </label>
+              </Row>
+              <Row title={TEXT.settings.system.mcp.name}>
+                <input
+                  className="field-input"
+                  onChange={(event) => change({ name: event.target.value })}
+                  value={current.name}
+                />
+              </Row>
+              <Row title={TEXT.settings.system.mcp.description}>
+                <input
+                  className="field-input"
+                  onChange={(event) => change({ description: event.target.value })}
+                  value={current.description}
+                />
+              </Row>
+              <Row title={TEXT.settings.system.mcp.transport}>
+                <Select
+                  label={TEXT.settings.system.mcp.transport}
+                  onChange={(value) => change({ transport: value as Draft["transport"] })}
+                  options={[
+                    { label: "Streamable HTTP", value: "http" },
+                    { label: "SSE", value: "sse" },
+                    { label: "STDIO", value: "stdio" },
+                  ]}
+                  value={current.transport}
+                />
+              </Row>
+              {current.transport === "stdio" ? (
+                <>
+                  <Row title={TEXT.settings.system.mcp.command}>
+                    <input
+                      className="field-input"
+                      onChange={(event) => change({ command: event.target.value })}
+                      value={current.command}
+                    />
+                  </Row>
+                  <Row hint={TEXT.settings.system.mcp.argsHint} title={TEXT.settings.system.mcp.args}>
+                    <input
+                      className="field-input"
+                      onChange={(event) => change({ args: event.target.value })}
+                      value={current.args}
+                    />
+                  </Row>
+                  <Row hint={TEXT.settings.system.mcp.optional} title={TEXT.settings.system.mcp.cwd}>
+                    <input
+                      className="field-input"
+                      onChange={(event) => change({ cwd: event.target.value })}
+                      value={current.cwd}
+                    />
+                  </Row>
+                  <SecretFields
+                    label={TEXT.settings.system.mcp.env}
+                    onChange={(envRows) => change({ envRows })}
+                    rows={current.envRows}
+                  />
+                </>
+              ) : (
+                <>
+                  <Row title={TEXT.settings.system.mcp.url}>
+                    <input
+                      className="field-input"
+                      onChange={(event) => change({ url: event.target.value })}
+                      value={current.url}
+                    />
+                  </Row>
+                  <Row title={TEXT.settings.system.mcp.authMode}>
+                    <Select
+                      label={TEXT.settings.system.mcp.authMode}
+                      onChange={(value) => change({ authMode: value as Draft["authMode"] })}
+                      options={[
+                        { label: TEXT.settings.system.mcp.authHeaders, value: "headers" },
+                        { label: TEXT.settings.system.mcp.authOauth, value: "oauth" },
+                      ]}
+                      value={current.authMode}
+                    />
+                  </Row>
+                  {current.authMode === "oauth" ? (
+                    <>
+                      <Row hint={TEXT.settings.system.mcp.optional} title={TEXT.settings.system.mcp.clientId}>
+                        <input
+                          className="field-input"
+                          onChange={(event) => change({
+                            oauth: { ...current.oauth, clientId: event.target.value },
+                          })}
+                          value={current.oauth.clientId}
+                        />
+                      </Row>
+                      <Row
+                        hint={current.savedOauthSecret
+                          ? TEXT.settings.system.mcp.secretSaved
+                          : TEXT.settings.system.mcp.optional}
+                        title={TEXT.settings.system.mcp.clientSecret}
+                      >
+                        <input
+                          autoComplete="off"
+                          className="field-input"
+                          onChange={(event) => change({
+                            oauth: { ...current.oauth, clientSecret: event.target.value },
+                          })}
+                          type="password"
+                          value={current.oauth.clientSecret}
+                        />
+                      </Row>
+                      <Row hint={TEXT.settings.system.mcp.optional} title={TEXT.settings.system.mcp.scope}>
+                        <input
+                          className="field-input"
+                          onChange={(event) => change({
+                            oauth: { ...current.oauth, scope: event.target.value },
+                          })}
+                          value={current.oauth.scope}
+                        />
+                      </Row>
+                      <Row hint={TEXT.settings.system.mcp.optional} title={TEXT.settings.system.mcp.metadataUrl}>
+                        <input
+                          className="field-input"
+                          onChange={(event) => change({
+                            oauth: { ...current.oauth, clientMetadataUrl: event.target.value },
+                          })}
+                          value={current.oauth.clientMetadataUrl}
+                        />
+                      </Row>
+                      <Row title={TEXT.settings.system.mcp.callback}>
+                        <input
+                          className="field-input"
+                          readOnly
+                          value={`${window.location.origin}/api/mcp/oauth/callback`}
+                        />
+                      </Row>
+                    </>
+                  ) : null}
+                  <SecretFields
+                    label={TEXT.settings.system.mcp.headers}
+                    onChange={(headerRows) => change({ headerRows })}
+                    rows={current.headerRows}
+                  />
                 </>
               )}
-            </LoadGate>
-            <div className="settings-actions">
-              <button className="secondary-button" onClick={() => setDraft(emptyDraft())} type="button">
-                {TEXT.settings.system.mcp.add}
-              </button>
-            </div>
-          </Group>
-
-          {draft ? (
-            <section className="settings-card is-form">
-              <div className="settings-card-form">
-                <Row title={TEXT.settings.system.mcp.enable}>
-                  <label className="settings-check">
-                    <input
-                      checked={draft.enabled}
-                      onChange={(event) => change({ enabled: event.target.checked })}
-                      type="checkbox"
-                    />
-                    <span>{TEXT.settings.system.mcp.enabled}</span>
-                  </label>
-                </Row>
-                <Row title={TEXT.settings.system.mcp.name}>
-                  <input
-                    className="field-input"
-                    onChange={(event) => change({ name: event.target.value })}
-                    value={draft.name}
-                  />
-                </Row>
-                <Row title={TEXT.settings.system.mcp.description}>
-                  <input
-                    className="field-input"
-                    onChange={(event) => change({ description: event.target.value })}
-                    value={draft.description}
-                  />
-                </Row>
-                <Row title={TEXT.settings.system.mcp.transport}>
-                  <Select
-                    label={TEXT.settings.system.mcp.transport}
-                    onChange={(value) => change({ transport: value as Draft["transport"] })}
-                    options={[
-                      { label: "Streamable HTTP", value: "http" },
-                      { label: "SSE", value: "sse" },
-                      { label: "STDIO", value: "stdio" },
-                    ]}
-                    value={draft.transport}
-                  />
-                </Row>
-                {draft.transport === "stdio" ? (
-                  <>
-                    <Row title={TEXT.settings.system.mcp.command}>
-                      <input
-                        className="field-input"
-                        onChange={(event) => change({ command: event.target.value })}
-                        value={draft.command}
-                      />
-                    </Row>
-                    <Row hint={TEXT.settings.system.mcp.argsHint} title={TEXT.settings.system.mcp.args}>
-                      <input
-                        className="field-input"
-                        onChange={(event) => change({ args: event.target.value })}
-                        value={draft.args}
-                      />
-                    </Row>
-                    <Row hint={TEXT.settings.system.mcp.optional} title={TEXT.settings.system.mcp.cwd}>
-                      <input
-                        className="field-input"
-                        onChange={(event) => change({ cwd: event.target.value })}
-                        value={draft.cwd}
-                      />
-                    </Row>
-                    <SecretFields
-                      label={TEXT.settings.system.mcp.env}
-                      onChange={(envRows) => change({ envRows })}
-                      rows={draft.envRows}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <Row title={TEXT.settings.system.mcp.url}>
-                      <input
-                        className="field-input"
-                        onChange={(event) => change({ url: event.target.value })}
-                        value={draft.url}
-                      />
-                    </Row>
-                    <Row title={TEXT.settings.system.mcp.authMode}>
-                      <Select
-                        label={TEXT.settings.system.mcp.authMode}
-                        onChange={(value) => change({ authMode: value as Draft["authMode"] })}
-                        options={[
-                          { label: TEXT.settings.system.mcp.authHeaders, value: "headers" },
-                          { label: TEXT.settings.system.mcp.authOauth, value: "oauth" },
-                        ]}
-                        value={draft.authMode}
-                      />
-                    </Row>
-                    {draft.authMode === "oauth" ? (
-                      <>
-                        <Row hint={TEXT.settings.system.mcp.optional} title={TEXT.settings.system.mcp.clientId}>
-                          <input
-                            className="field-input"
-                            onChange={(event) => change({
-                              oauth: { ...draft.oauth, clientId: event.target.value },
-                            })}
-                            value={draft.oauth.clientId}
-                          />
-                        </Row>
-                        <Row
-                          hint={draft.savedOauthSecret
-                            ? TEXT.settings.system.mcp.secretSaved
-                            : TEXT.settings.system.mcp.optional}
-                          title={TEXT.settings.system.mcp.clientSecret}
-                        >
-                          <input
-                            autoComplete="off"
-                            className="field-input"
-                            onChange={(event) => change({
-                              oauth: { ...draft.oauth, clientSecret: event.target.value },
-                            })}
-                            type="password"
-                            value={draft.oauth.clientSecret}
-                          />
-                        </Row>
-                        <Row hint={TEXT.settings.system.mcp.optional} title={TEXT.settings.system.mcp.scope}>
-                          <input
-                            className="field-input"
-                            onChange={(event) => change({
-                              oauth: { ...draft.oauth, scope: event.target.value },
-                            })}
-                            value={draft.oauth.scope}
-                          />
-                        </Row>
-                        <Row hint={TEXT.settings.system.mcp.optional} title={TEXT.settings.system.mcp.metadataUrl}>
-                          <input
-                            className="field-input"
-                            onChange={(event) => change({
-                              oauth: { ...draft.oauth, clientMetadataUrl: event.target.value },
-                            })}
-                            value={draft.oauth.clientMetadataUrl}
-                          />
-                        </Row>
-                        <Row title={TEXT.settings.system.mcp.callback}>
-                          <input
-                            className="field-input"
-                            readOnly
-                            value={`${window.location.origin}/api/mcp/oauth/callback`}
-                          />
-                        </Row>
-                      </>
-                    ) : null}
-                    <SecretFields
-                      label={TEXT.settings.system.mcp.headers}
-                      onChange={(headerRows) => change({ headerRows })}
-                      rows={draft.headerRows}
-                    />
-                  </>
-                )}
-                <Row title={TEXT.settings.system.mcp.timeout}>
-                  <input
-                    className="field-input is-number"
-                    min="1"
-                    onChange={(event) => change({ timeoutSeconds: event.target.value })}
-                    type="number"
-                    value={draft.timeoutSeconds}
-                  />
-                </Row>
-                <div className="settings-card-actions">
-                  <button className="secondary-button" onClick={() => setDraft(undefined)} type="button">
-                    {TEXT.settings.cancel}
-                  </button>
-                  <button className="primary-button" disabled={busy} onClick={() => void submit()} type="button">
-                    {TEXT.settings.system.save}
-                  </button>
-                </div>
+              <Row title={TEXT.settings.system.mcp.timeout}>
+                <input
+                  className="field-input is-number"
+                  min="1"
+                  onChange={(event) => change({ timeoutSeconds: event.target.value })}
+                  type="number"
+                  value={current.timeoutSeconds}
+                />
+              </Row>
+              {failure ? <small className="row-note is-error">{failure}</small> : null}
+              <div className="settings-card-actions">
+                <button className="secondary-button" onClick={closeForm} type="button">
+                  {TEXT.settings.cancel}
+                </button>
+                <button className="primary-button" disabled={busy} onClick={() => void submit()} type="button">
+                  {TEXT.settings.system.save}
+                </button>
               </div>
-            </section>
-          ) : null}
-        </>
-      ) : (
-        <Group heading={TEXT.settings.system.mcp.builtinHeading}>
-          <p className="settings-note">{TEXT.settings.system.mcp.builtinHint}</p>
-          <LoadGate loaded={sources}>
-            {(list) => {
-              const sourcesOnly = list.filter((source) => !source.manifest.id.startsWith("custom-"));
-              return sourcesOnly.length === 0 ? (
-                <p className="settings-empty">{TEXT.settings.system.mcp.builtinEmpty}</p>
-              ) : (
-                <div className="settings-list">
-                  {sourcesOnly.map((source) => {
-                    const tools = Object.values(source.manifest.tools ?? {});
-                    return (
-                      <details className="settings-builtin" key={source.manifest.id}>
-                        <summary>
-                          <strong>{source.manifest.displayName ?? source.manifest.id}</strong>
-                          <Tag tone="off">{TEXT.settings.system.mcp.toolCount(tools.length)}</Tag>
-                          <Tag tone={catalogTone(source.status.status)}>
-                            {statusLabel(source.status.status)}
-                          </Tag>
-                        </summary>
-                        {source.manifest.description ? (
-                          <p className="settings-note">{source.manifest.description}</p>
-                        ) : null}
-                        <ul className="settings-builtin-tools">
-                          {tools.map((tool) => (
-                            <li key={tool.id}>
-                              <code>{tool.id}</code>
-                              {tool.description ? <small>{tool.description}</small> : null}
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    );
-                  })}
-                </div>
-              );
-            }}
-          </LoadGate>
-        </Group>
-      )}
+            </div>
+          </section>
+        </SettingsModal>
+      ) : null}
 
-      {failure ? <small className="row-note is-error">{failure}</small> : null}
+      {failure && current === undefined ? <small className="row-note is-error">{failure}</small> : null}
     </>
   );
 }
