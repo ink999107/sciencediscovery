@@ -14,9 +14,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { ApprovalMode, ModelProfile, ModelProvider, Project } from "../api/types.js";
+import type { ApiClient } from "../api/client.js";
+import { listSpecialists } from "../api/settings.js";
+import type { ApprovalMode, ModelProfile, ModelProvider, Project, Specialist } from "../api/types.js";
 import type { LandingCategory, LandingSeed } from "../app/landing.js";
 import { TEXT } from "../text.js";
+import { filterExperts } from "./expert-catalog.js";
 import { modelBrand } from "./model-brand.js";
 import { modelLabel, providerName } from "./provider-name.js";
 import { ProjectPicker } from "./ProjectPicker.js";
@@ -36,6 +39,9 @@ interface Props {
   /** Why uploading is not on offer, or `undefined` when it is. A reason rather
    *  than a flag because the button's tooltip has to say what is missing. */
   attachBlocked?: string;
+  /** Reads the expert catalog for 专家's flyout. Absent in a static render,
+   *  where the flyout is never opened and there is nothing to fetch. */
+  client?: ApiClient;
   /** The per-file ceiling to state in that tooltip, already formatted. */
   attachLimit?: string;
   /** The welcome page's arrangement: the card floats, and a grey strip under
@@ -50,6 +56,8 @@ interface Props {
   onSelectModel: (modelId: string) => void;
   /** Point the next conversation at a Project, or at none (`undefined`). */
   onSelectProject: (projectId?: string) => void;
+  /** Binds an expert to the session, or clears the binding. */
+  onSelectSpecialist?: (specialistId?: string) => void;
   onSend: (content: string) => void;
   onStop: () => void;
   onUpload: (files: File[]) => void;
@@ -66,6 +74,8 @@ interface Props {
   /** A starter prompt chosen on the welcome page, to be placed in the input. */
   seed?: LandingSeed;
   selectedModelId?: string;
+  /** The expert the open session is bound to, if any. */
+  selectedSpecialistId?: string;
   /** The category the welcome page attached to this turn. */
   tag?: ComposerTag;
   uploading: boolean;
@@ -241,19 +251,31 @@ export function PermissionFlyout({
  */
 export function SessionSettingsMenu({
   approvalMode,
+  experts,
+  expertsLoading,
   onApprovalMode,
   onClose,
   onOpenSpecialists,
+  onSelectSpecialist,
   running,
+  selectedSpecialistId,
 }: {
   approvalMode?: ApprovalMode;
+  /** The experts a session can be bound to, already read by the composer.
+   *  Held there rather than here so reopening the menu does not blank the row
+   *  above it back to 无 while the catalog is fetched again. */
+  experts?: Specialist[];
+  expertsLoading?: boolean;
   onApprovalMode: (mode: ApprovalMode) => void;
   onClose: () => void;
   onOpenSpecialists: () => void;
+  onSelectSpecialist?: (specialistId?: string) => void;
   running: boolean;
+  selectedSpecialistId?: string;
 }) {
   const [panel, setPanel] = useState<SettingsPanel>();
   const fullAccess = approvalMode === "always_allow";
+  const selectedExpert = (experts ?? []).find((row) => row.id === selectedSpecialistId);
   const toggle = (next: SettingsPanel) => setPanel((current) => (current === next ? undefined : next));
 
   return (
@@ -277,7 +299,9 @@ export function SessionSettingsMenu({
               <span className="session-menu-value-icon">
                 <ShieldGlyph />
               </span>
-              {fullAccess ? TEXT.composer.permissionFull : TEXT.composer.permissionAskShort}
+              <span className="session-menu-value-text">
+                {fullAccess ? TEXT.composer.permissionFull : TEXT.composer.permissionAskShort}
+              </span>
               <ChevronRightGlyph />
             </span>
           </button>
@@ -295,7 +319,9 @@ export function SessionSettingsMenu({
             </span>
             <span className="session-menu-label">{TEXT.composer.experts}</span>
             <span className="session-menu-value">
-              {TEXT.composer.expertsNone}
+              <span className="session-menu-value-text">
+                {selectedExpert?.name ?? TEXT.composer.expertsNone}
+              </span>
               <ChevronRightGlyph />
             </span>
             {/* The row's explanation, shown over it on hover. It is aria-hidden
@@ -314,30 +340,158 @@ export function SessionSettingsMenu({
         ) : null}
 
         {panel === "experts" ? (
-          <div className="session-menu-flyout">
-            <button className="session-flyout-row is-selected" onClick={onClose} type="button">
-              <span className="session-flyout-none">
-                <NoneGlyph />
-              </span>
-              <span className="session-flyout-label">{TEXT.composer.expertsNone}</span>
-              <span className="session-flyout-check">
-                <CheckGlyph />
-              </span>
-            </button>
-            <div className="session-menu-divider" />
-            <button
-              className="session-flyout-row is-action"
-              onClick={() => {
-                onClose();
-                onOpenSpecialists();
-              }}
-              type="button"
-            >
-              <span className="session-flyout-label">{TEXT.composer.expertsCreate}</span>
-            </button>
-          </div>
+          <ExpertFlyout
+            loading={expertsLoading ?? false}
+            onClose={onClose}
+            onOpenSpecialists={onOpenSpecialists}
+            onSelect={(specialistId) => {
+              onSelectSpecialist?.(specialistId);
+              onClose();
+            }}
+            selectedId={selectedSpecialistId}
+            specialists={experts ?? []}
+          />
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** The magnifier at the start of 专家's search field. */
+function SearchGlyph() {
+  return (
+    <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24" width="15">
+      <circle cx="11" cy="11" r="6" />
+      <path d="m16 16 4 4" />
+    </svg>
+  );
+}
+
+/** The colours an expert's initial can take. They carry nothing — the list is
+ *  ordered and filtered — they only make one row easier to find again. */
+const EXPERT_TONES = ["is-blue", "is-pink", "is-amber", "is-violet", "is-teal"] as const;
+
+function expertTone(id: string): string {
+  let hash = 0;
+  for (const character of id) hash = (hash * 31 + (character.codePointAt(0) ?? 0)) % 997;
+  return EXPERT_TONES[hash % EXPERT_TONES.length] ?? "is-blue";
+}
+
+
+/**
+ * 专家's choices: the experts this app can bind to a session.
+ *
+ * The reference lists them the way a catalog does — a search line, then one
+ * row per expert with its initial and its one-line description — rather than
+ * as a menu of names. 无 and 新建 keep their place below the list: the first is
+ * how a binding is undone, the second is the way to an expert this list does
+ * not have yet.
+ *
+ * Exported because it is only mounted while its row is open.
+ */
+export function ExpertFlyout({
+  loading,
+  onClose,
+  onOpenSpecialists,
+  onSelect,
+  selectedId,
+  specialists,
+}: {
+  loading: boolean;
+  onClose: () => void;
+  onOpenSpecialists: () => void;
+  onSelect: (specialistId?: string) => void;
+  selectedId?: string;
+  specialists: Specialist[];
+}) {
+  const [query, setQuery] = useState("");
+  const list = useRef<HTMLDivElement>(null);
+  const shown = filterExperts(specialists, query);
+
+  // The list can be longer than the card; opening it on the bound expert is
+  // what shows the reader where the session stands, without hunting for the
+  // tick.
+  useEffect(() => {
+    list.current?.querySelector('[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
+  }, []);
+
+  return (
+    <div className="session-menu-flyout is-experts">
+      <label className="expert-search">
+        <SearchGlyph />
+        <input
+          aria-label={TEXT.composer.expertsSearch}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={TEXT.composer.expertsSearch}
+          type="search"
+          value={query}
+        />
+      </label>
+      <div className="session-menu-divider" />
+      <div className="expert-list" ref={list}>
+        <button
+          aria-current={selectedId === undefined ? "true" : undefined}
+          className={`expert-row${selectedId === undefined ? " is-selected" : ""}`}
+          onClick={() => onSelect(undefined)}
+          type="button"
+        >
+          <span className="expert-mark is-none">
+            <NoneGlyph />
+          </span>
+          <span className="expert-text">
+            <span className="expert-name">{TEXT.composer.expertsNone}</span>
+          </span>
+          {selectedId === undefined ? (
+            <span className="session-flyout-check">
+              <CheckGlyph />
+            </span>
+          ) : null}
+        </button>
+        {shown.map((specialist) => {
+          const selected = specialist.id === selectedId;
+          return (
+            <button
+              aria-current={selected ? "true" : undefined}
+              className={`expert-row${selected ? " is-selected" : ""}`}
+              key={specialist.id}
+              onClick={() => onSelect(specialist.id)}
+              type="button"
+            >
+              <span className={`expert-mark ${expertTone(specialist.id)}`}>
+                {specialist.name.slice(0, 1)}
+              </span>
+              <span className="expert-text">
+                <span className="expert-name">{specialist.name}</span>
+                {specialist.description === "" ? null : (
+                  <span className="expert-desc">{specialist.description}</span>
+                )}
+              </span>
+              {selected ? (
+                <span className="session-flyout-check">
+                  <CheckGlyph />
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+        {loading && shown.length === 0 ? (
+          <p className="expert-note">{TEXT.composer.expertsLoading}</p>
+        ) : null}
+        {!loading && shown.length === 0 ? (
+          <p className="expert-note">{TEXT.composer.expertsEmpty}</p>
+        ) : null}
+      </div>
+      <div className="session-menu-divider" />
+      <button
+        className="session-flyout-row is-action"
+        onClick={() => {
+          onClose();
+          onOpenSpecialists();
+        }}
+        type="button"
+      >
+        <span className="session-flyout-label">{TEXT.composer.expertsCreate}</span>
+      </button>
     </div>
   );
 }
@@ -444,6 +598,7 @@ export function Composer({
   approvalMode,
   attachBlocked,
   attachLimit,
+  client,
   landing = false,
   models,
   onApprovalMode,
@@ -452,6 +607,7 @@ export function Composer({
   onOpenSpecialists,
   onSelectModel,
   onSelectProject,
+  onSelectSpecialist,
   onSend,
   onStop,
   onUpload,
@@ -461,6 +617,7 @@ export function Composer({
   running,
   seed,
   selectedModelId,
+  selectedSpecialistId,
   tag,
   uploading,
 }: Props) {
@@ -468,6 +625,31 @@ export function Composer({
   const [menu, setMenu] = useState<Menu>();
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
+
+  /** 专家's catalog. Read once per client, not per menu opening: the row's
+   *  value is the bound expert's name, and reopening the menu must not show 无
+   *  for the half second a fresh fetch takes. A disabled expert cannot be
+   *  bound — the server drops it — so it is not listed here. */
+  const [experts, setExperts] = useState<Specialist[]>([]);
+  const [expertsLoading, setExpertsLoading] = useState(false);
+  useEffect(() => {
+    if (client === undefined) return;
+    let cancelled = false;
+    setExpertsLoading(true);
+    void listSpecialists(client)
+      .then((rows) => {
+        if (!cancelled) setExperts(rows.filter((row) => row.enabled !== false));
+      })
+      .catch(() => {
+        if (!cancelled) setExperts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setExpertsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
 
   const selected = models.find((model) => model.id === selectedModelId) ?? models[0];
   /** The stored name is the server's; the pill shows it in the interface's
@@ -583,10 +765,14 @@ export function Composer({
           {menu === "settings" ? (
             <SessionSettingsMenu
               approvalMode={approvalMode}
+              experts={experts}
+              expertsLoading={expertsLoading}
               onApprovalMode={onApprovalMode}
               onClose={() => setMenu(undefined)}
               onOpenSpecialists={onOpenSpecialists}
+              onSelectSpecialist={onSelectSpecialist}
               running={running}
+              selectedSpecialistId={selectedSpecialistId}
             />
           ) : null}
         </span>

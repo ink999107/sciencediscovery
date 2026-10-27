@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import type { ToolTrace } from "../api/types.js";
+import { TEXT } from "../text.js";
 
 /**
  * Splits a tool result text into displayable I/O sections. Execution tools
@@ -32,10 +33,28 @@ export interface ToolResultSection {
 }
 
 /**
+ * One block of a tool call, handed to the right panel when the reader presses
+ * it: the call's name for the panel's heading, and the section's own label and
+ * full text. `toolId` and `id` together are the block's identity, so the panel
+ * can tell a second press on the same block from a press on another one.
+ */
+export interface ToolDetail {
+  content: string;
+  id: string;
+  label: string;
+  name: string;
+  status: ToolTrace["status"];
+  toolId: string;
+}
+
+/**
  * The labels below are the runner's own section markers, matched verbatim and
  * shown verbatim. They are deliberately not in `text.ts`: they are not UI copy
  * but the wire format of a tool result, and translating them would make the
  * label stop describing the text underneath it.
+ *
+ * The residual section is the exception: it is text the runner never labelled,
+ * so its heading is ours to name, and it reads as the counterpart of Input.
  */
 const SECTION_MARKERS: Array<{ id: ToolResultSectionId; label: string; pattern: RegExp }> = [
   { id: "stdout", label: "stdout", pattern: /^stdout:[ \t]?(.*)$/ },
@@ -91,7 +110,7 @@ function matchSectionMarker(line: string): { id: ToolResultSectionId; inline: st
 }
 
 function resultLabel(status: ToolTrace["status"]): string {
-  return status === "failed" ? "Error" : "Result";
+  return status === "failed" ? TEXT.conversation.toolError : TEXT.conversation.toolOutput;
 }
 
 export function parseToolResultSections(text: string, status: ToolTrace["status"]): ToolResultSection[] {

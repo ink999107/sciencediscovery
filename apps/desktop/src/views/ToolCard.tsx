@@ -17,38 +17,10 @@ import { useEffect, useState } from "react";
 import type { ApiClient } from "../api/client.js";
 import { readToolOutput } from "../api/stream.js";
 import type { ToolTrace } from "../api/types.js";
-import { formatToolInput, parseToolResultSections } from "../app/tool-io.js";
+import { formatToolInput, parseToolResultSections, type ToolDetail } from "../app/tool-io.js";
 import { TEXT } from "../text.js";
 import { collapseHint } from "./collapse-hint.js";
-
-/** One fold inside the card: the input, or one labeled slice of the result. */
-function IoFold({
-  content,
-  label,
-  open,
-  onToggle,
-}: {
-  content: string;
-  label: string;
-  onToggle: (open: boolean) => void;
-  open: boolean;
-}) {
-  return (
-    <details
-      className="tool-io-section"
-      onToggle={(event) => {
-        if (event.currentTarget.open !== open) onToggle(event.currentTarget.open);
-      }}
-      open={open}
-    >
-      <summary>
-        <span className="tool-io-label">{label}</span>
-        <span aria-hidden="true" className="collapse-chev">›</span>
-      </summary>
-      <pre>{content}</pre>
-    </details>
-  );
-}
+import { ToolIoBlock } from "./ToolIoBlock.js";
 
 function statusLabel(trace: ToolTrace): string {
   if (trace.status === "running") return trace.name;
@@ -74,6 +46,7 @@ function statusLabel(trace: ToolTrace): string {
 export function ToolCard({
   authorized,
   client,
+  onOpenTool,
   runId,
   sessionId,
   trace,
@@ -82,12 +55,14 @@ export function ToolCard({
    *  difference between "the tool ran" and "the tool ran because you said so". */
   authorized: boolean;
   client: ApiClient;
+  /** Hand one input or result block to the right panel. Absent where there is
+   *  no panel — the block then shows its clipped text and is not a door. */
+  onOpenTool?: (detail: ToolDetail) => void;
   runId?: string;
   sessionId?: string;
   trace: ToolTrace;
 }) {
   const [open, setOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [fetched, setFetched] = useState<string>();
   const [loaded, setLoaded] = useState<string>();
   const [unreadable, setUnreadable] = useState(false);
@@ -122,13 +97,14 @@ export function ToolCard({
     ? []
     : parseToolResultSections(outputText, trace.status);
 
-  const renderFold = (id: string, label: string, content: string) => (
-    <IoFold
+  const renderBlock = (id: string, label: string, content: string) => (
+    <ToolIoBlock
       content={content}
       key={id}
       label={label}
-      onToggle={(next) => setCollapsed((current) => ({ ...current, [id]: !next }))}
-      open={collapsed[id] === false}
+      onOpen={onOpenTool === undefined
+        ? undefined
+        : () => onOpenTool({ content, id, label, name: trace.name, status: trace.status, toolId: trace.id })}
     />
   );
 
@@ -146,18 +122,18 @@ export function ToolCard({
         <span aria-hidden="true" className="collapse-chev">›</span>
       </summary>
       <div className="collapse-body tool-io-sections">
-        {inputText !== undefined && inputText !== "" ? renderFold("input", TEXT.conversation.toolInput, inputText) : null}
+        {inputText !== undefined && inputText !== "" ? renderBlock("input", TEXT.conversation.toolInput, inputText) : null}
         {trace.inputTruncated ? <p className="tool-io-note">{TEXT.conversation.inputTruncated}</p> : null}
         {sections.length > 0
-          ? sections.map((section) => renderFold(section.id, section.label, section.content))
+          ? sections.map((section) => renderBlock(section.id, section.label, section.content))
           : (
-            <pre>{trace.status === "running"
+            <p className="tool-io-note">{trace.status === "running"
               ? TEXT.conversation.toolRunning
               : unreadable
                 ? TEXT.conversation.resultUnavailable
                 : streamId !== undefined
                   ? TEXT.conversation.loadingResult
-                  : TEXT.conversation.noOutput}</pre>
+                  : TEXT.conversation.noOutput}</p>
           )}
         {trace.outputTruncated ? <p className="tool-io-note">{TEXT.conversation.outputTruncated}</p> : null}
       </div>

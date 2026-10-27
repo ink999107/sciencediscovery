@@ -24,11 +24,13 @@ import { usePanelSplit } from "../app/use-panel-split.js";
 import { fileFolder, fileName } from "../app/paths.js";
 import { PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, PANEL_NUDGE_STEP, PANEL_NUDGE_STRIDE } from "../app/panel-width.js";
 import { Markdown } from "../Markdown.js";
+import type { ToolDetail as ToolDetailData } from "../app/tool-io.js";
 import { detectStructureFormat } from "../molecular.js";
 import type { Session, SessionArtifactOutput, Subagent, WorkspaceFile } from "../api/types.js";
 import { subagentTask } from "../run-stream/subagent.js";
 import { TEXT } from "../text.js";
 import { SubagentDetail } from "./SubagentDetail.js";
+import { ToolDetail } from "./ToolDetail.js";
 
 /** Loaded on the first structure that is opened. Mol* is an order of magnitude
  *  larger than the rest of the app together, and most sessions never show one. */
@@ -55,6 +57,9 @@ interface Props {
   subagent?: Subagent;
   /** The catalog read that fills a replayed child's steps is still in flight. */
   subagentLoading?: boolean;
+  /** One input or result block of a tool call, opened from the run. It is the
+   *  same mode as `subagent`: the panel shows only that text. */
+  tool?: ToolDetailData;
   tabs: TabState;
 }
 
@@ -488,6 +493,7 @@ export function WorkspacePanel({
   sessions = [],
   subagent,
   subagentLoading,
+  tool,
   tabs,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -745,8 +751,13 @@ export function WorkspacePanel({
         role="separator"
         tabIndex={0}
       />
-      <header className={`panel-head${subagent === undefined ? "" : " is-subagent"}`}>
-        {subagent === undefined ? (
+      <header className={`panel-head${subagent === undefined && tool === undefined ? "" : " is-subagent"}`}>
+        {tool !== undefined ? (
+          <div className="panel-subagent-title" title={tool.name}>
+            <span className="panel-subagent-label">{TEXT.conversation.toolCall}</span>
+            <span className="panel-subagent-text">{tool.name}</span>
+          </div>
+        ) : subagent === undefined ? (
           <div className="panel-group-tabs" role="tablist">
             {groups.map((group) => (
               <button
@@ -784,7 +795,11 @@ export function WorkspacePanel({
         </div>
       </header>
 
-      {subagent === undefined ? (
+      {tool !== undefined ? (
+        <div className="panel-body is-tool">
+          <ToolDetail detail={tool} />
+        </div>
+      ) : subagent === undefined ? (
         <div
           className={`panel-body${panel.split.docClosed ? " is-doc-closed" : ""}${listClosed ? " is-list-closed" : ""}`}
           ref={splitBody}

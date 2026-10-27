@@ -124,7 +124,7 @@ test("an answer's name is a header above the prose, not a column beside it", () 
   const markup = render({ detail: detail([message("answer-a", "assistant", "PLAIN-ANSWER-A")]) });
   assert.match(
     markup,
-    /<div class="assistant-head"><div aria-hidden="true" class="avatar-mini">.*?<\/div><div class="role"><span>[^<]*<\/span><\/div><\/div><div class="body">.*?PLAIN-ANSWER-A/u,
+    /<div class="assistant-head"><div aria-hidden="true" class="avatar-mini is-brand"><\/div><div class="role"><span>[^<]*<\/span><\/div><\/div><div class="body">.*?PLAIN-ANSWER-A/u,
   );
 });
 

@@ -42,7 +42,7 @@ export function ThinkingBlock({
   return (
     <details className="msg-collapse thinking">
       <summary>
-        <span className="collapse-icon">💭</span>
+        <span aria-hidden="true" className="collapse-icon">✳</span>
         <span className="collapse-title">
           {TEXT.conversation.thinking}
           {steps.length > 0 ? ` · ${TEXT.conversation.thinkingSteps(steps.length)}` : ""}

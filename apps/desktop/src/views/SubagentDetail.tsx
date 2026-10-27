@@ -204,6 +204,31 @@ export function SubagentDetail({
 
   return (
     <div className="subagent-detail">
+      <div className={`subagent-status is-${subagent.status}`}>
+        <span aria-hidden="true" className="subagent-status-icon">
+          {subagent.status === "running" ? <span className="spinner" /> : failed ? "!" : "✓"}
+        </span>
+        <span>{TEXT.subagent.status[subagent.status]}</span>
+        {subagent.turnCount > 0 ? (
+          <span className="subagent-status-meta">{TEXT.subagent.turns(subagent.turnCount)}</span>
+        ) : null}
+        {subagent.usage === undefined ? null : (
+          <span className="subagent-status-meta">{TEXT.subagent.tokens(subagent.usage.totalTokens)}</span>
+        )}
+      </div>
+      {failed && subagent.error !== undefined ? (
+        <div className="subagent-error">
+          <div className="subagent-error-title">
+            {subagent.status === "timed_out"
+              ? TEXT.subagent.timedOutTitle
+              : subagent.status === "cancelled"
+                ? TEXT.subagent.cancelledTitle
+                : TEXT.subagent.failedTitle}
+          </div>
+          <div>{subagent.error}</div>
+        </div>
+      ) : null}
+
       {prompt === "" && inputPaths.length === 0 ? null : (
         <FoldCard className="subagent-task" title={TEXT.subagent.task}>
           {prompt === "" ? null : (
@@ -238,22 +263,6 @@ export function SubagentDetail({
           </div>
         )}
       </FoldCard>
-
-      {/* The reason a child stopped is part of how it ran, so it sits with the
-       *  execution rather than as a banner above the brief. The transcript line
-       *  already says the child failed; this says why. */}
-      {failed && subagent.error !== undefined ? (
-        <div className="subagent-error">
-          <div className="subagent-error-title">
-            {subagent.status === "timed_out"
-              ? TEXT.subagent.timedOutTitle
-              : subagent.status === "cancelled"
-                ? TEXT.subagent.cancelledTitle
-                : TEXT.subagent.failedTitle}
-          </div>
-          <div>{subagent.error}</div>
-        </div>
-      ) : null}
 
       {final === undefined ? null : (
         <section className="subagent-output">

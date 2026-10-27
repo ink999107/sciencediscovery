@@ -26,6 +26,7 @@ import { ApiClient } from "./api/client.js";
 import { listSubagents } from "./api/sessions.js";
 import type { Subagent } from "./api/types.js";
 import { isEmptyTranscript, landingKey } from "./app/landing.js";
+import type { ToolDetail } from "./app/tool-io.js";
 import { useFileDrop } from "./app/use-file-drop.js";
 import { useLanguage } from "./app/use-language.js";
 import { usePanelWidth } from "./app/use-panel-width.js";
@@ -48,7 +49,11 @@ import { OfflineScreen } from "./views/OfflineScreen.js";
 import { Rail } from "./views/Rail.js";
 import { SessionBar } from "./views/SessionBar.js";
 import { SetupWizard } from "./views/SetupWizard.js";
-import { SystemSettingsDialog, type SettingsGroup } from "./views/SystemSettingsDialog.js";
+import {
+  SystemSettingsDialog,
+  type SettingsGroup,
+  type SettingsIntent,
+} from "./views/SystemSettingsDialog.js";
 import { Sidebar } from "./views/Sidebar.js";
 import { Toasts } from "./views/Toasts.js";
 import { WorkspacePanel, type PanelGroup } from "./views/WorkspacePanel.js";
@@ -67,6 +72,10 @@ export function App({ initialToken }: Props) {
    *  reopening lands where the user left off. */
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsGroup, setSettingsGroup] = useState<SettingsGroup>("general");
+  /** A pane can be opened to do one thing rather than to be read: 专家's 新建…
+   *  asks 设置 › 专家 for a blank form. The request lives until that pane has
+   *  taken it, so switching panes does not reopen the form on the way back. */
+  const [settingsIntent, setSettingsIntent] = useState<SettingsIntent>();
   /** The task sidebar folds away; the conversation's does too when the panel
    *  needs the room. */
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -80,6 +89,10 @@ export function App({ initialToken }: Props) {
    *  mode of the panel rather than a fourth tab: the transcript's line opens
    *  it, and the panel's own back arrow closes it. */
   const [openSubagentId, setOpenSubagentId] = useState<string | undefined>();
+  /** One input or result block of a tool call, shown in the panel. Like the
+   *  subagent, it is a mode of the panel rather than a tab, and the two are
+   *  mutually exclusive: one panel can only show one record. */
+  const [openTool, setOpenTool] = useState<ToolDetail | undefined>();
 
   // The language lives in a module store rather than in state, because
   // `TEXT` is read from components the tree passes no props to. Reading it
@@ -176,6 +189,7 @@ export function App({ initialToken }: Props) {
   // would open a panel on a subagent the reader cannot see.
   useEffect(() => {
     setOpenSubagentId(undefined);
+    setOpenTool(undefined);
     lastSubagent.current = undefined;
     setSubagentCatalog([]);
   }, [state.sessionId]);
@@ -185,6 +199,21 @@ export function App({ initialToken }: Props) {
   // own, so the toggle is the only way back.
   const openSubagentDetails = useCallback((id: string) => {
     setOpenSubagentId((current) => (current === id ? undefined : id));
+    setOpenTool(undefined);
+    setWorkspaceOpen(true);
+  }, []);
+
+  /**
+   * The same gesture for a tool's input or result: the block opens it, and a
+   * second press on the same block closes it. Pressing another block swaps the
+   * panel's content, because the panel is where the reader is already looking.
+   */
+  const openToolDetails = useCallback((detail: ToolDetail) => {
+    setOpenTool((current) =>
+      current !== undefined && current.toolId === detail.toolId && current.id === detail.id
+        ? undefined
+        : detail);
+    setOpenSubagentId(undefined);
     setWorkspaceOpen(true);
   }, []);
 
@@ -300,8 +329,9 @@ export function App({ initialToken }: Props) {
   // once on the shell reaches both, and neither has to be told twice.
   const shellStyle = { "--panel-width": `${resize.width}px` } as CSSProperties;
 
-  const openSettings = (group: SettingsGroup) => {
+  const openSettings = (group: SettingsGroup, intent?: SettingsIntent) => {
     setSettingsGroup(group);
+    setSettingsIntent(intent);
     setSettingsOpen(true);
   };
 
@@ -312,13 +342,15 @@ export function App({ initialToken }: Props) {
     approvalMode: state.detail?.approvalMode,
     attachBlocked: canUpload ? undefined : TEXT.composer.attachArchived,
     attachLimit,
+    client,
     models: state.models,
     onApprovalMode: (mode) => void actions.setApprovalMode(mode),
     onCreateProject: (name) => void actions.createProject(name),
     onOpenSettings: () => openSettings("models"),
-    onOpenSpecialists: () => openSettings("specialists"),
+    onOpenSpecialists: () => openSettings("specialists", "add-specialist"),
     onSelectModel: (modelId) => void actions.selectModel(modelId),
     onSelectProject: (projectId) => actions.selectProject(projectId),
+    onSelectSpecialist: (specialistId) => void actions.selectSpecialist(specialistId),
     onSend: (content) => void actions.send(content),
     onStop: () => void actions.stop(),
     onUpload: (files) => void upload(files),
@@ -331,6 +363,7 @@ export function App({ initialToken }: Props) {
     providers: state.providers,
     running: state.running,
     selectedModelId: state.selectedModelId,
+    selectedSpecialistId: state.detail?.specialistId,
     uploading: state.uploading,
   };
 
@@ -400,6 +433,7 @@ export function App({ initialToken }: Props) {
                 loading={state.loadingSession}
                 onDecidePermission={(request, decision) => actions.decidePermission(request.id, decision)}
                 onOpenSubagent={openSubagentDetails}
+                onOpenTool={openToolDetails}
                 pending={state.pendingMessage}
                 replays={state.replays}
                 run={state.run}
@@ -423,6 +457,7 @@ export function App({ initialToken }: Props) {
           subagent={openSubagent}
           subagentLoading={subagentLoading && (openSubagent?.steps.length ?? 0) === 0}
           tabs={state.tabs}
+          tool={openTool}
         />
       </div>
 
@@ -431,8 +466,13 @@ export function App({ initialToken }: Props) {
           actions={actions}
           client={client}
           group={settingsGroup}
-          onClose={() => setSettingsOpen(false)}
+          intent={settingsIntent}
+          onClose={() => {
+            setSettingsOpen(false);
+            setSettingsIntent(undefined);
+          }}
           onGroupChange={setSettingsGroup}
+          onIntentHandled={() => setSettingsIntent(undefined)}
           state={state}
         />
       ) : null}

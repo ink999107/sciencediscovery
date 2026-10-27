@@ -59,7 +59,7 @@ test("switching to English changes every top-level section of TEXT", () => {
   assert.equal(TEXT.status.localOnline, "Local runtime · Online");
   // Functions are translated too, not just literals.
   assert.equal(TEXT.workspace.minutesAgo(3), "3 min ago");
-  assert.equal(TEXT.conversation.turn(2), "Turn 2");
+  assert.equal(TEXT.conversation.thinkingSteps(2), "2 steps");
 });
 
 test("the choice is persisted under this app's own key", () => {

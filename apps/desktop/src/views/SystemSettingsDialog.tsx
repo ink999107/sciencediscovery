@@ -28,6 +28,11 @@ import { McpServers } from "./settings/system/McpServers.js";
 import { SpecialistsSettings } from "./settings/system/Specialists.js";
 import { TimeoutSettings } from "./settings/system/Timeouts.js";
 
+/** A pane can be opened to do one thing rather than to be read: 专家's 新建…
+ *  asks 设置 › 专家 for a blank form. The request lives until that pane has
+ *  taken it, so switching panes does not reopen the form on the way back. */
+export type SettingsIntent = "add-specialist";
+
 /** The original desktop nav, extended with MCP, 专家 and 超时. */
 export type SettingsGroup =
   | "general"
@@ -56,8 +61,10 @@ interface Props {
   actions: WorkspaceActions;
   client: ApiClient;
   group: SettingsGroup;
+  intent?: SettingsIntent;
   onClose: () => void;
   onGroupChange: (group: SettingsGroup) => void;
+  onIntentHandled?: () => void;
   state: WorkspaceState;
 }
 
@@ -74,8 +81,10 @@ export function SystemSettingsDialog({
   actions,
   client,
   group,
+  intent,
   onClose,
   onGroupChange,
+  onIntentHandled,
   state,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Partial<Record<CategoryId, boolean>>>({});
@@ -101,6 +110,15 @@ export function SystemSettingsDialog({
     setAddingMcp(false);
     setAddingSpecialist(false);
   }, [group]);
+
+  // A pane opened to do one thing has already said which form to show. The
+  // request is taken here rather than re-read, so the pane's own close — and
+  // its unmount when the reader leaves — stays in charge afterwards.
+  useEffect(() => {
+    if (intent !== "add-specialist") return;
+    setAddingSpecialist(true);
+    onIntentHandled?.();
+  }, [intent, onIntentHandled]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

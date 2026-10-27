@@ -203,6 +203,10 @@ export interface WorkspaceActions {
    *  own, so the composer's permission picker does not have to resend anything
    *  else about the session. */
   setApprovalMode: (mode: ApprovalMode) => Promise<void>;
+  /** Bind an expert to the open session, or clear it with `undefined`. Like the
+   *  permission mode, the choice lives on the session, so there is nothing to
+   *  write before one exists. */
+  selectSpecialist: (specialistId?: string) => Promise<void>;
   /** Change the global default from 设置 › 模型. Distinct from `selectModel`,
    *  which points the *open* session at a profile without touching the default
    *  that future sessions inherit. */
@@ -1146,6 +1150,27 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     [client, report],
   );
 
+  /**
+   * Bind an expert to the open session, or unbind it.
+   *
+   * The reply is read back for the same reason the approval mode's is: the
+   * server drops an id it cannot resolve or that is disabled, and the
+   * composer's row must not claim an expert the session does not hold.
+   */
+  const selectSpecialist = useCallback(
+    async (specialistId?: string) => {
+      const target = sessionRef.current;
+      if (!target) return;
+      try {
+        const updated = await updateSession(client, target, { specialistId: specialistId ?? null });
+        setDetail((current) => (current ? { ...current, specialistId: updated.specialistId } : current));
+      } catch (reason) {
+        report(reason);
+      }
+    },
+    [client, report],
+  );
+
   const setDefaultModel = useCallback(
     async (modelId: string) => {
       try {
@@ -1450,6 +1475,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       selectModel,
       selectPanelTab,
       selectProject,
+      selectSpecialist,
       send,
       setApprovalMode,
       setDefaultModel,
@@ -1476,6 +1502,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       selectModel,
       selectPanelTab,
       selectProject,
+      selectSpecialist,
       send,
       setApprovalMode,
       setDefaultModel,

@@ -15,6 +15,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import type { PendingMessage } from "../app/use-workspace.js";
+import type { ToolDetail } from "../app/tool-io.js";
 import type { ApiClient } from "../api/client.js";
 import type {
   ChatMessage,
@@ -38,6 +39,9 @@ interface Props {
   /** Open one subagent's execution in the workspace panel. The transcript
    *  itself only ever draws its line. */
   onOpenSubagent?: (id: string) => void;
+  /** Open one tool's input or result in the workspace panel. The card shows a
+   *  clipped preview of both. */
+  onOpenTool?: (detail: ToolDetail) => void;
   /** The session's workspace: the files whose provenance says they arrived by
    *  upload are drawn above the question they were sent with. */
   workspaceFiles: readonly WorkspaceFile[];
@@ -122,7 +126,7 @@ function MessageRow({ message, uploads }: { message: ChatMessage; uploads?: read
       <div className="assistant-head">
         <AssistantAvatar />
         <div className="role">
-          <span>{message.modelName ?? TEXT.appName}</span>
+          <span>{TEXT.appName}</span>
         </div>
       </div>
       <div className="body">
@@ -175,6 +179,7 @@ export function Conversation({
   loading,
   onDecidePermission,
   onOpenSubagent,
+  onOpenTool,
   pending,
   replays,
   run,
@@ -241,6 +246,7 @@ export function Conversation({
                   client={client}
                   onDecide={onDecidePermission}
                   onOpenSubagent={onOpenSubagent}
+                  onOpenTool={onOpenTool}
                   run={replacement}
                   sessionId={detail?.id}
                 />
@@ -254,6 +260,7 @@ export function Conversation({
                   key={replay.runId}
                   onDecide={onDecidePermission}
                   onOpenSubagent={onOpenSubagent}
+                  onOpenTool={onOpenTool}
                   run={replay.state}
                   sessionId={detail?.id}
                 />
@@ -267,6 +274,7 @@ export function Conversation({
             key={replay.runId}
             onDecide={onDecidePermission}
             onOpenSubagent={onOpenSubagent}
+            onOpenTool={onOpenTool}
             run={replay.state}
             sessionId={detail?.id}
           />
@@ -280,6 +288,7 @@ export function Conversation({
             client={client}
             onDecide={onDecidePermission}
             onOpenSubagent={onOpenSubagent}
+            onOpenTool={onOpenTool}
             run={run}
             sessionId={detail?.id}
           />

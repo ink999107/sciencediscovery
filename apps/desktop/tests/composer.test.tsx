@@ -19,7 +19,8 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { Composer, ModelMenu, PermissionFlyout, SessionSettingsMenu } from "../src/views/Composer.js";
+import { Composer, ExpertFlyout, ModelMenu, PermissionFlyout, SessionSettingsMenu } from "../src/views/Composer.js";
+import { filterExperts } from "../src/views/expert-catalog.js";
 import { modelBrand } from "../src/views/model-brand.js";
 import { modelLabel } from "../src/views/provider-name.js";
 
@@ -134,6 +135,78 @@ test("a permission option says on screen what it allows", () => {
   assert.match(markup, /aria-describedby="session-permission-full-desc"/);
   // The mode in force is the one marked.
   assert.equal(markup.split("is-selected").length - 1, 1);
+});
+
+/** Two experts, enough to tell a catalog from a list of fixed choices. */
+const EXPERTS = [
+  { description: "Writes and runs code", id: "e1", name: "code-engineer" },
+  { description: "Searches the literature", id: "e2", name: "literature-searcher" },
+] as never[];
+
+test("专家's flyout lists the experts with what each one does", () => {
+  const markup = renderToStaticMarkup(
+    <ExpertFlyout
+      loading={false}
+      onClose={() => {}}
+      onOpenSpecialists={() => {}}
+      onSelect={() => {}}
+      selectedId="e2"
+      specialists={EXPERTS}
+    />,
+  );
+  assert.match(markup, /请输入关键字搜索/);
+  for (const expert of EXPERTS as unknown as { description: string; name: string }[]) {
+    assert.match(markup, new RegExp(expert.name));
+    assert.match(markup, new RegExp(expert.description));
+  }
+  // 无 stays the way to unbind, and 新建 the way to an expert not listed.
+  assert.match(markup, /class="expert-mark is-none"/);
+  assert.match(markup, /新建…/);
+  // Exactly the bound expert is marked, and it is the one identified to AT.
+  const selected = markup.match(/aria-current="true"[^>]*>[\s\S]*?class="expert-name">([^<]+)</g) ?? [];
+  assert.equal(selected.length, 1);
+  assert.match(selected[0] ?? "", /literature-searcher/);
+});
+
+test("the 专家 row names the bound expert rather than saying 无", () => {
+  const markup = renderToStaticMarkup(
+    <SessionSettingsMenu
+      experts={EXPERTS}
+      onApprovalMode={() => {}}
+      onClose={() => {}}
+      onOpenSpecialists={() => {}}
+      running={false}
+      selectedSpecialistId="e2"
+    />,
+  );
+  assert.match(markup, />literature-searcher</);
+  assert.doesNotMatch(markup, />无</);
+});
+
+test("the search matches names, not words inside a description", () => {
+  const experts = [
+    { description: "Screens candidates", id: "a", name: "assessment-screener" },
+    { description: "Feasibility analysis", id: "b", name: "creative-material-design" },
+    { description: "Synthesizes assessment results", id: "c", name: "insight-aggregator" },
+  ] as never[];
+  // "as" appears in "feasibility" and "assessment"; only the name decides.
+  assert.deepEqual(filterExperts(experts, "as").map((row) => row.id), ["a"]);
+  // A substring of the name works anywhere, and case does not matter.
+  assert.deepEqual(filterExperts(experts, " MATERIAL ").map((row) => row.id), ["b"]);
+  assert.equal(filterExperts(experts, "").length, 3);
+});
+
+test("an empty catalog says so instead of showing a blank card", () => {
+  const markup = renderToStaticMarkup(
+    <ExpertFlyout
+      loading={false}
+      onClose={() => {}}
+      onOpenSpecialists={() => {}}
+      onSelect={() => {}}
+      specialists={[]}
+    />,
+  );
+  assert.match(markup, /没有匹配的专家。/);
 });
 
 test("the 专家 row is named by its label and value, and its hint is attached", () => {

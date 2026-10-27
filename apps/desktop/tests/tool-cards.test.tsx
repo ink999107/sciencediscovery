@@ -24,6 +24,7 @@ import type { PermissionRequest, ToolTrace } from "../src/api/types.js";
 import { TEXT } from "../src/text.js";
 import { PermissionCard } from "../src/views/PermissionCard.js";
 import { ToolCard } from "../src/views/ToolCard.js";
+import { ToolDetail } from "../src/views/ToolDetail.js";
 
 const { describe, it } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
 
@@ -104,6 +105,58 @@ describe("a card with no result yet says which of the three reasons it is", () =
   it("reports an inline result and a truncation note together", () => {
     const html = card({ trace: trace({ output: "stdout: 3", outputTruncated: true }) });
     assert.match(html, new RegExp(TEXT.conversation.outputTruncated));
+  });
+});
+
+describe("a tool call's input and result are tiles, not another row of folds", () => {
+  it("draws each block as a labeled code tile", () => {
+    // One more click to read the result the card was opened for is the thing
+    // the handoff removes: the tiles are open by construction.
+    const html = card({ trace: trace({ args: { command: "ls -l" }, output: "stdout: a\nstderr: b" }) });
+    assert.match(html, /class="tool-io-code-text"/);
+    // The plural `tool-io-sections` is the card's own body; the singular class
+    // was the nested fold that is gone.
+    assert.doesNotMatch(html, /tool-io-section"/);
+    assert.match(html, /ls -l/);
+    assert.match(html, /stdout/);
+    assert.match(html, /stderr/);
+  });
+
+  it("makes a tile a door to the panel when one is wired", () => {
+    const html = card({
+      onOpenTool: () => undefined,
+      trace: trace({ id: "c9", name: "run_python", output: "stdout: 3" }),
+    });
+    assert.match(html, /role="button"/);
+    assert.match(html, new RegExp(TEXT.conversation.openInPanel));
+  });
+
+  it("leaves the tiles plain where there is no panel to open", () => {
+    const html = card({ trace: trace({ output: "stdout: 3" }) });
+    assert.doesNotMatch(html, /role="button"/);
+    assert.doesNotMatch(html, new RegExp(TEXT.conversation.openInPanel));
+  });
+});
+
+describe("the panel shows the block the reader pressed", () => {
+  it("draws the full text with the same label and no second door", () => {
+    const html = render(
+      <ToolDetail
+        detail={{
+          content: "the whole output\nsecond line",
+          id: "result",
+          label: TEXT.conversation.toolOutput,
+          name: "run_python",
+          status: "completed",
+          toolId: "c1",
+        }}
+      />,
+    );
+    assert.match(html, /class="tool-io-code-text"/);
+    assert.match(html, /the whole output\nsecond line/);
+    assert.match(html, new RegExp(TEXT.conversation.toolOutput));
+    assert.doesNotMatch(html, /role="button"/);
+    assert.doesNotMatch(html, new RegExp(TEXT.conversation.openInPanel));
   });
 });
 

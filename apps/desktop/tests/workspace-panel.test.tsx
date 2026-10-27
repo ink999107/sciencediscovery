@@ -700,10 +700,32 @@ test("a child that timed out has no output, only what it had said so far", () =>
 
 test("a child that has not run anything yet says so", () => {
   const markup = render(initialTabState(), { subagent: subagent({ status: "running" }) });
-  // There is no status row of its own: the transcript line carries the status,
-  // and an empty timeline says the rest.
-  assert.doesNotMatch(markup, /class="subagent-status"/u);
+  assert.match(markup, /class="subagent-status is-running"/u);
+  assert.match(markup, /执行中/u);
   assert.match(markup, /class="workspace-empty"/);
+});
+
+test("a tool block opened from the run takes the panel, like a child does", () => {
+  // The run's tiles are short by design; the panel is where the untruncated
+  // text is read. It is one mode of the panel, so the group tabs step aside.
+  const markup = render(initialTabState(), {
+    tool: {
+      content: "the whole output\nsecond line",
+      id: "result",
+      label: "Result",
+      name: "run_python",
+      status: "completed",
+      toolId: "c1",
+    },
+  });
+  assert.match(markup, /class="panel-head is-subagent"/u);
+  assert.match(markup, /工具调用/u);
+  assert.match(markup, /run_python/u);
+  assert.match(markup, /class="panel-body is-tool"/u);
+  assert.match(markup, /the whole output\nsecond line/u);
+  // The groups are still reachable: the tablist is what the head shows when
+  // the mode closes, and nothing here takes that away.
+  assert.doesNotMatch(markup, /role="tablist"/u);
 });
 
 test("a replayed child says it is loading instead of claiming it recorded nothing", () => {
@@ -720,17 +742,17 @@ test("a replayed child says it is loading instead of claiming it recorded nothin
   assert.doesNotMatch(markup, /还没有留下可展示的执行记录/u);
 });
 
-test("a failed child's reason sits below its execution", () => {
+test("a failed child keeps the reason beside its status", () => {
   const markup = render(initialTabState(), {
     subagent: subagent({ error: "the provider refused the request", status: "failed" }),
   });
   assert.match(markup, /执行失败|失败/);
   assert.match(markup, /the provider refused the request/);
-  // The reason belongs to how the child ran, so it follows the timeline card
+  // The reason belongs to how the child ran, so it sits under the status strip
   // rather than opening the panel above the brief.
   const reasonAt = markup.indexOf("the provider refused the request");
-  const cardAt = markup.indexOf('class="subagent-card subagent-execution"');
-  assert.ok(cardAt >= 0 && cardAt < reasonAt, "the reason should follow the execution card");
+  const statusAt = markup.indexOf('class="subagent-status is-failed"');
+  assert.ok(statusAt >= 0 && statusAt < reasonAt, "the reason should follow the status");
 });
 
 test("the list and the document are separated by a draggable divider", () => {

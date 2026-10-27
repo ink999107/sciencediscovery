@@ -16,6 +16,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { Markdown } from "../Markdown.js";
 import type { ApiClient } from "../api/client.js";
+import type { ToolDetail } from "../app/tool-io.js";
 import { TEXT } from "../text.js";
 import type { AssistantTurn as Turn, PermissionEntry, RunStreamState } from "../run-stream/model.js";
 import { permissionMatchingKey, pendingPermissions } from "../run-stream/permission.js";
@@ -32,17 +33,12 @@ export function markOf(name: string): string {
   return name.trim().slice(0, 1).toUpperCase() || "◈";
 }
 
-/** The blue round mark every assistant row wears in the handoff. One product,
- *  one mark — the model's initial made the avatar look like a person. */
+/** The product mark every assistant row wears in the handoff. One product,
+ *  one mark — the model's initial made the avatar look like a person. The
+ *  artwork lives in the stylesheet (`assets/avatar/assistant.png`), so a
+ *  transparent PNG keeps its own soft edge instead of being redrawn in SVG. */
 export function AssistantAvatar() {
-  return (
-    <div aria-hidden="true" className="avatar-mini">
-      <svg aria-hidden="true" fill="none" height="20" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" viewBox="0 0 24 24" width="20">
-        <path d="M9.5 3.5h5M10 3.5v6.2L5.6 17a2.4 2.4 0 0 0 2.1 3.5h8.6a2.4 2.4 0 0 0 2.1-3.5L14 9.7V3.5" />
-        <path d="M7.6 14.5h8.8" />
-      </svg>
-    </div>
-  );
+  return <div aria-hidden="true" className="avatar-mini is-brand" />;
 }
 
 /** Copy the answer, and say the press landed. It is the only tool under an
@@ -120,6 +116,8 @@ interface ToolContext {
   interactive: boolean;
   onDecide: (request: PermissionRequest, decision: PermissionDecision) => void;
   onOpenSubagent?: (id: string) => void;
+  /** Hand one tool's input or result to the right panel. */
+  onOpenTool?: (detail: ToolDetail) => void;
   permissions: PermissionEntry[];
   runId?: string;
   sessionId?: string;
@@ -202,14 +200,12 @@ function isDelegationTool(name: string): boolean {
 function TurnBlock({
   detach,
   live,
-  modelName,
   tools,
   turn,
 }: {
   /** The index of the response rendered outside the fold, if this turn owns it. */
   detach?: number;
   live: boolean;
-  modelName?: string;
   tools: ToolContext;
   turn: Turn;
 }) {
@@ -246,6 +242,7 @@ function TurnBlock({
             entry.request.state === "allowed" && entry.request.toolCallId === tool.trace.id)}
           client={tools.client}
           key={`tool-${tool.id}`}
+          onOpenTool={tools.onOpenTool}
           runId={tools.runId}
           sessionId={tools.sessionId}
           trace={tool.trace}
@@ -265,14 +262,16 @@ function TurnBlock({
     }
   }
 
+  // A turn is a bookkeeping unit, not a section of the transcript: the server
+  // opens a new one for every re-invocation of the model, and the reader is
+  // following one continuous piece of work. So the turn draws no wrapper and
+  // no heading — its reasoning and its layers take their place directly in the
+  // run's stream, in the order they happened.
   return (
-    <div className="run-turn">
-      <div className="run-turn-head">
-        {modelName ?? TEXT.appName} · {TEXT.conversation.turn(turn.turn)}
-      </div>
+    <>
       <ThinkingBlock live={live && turn.responses.length === 0} text={turn.thinking} truncated={turn.thinkingTruncated} />
       {layers}
-    </div>
+    </>
   );
 }
 
@@ -480,6 +479,7 @@ export function AssistantTurns({
   client,
   onDecide,
   onOpenSubagent,
+  onOpenTool,
   run,
   sessionId,
 }: {
@@ -488,6 +488,8 @@ export function AssistantTurns({
   /** Open one child's execution in the right panel. Absent where there is no
    *  such panel — the line still shows the task, it just is not a door. */
   onOpenSubagent?: (id: string) => void;
+  /** Open one tool's input or result in the right panel. */
+  onOpenTool?: (detail: ToolDetail) => void;
   run: RunStreamState;
   sessionId?: string;
 }) {
@@ -527,6 +529,7 @@ export function AssistantTurns({
     interactive: live,
     onDecide: decide,
     onOpenSubagent,
+    onOpenTool,
     permissions: run.permissions,
     runId: run.runId,
     sessionId,
@@ -555,7 +558,7 @@ export function AssistantTurns({
         <div className="assistant-head">
           <AssistantAvatar />
           <div className="role">
-            <span>{run.modelName ?? TEXT.appName}</span>
+            <span>{TEXT.appName}</span>
           </div>
         </div>
         <div className="body">
@@ -583,7 +586,6 @@ export function AssistantTurns({
                     detach={shown !== undefined && shown.turn === turn.turn ? shown.response : undefined}
                     key={turn.turn}
                     live={live}
-                    modelName={run.modelName}
                     tools={tools}
                     turn={turn}
                   />

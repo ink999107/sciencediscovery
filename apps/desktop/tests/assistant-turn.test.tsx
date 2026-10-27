@@ -232,6 +232,29 @@ describe("a run folds into one line", () => {
     assert.match(html, /正在规划下一步/);
   });
 
+  it("draws one stream rather than one section per turn", () => {
+    // A turn is how the run is booked, not a heading the reader follows. The
+    // expanded fold is the work in the order it happened: a response, then the
+    // next turn's thought, with nothing announcing the boundary between them.
+    const html = render({
+      terminal: true,
+      turns: [
+        turn({
+          responses: [{ content: "first", responseId: "a", settled: true, truncated: false }],
+          turn: 1,
+        }),
+        turn({
+          responses: [{ content: "the answer", responseId: "b", settled: true, truncated: false }],
+          thinking: "second thought",
+          turn: 2,
+        }),
+      ],
+    });
+    assert.doesNotMatch(html, /第 \d+ 轮/u);
+    assert.doesNotMatch(html, /run-turn/u);
+    assert.ok(html.indexOf("first") < html.indexOf("second thought"));
+  });
+
   it("leaves an outstanding authorization outside the fold", () => {
     // A run waiting on an answer is waiting on the person reading. A question
     // folded shut behind a summary is a run that looks stopped for no reason.

@@ -97,6 +97,9 @@ export const ZH = {
     expertsNone: "无",
     expertsHint: "为此对话绑定一位个人专家。",
     expertsCreate: "新建…",
+    expertsSearch: "请输入关键字搜索",
+    expertsEmpty: "没有匹配的专家。",
+    expertsLoading: "正在读取专家…",
     permission: "请求批准",
     permissionMode: "权限模式",
     permissionAskShort: "询问",
@@ -129,8 +132,6 @@ export const ZH = {
   conversation: {
     copyAnswer: "复制回答",
     copied: "已复制",
-    /** The header of one request/answer turn inside a run. */
-    turn: (turn: number) => `第 ${turn} 轮`,
     /** The system-notice kinds the transcript can carry. */
     notices: {
       review_notice: "审阅提示",
@@ -178,6 +179,9 @@ export const ZH = {
     loadingResult: "正在加载完整结果…",
     noOutput: "工具已完成，但没有输出。",
     toolInput: "输入",
+    toolOutput: "输出",
+    toolError: "错误",
+    openInPanel: "在右侧打开",
     toolCompleted: (name: string) => `已调用 ${name}`,
     toolFailed: (name: string) => `调用失败：${name}`,
     inputTruncated: "输入已被保留策略截断。",
@@ -214,6 +218,8 @@ export const ZH = {
     loading: "正在加载执行记录…",
     thinking: "思考",
     tool: "工具",
+    turns: (count: number) => `${count} 轮`,
+    tokens: (count: number) => `${count} tokens`,
     failedTitle: "执行失败",
     timedOutTitle: "执行超时",
     cancelledTitle: "执行已取消",

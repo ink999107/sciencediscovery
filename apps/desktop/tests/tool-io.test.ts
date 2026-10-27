@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 
 import type { ToolTrace } from "../src/api/types.js";
 import { formatToolInput, parseToolResultSections } from "../src/app/tool-io.js";
+import { TEXT } from "../src/text.js";
 import { mergePermissionSnapshot, permissionMatchingKey, pendingPermissions } from "../src/run-stream/permission.js";
 import type { PermissionRequest } from "../src/api/types.js";
 
@@ -69,9 +70,13 @@ test("text before the first marker becomes the residual result section", () => {
   assert.equal(sections[1]!.id, "stdout");
 });
 
-test("the residual section is labelled Error when the call failed", () => {
-  const sections = parseToolResultSections("traceback on line 4", "failed");
-  assert.deepEqual(sections, [{ content: "traceback on line 4", id: "result", label: "Error" }]);
+test("the residual section is named 输出, or 错误 when the call failed", () => {
+  // The residual text is what the runner never labelled, so its heading is UI
+  // copy: it reads as the counterpart of 输入 rather than as a wire marker.
+  const done = parseToolResultSections("warming up", "completed");
+  assert.deepEqual(done, [{ content: "warming up", id: "result", label: TEXT.conversation.toolOutput }]);
+  const failed = parseToolResultSections("traceback on line 4", "failed");
+  assert.deepEqual(failed, [{ content: "traceback on line 4", id: "result", label: TEXT.conversation.toolError }]);
 });
 
 test("runner placeholders for an absent stream are dropped, not shown as data", () => {

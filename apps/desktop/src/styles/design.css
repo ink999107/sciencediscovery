@@ -604,7 +604,7 @@ body.is-resizing {
  *  no longer grows is what keeps a two-word question from being drawn as a
  *  560px block; the ceiling still wraps a long one before it reaches the
  *  assistant's avatar below. */
-.message.user > .body {
+.message.user .body {
   flex: 0 1 auto;
   width: fit-content;
   max-width: 560px;
@@ -805,6 +805,18 @@ body.is-resizing {
 .message .avatar-mini svg {
   width: 17px;
   height: 17px;
+}
+
+/* The product mark is an exported PNG with its own gradient and soft edge,
+ *  so the generic circle behind it would be a second blue disc. It is drawn a
+ *  little larger than the box: the artwork carries a margin of glow, and the
+ *  face itself should be the size of the rows around it. */
+.message .avatar-mini.is-brand {
+  /* The artwork is a transparent PNG: the disc is 56 of its 72 pixels, and the
+     rest is glow. A background is always clipped to its box, so drawing the
+     file larger than the box squares off that glow into an octagon. 33px keeps
+     the whole disc (about 26px) and its soft edge inside the 28px tile. */
+  background: transparent url("../assets/avatar/assistant.png") center / 33px 33px no-repeat;
 }
 
 .message .body {
@@ -1042,7 +1054,7 @@ body.is-resizing {
 }
 
 .msg-collapse[open] > summary .collapse-chev {
-  transform: rotate(-90deg);
+  transform: rotate(90deg);
 }
 
 /* The fold's contents are the transcript continued, not an indented card:
@@ -1055,10 +1067,44 @@ body.is-resizing {
   border-left: 0;
 }
 
-.run-turn-head {
-  margin: 10px 0 4px;
-  color: #b3b3b3;
-  font-size: 11.5px;
+/* The one line the run draws: a hairline under the summary, so the folded
+ *  line and the work it stands for are two things rather than one paragraph.
+ *  Everything inside is a single stream, so nothing down there draws a line. */
+.run-fold > .collapse-body {
+  margin-top: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-soft);
+}
+
+/* One rhythm for the run's parts. The model's prose, every tool call, every
+ *  delegation and every thought are modules of the same stream, and the gap
+ *  between two of them is the same whichever kinds happen to be adjacent:
+ *  the modules' own margins are reset first, then every module but the first
+ *  takes the gap from the one above. */
+.run-fold > .collapse-body > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* `:first-child` / `:not(:first-child)` rather than `* + *`: `.msg-collapse.
+ *  tool-card` is exactly as specific as a universal direct child, and it comes
+ *  later in this sheet, so the tool's own 8px would otherwise come back. */
+.run-fold > .collapse-body > :first-child {
+  margin-top: 0;
+}
+
+.run-fold > .collapse-body > :not(:first-child) {
+  margin-top: 18px;
+}
+
+.run-fold > .collapse-body > :last-child {
+  margin-bottom: 0;
+}
+
+/* The answer is the run's visible result and lives outside the fold — it is
+ *  the next module after the body rather than a separate message. */
+.run-fold + .text {
+  margin-top: 18px;
 }
 
 /* A tool call reads as 查看技能 name ›, the handoff's row. */
@@ -1079,19 +1125,35 @@ body.is-resizing {
   max-width: 100%;
   min-height: 24px;
   padding: 0;
-  color: #4d4d4d;
-  font-size: 14.5px;
+  color: #8c8c8c;
+  /* Work is a note beside the answer, so its rows are a step smaller than the
+     prose. The line-height and min-height are left alone: the size changes,
+     the rhythm between modules does not. */
+  font-size: 13px;
 }
 
 .msg-collapse.tool-card > summary .collapse-title {
-  color: #4d4d4d;
-  font-size: 14.5px;
+  color: #8c8c8c;
+  font-size: 13px;
   font-weight: 400;
 }
 
-.msg-collapse.tool-card > summary .collapse-icon {
+/* The glyph carries the state by itself. The older soft tiles were the
+ *  background of a card; on a line they read as a badge, and the run's
+ *  tools all step back to the same quiet gray. The selectors are longer than
+ *  the state rules in conversation.css on purpose: `is-completed` and friends
+ *  still win over the plain `.collapse-icon` rules there. */
+.msg-collapse.tool-card > summary .collapse-icon,
+.run-fold .msg-collapse.tool-card > summary .collapse-icon {
   color: #b3b3b3;
+  background: transparent;
   font-size: 13px;
+}
+
+.run-fold .msg-collapse.tool-card.is-failed > summary .collapse-icon,
+.run-fold .msg-collapse.tool-card.is-timed_out > summary .collapse-icon {
+  background: transparent;
+  color: #d84a3a;
 }
 
 .tool-authorized {
@@ -1100,71 +1162,130 @@ body.is-resizing {
   line-height: 18px;
 }
 
-.tool-io-sections {
+/* ── a tool call's input and result ────────────────────────────────────────
+   The expanded card is the call's own small sheet: one rounded frame with a
+   quiet label and a gray code tile for the input and for each slice of the
+   result. The tiles are previews — the panel is where the full text is read —
+   so they are clipped to a few lines rather than scrolling inside a column
+   that is already narrow. */
+.tool-card > .tool-io-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 12px 14px 14px;
+  border: 1px solid #ececec;
+  border-radius: 10px;
+  background: #fff;
+}
+
+/* A call with nothing to show yet is a sentence, not an empty sheet: the
+   frame and its padding belong to the tiles inside it. */
+.tool-card > .tool-io-sections:not(:has(.tool-io-block)) {
   padding: 0;
-}
-
-.tool-io-section {
-  margin-top: 2px;
   border: 0;
-  border-radius: 0;
   background: transparent;
 }
 
-.tool-io-section > summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 0;
-  color: #9a9a9a;
-  font-size: 13px;
-  font-weight: 400;
-  cursor: pointer;
-  list-style: none;
+.tool-io-block {
+  min-width: 0;
 }
 
-.tool-io-section > summary::-webkit-details-marker {
-  display: none;
+.tool-io-block-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
-.tool-io-section[open] > summary {
-  border-bottom: 0;
-}
-
-.tool-io-section .collapse-chev {
-  font-size: 14px;
-  color: #b3b3b3;
-}
-
-.tool-io-section[open] .collapse-chev {
-  transform: rotate(-90deg);
-}
-
-.tool-io-section > pre {
-  margin: 4px 0 10px;
-  padding: 2px 0 2px 14px;
-  overflow-x: auto;
-  border: 0;
-  border-left: 1px solid #e6e6e6;
-  background: transparent;
-  color: #666;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.75;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.tool-io-sections > pre {
-  margin: 4px 0 10px;
-  padding: 2px 0 2px 14px;
-  border: 0;
-  border-left: 1px solid #e6e6e6;
-  border-radius: 0;
-  background: transparent;
+.tool-io-label {
   color: #8c8c8c;
-  font-size: 13px;
-  line-height: 1.75;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.tool-io-hint {
+  color: #b3b3b3;
+  font-size: 11px;
+}
+
+.tool-io-code {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: #f5f5f5;
+  color: #3d3d3d;
+  text-align: left;
+}
+
+.tool-io-code.is-openable {
+  cursor: pointer;
+}
+
+.tool-io-code.is-openable:hover {
+  background: #f0f0f0;
+}
+
+/* More text than the tile shows: the text fades into the tile's own edge
+   rather than being sliced through the middle of a line. Measured in the
+   component, so a short tile keeps its last line at full strength. */
+.tool-io-code.is-clipped {
+  position: relative;
+}
+
+.tool-io-code.is-clipped::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 30px;
+  border-radius: 0 0 8px 8px;
+  background: linear-gradient(to bottom, rgba(245, 245, 245, 0), #f5f5f5);
+  content: "";
+  pointer-events: none;
+}
+
+.tool-io-code.is-openable:focus-visible {
+  outline: 2px solid #1476ff;
+  outline-offset: 1px;
+}
+
+.tool-io-code-text {
+  display: block;
+  margin: 0;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* In the panel there is nothing to clip and nowhere further to go. */
+.tool-detail {
+  width: 100%;
+  max-width: 860px;
+}
+
+.tool-detail .tool-io-code {
+  max-height: none;
+  padding: 14px 16px;
+}
+
+.tool-detail .tool-io-code-text {
+  font-size: 12.5px;
+}
+
+.panel-body.is-tool {
+  display: block;
+  padding: 4px 20px 24px;
+  overflow-y: auto;
 }
 
 .thinking-block,
@@ -1177,6 +1298,23 @@ body.is-resizing {
   margin-top: 6px;
   color: #777;
   font-size: 13px;
+}
+
+/* A thought is an aside in the run, so it steps back with the tool lines:
+ *  the glyph and the steps use the same gray and the same size — the keep of
+ *  the 22px line-height and 24px min-height is what holds the spacing. */
+.run-fold .msg-collapse.thinking > summary {
+  font-size: 13px;
+}
+
+.run-fold .msg-collapse.thinking .collapse-icon {
+  background: transparent;
+  color: #b3b3b3;
+  font-size: 12px;
+}
+
+.run-fold .thinking-list {
+  color: #8c8c8c;
 }
 
 .run-spinner {
@@ -1435,7 +1573,11 @@ body.is-resizing {
   border: 1px solid rgba(25, 25, 25, 0.1);
   border-radius: 24px;
   background: #fff;
-  box-shadow: 0 10px 30px rgba(25, 25, 25, 0.05);
+  /* A tight, faint halo under a hairline edge. The handoff draws the card as
+     something laid on the page rather than floating above it: the old 30px blur
+     spread a grey cloud well past the border and made the edge read as a shadow
+     instead of an outline. */
+  box-shadow: 0 2px 10px rgba(25, 25, 25, 0.045);
 }
 
 .composer-input {
@@ -1472,6 +1614,17 @@ body.is-resizing {
   align-items: center;
   gap: 8px;
   padding: 8px 12px 12px 16px;
+  /* composer.css separates the input from the footer with a rule and fills the
+     row with white. Neither belongs on this card: it is one white surface, and a
+     child with a square white background paints over the card's own rounded
+     bottom corners — the border there vanished and the card ended flat, as if
+     the radius had been cut off. */
+  border-top: 0;
+  border-radius: 0 0 23px 23px;
+}
+
+.composer:not(.is-landing) .composer-footer {
+  background: transparent;
 }
 
 .composer-plus {
@@ -1511,26 +1664,52 @@ body.is-resizing {
   flex: 1;
 }
 
+/* The model is set as plain text on the card, the way the handoff draws it:
+   no pill, no fill. The only thing that says it can be pressed is the chevron
+   and the light grey it gains on hover. */
 .composer-model-pill {
   height: 28px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 8px;
+  padding: 0 6px;
   border-radius: 6px;
-  color: #191919;
+  background: transparent;
+  color: #4d4d4d;
   font-size: 13px;
+  font-weight: 400;
 }
 
 .composer-model-pill:hover {
   background: #f2f2f2;
+  color: #191919;
+}
+
+/* composer.css fills the pill while its menu is open. On a selector that is
+   already just text, a fill appearing on the press would undo the point. */
+.composer-model-pill[aria-expanded="true"] {
+  background: transparent;
+  box-shadow: none;
+  color: #191919;
 }
 
 .composer-model-pill .model-mark {
   display: none;
 }
 
+.composer-model-pill .model-name {
+  color: inherit;
+  font-weight: 400;
+}
+
 .composer-model-pill .model-chev {
+  color: #8c8c8c;
+}
+
+/* The shared rule tints the chevron blue while the menu is open. On a text
+   selector that tint is the loudest thing in the footer, and the reference
+   keeps the arrow grey and simply turns it over. */
+.composer-model-pill[aria-expanded="true"] .model-chev {
   color: #8c8c8c;
 }
 
@@ -1548,20 +1727,27 @@ body.is-resizing {
   background: transparent;
 }
 
+/* The same blue as the welcome page's button: sending is the same act in both
+   places, so it should not change colour when the session stops being empty.
+   The disabled disc is a filled grey rather than a faded one — composer.css
+   already fades the whole button, and fading a pale fill leaves nothing to
+   see. */
 .send-button-icon {
   flex: 0 0 32px;
-  background: #191919;
+  border: 0;
+  background: #1476ff;
   color: #fff;
 }
 
 .send-button-icon:disabled {
-  background: #ececec;
-  color: #a6a6a6;
+  background: #d9d9d9;
+  color: #fff;
+  opacity: 1;
   cursor: default;
 }
 
 .send-button-icon:hover:not(:disabled) {
-  background: #000;
+  background: #0f63d8;
 }
 
 .composer-file-input {
@@ -1821,6 +2007,13 @@ body.is-resizing {
   white-space: nowrap;
 }
 
+/* The text's ink sits half a pixel above the line box's middle in this font at
+   12px; on a 24px capsule that reads as high, so the label alone is lowered to
+   where the eye expects it. The icon and chevron are already symmetric. */
+.session-menu-value-text {
+  transform: translateY(0.5px);
+}
+
 .session-menu-value-icon {
   display: inline-flex;
   color: #8c8c8c;
@@ -1934,6 +2127,147 @@ body.is-resizing {
 
 .session-flyout-row.is-action {
   color: #8c8c8c;
+}
+
+/* ── 专家's catalog ─────────────────────────────────────────────────────────
+   专家 is a list of the experts a session can be bound to, not a pair of
+   fixed choices: the reference draws it as a search line over a scrolling
+   column of two-line rows — initial, name, what the expert does. 无 and 新建
+   stay below the list, one as the way to unbind and the other as the way to
+   an expert this catalog does not have yet. */
+/* Anchored by its bottom edge, unlike 权限's short flyout: this card is as tall
+   as the catalog, and the composer it hangs off sits at the bottom of the
+   window — grown downwards from the top of the menu it would run off screen. */
+.session-menu-flyout.is-experts {
+  top: auto;
+  bottom: 0;
+  width: 380px;
+  padding: 8px;
+}
+
+.expert-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 6px 8px 8px;
+  color: #a6a6a6;
+}
+
+.expert-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #191919;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.expert-search input::placeholder {
+  color: #a6a6a6;
+}
+
+/* The search removes the browser's own clear button: the field is one quiet
+   line, and a second control inside it would be louder than the field. */
+.expert-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.session-menu-flyout.is-experts .session-menu-divider {
+  margin: 4px -8px;
+}
+
+.expert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: min(340px, 52vh);
+  margin: 4px 0;
+  overflow-y: auto;
+  scrollbar-color: #dedede transparent;
+  scrollbar-width: thin;
+}
+
+.expert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  flex: 0 0 auto;
+  padding: 7px 8px;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.expert-row:hover,
+.expert-row.is-selected {
+  background: #f5f5f5;
+}
+
+.expert-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.expert-mark.is-none {
+  background: #f2f2f2;
+  color: #8c8c8c;
+}
+
+.expert-mark.is-blue { background: #4a7cf5; }
+.expert-mark.is-pink { background: #ef5da8; }
+.expert-mark.is-amber { background: #f5a524; }
+.expert-mark.is-violet { background: #a855f7; }
+.expert-mark.is-teal { background: #14b8a6; }
+
+.expert-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.expert-name {
+  overflow: hidden;
+  color: #191919;
+  font-size: 13px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The description is one line by design: it is there to tell two experts
+   apart at a glance, and the full text lives in settings. */
+.expert-desc {
+  overflow: hidden;
+  color: #8c8c8c;
+  font-size: 12px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expert-note {
+  margin: 0;
+  padding: 10px 8px;
+  color: #8c8c8c;
+  font-size: 12px;
+  text-align: center;
+}
+
+.expert-row .session-flyout-check {
+  margin-left: 2px;
 }
 
 /* The row's explanation, shown over the row above rather than pushing the
@@ -4100,19 +4434,26 @@ body.is-resizing {
  *  a button because pressing it opens the child's own record in the panel. */
 .subagent-line {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto 12px;
+  /* The first column is as wide as a tool card's glyph and the row has no
+     side padding: a delegation has to start on the same vertical as the
+     thought and tool rows above it, not six pixels in. */
+  grid-template-columns: 11px minmax(0, 1fr) auto 12px;
   align-items: center;
   gap: 7px;
   width: 100%;
   min-height: 28px;
   margin: 4px 0;
-  padding: 2px 6px;
+  padding: 2px 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #4d4d4d;
+  color: #8c8c8c;
   font: inherit;
-  font-size: 14.5px;
+  /* The same 13px as the thought and tool rows: every kind of work in the
+     stream is one size, and only the answer is prose. The 22px line-height
+     and 28px min-height are what hold the row's height, so the rhythm between
+     modules does not move. */
+  font-size: 13px;
   line-height: 22px;
   text-align: left;
   cursor: pointer;
@@ -4145,19 +4486,24 @@ body.is-resizing {
 }
 
 /* "Subagent" names what the row is; the task beside it is only its subject,
- *  so the label carries the weight and the summary steps back. */
+ *  so the label carries the weight and the summary steps back. Both stay in
+ *  the run's quiet gray: a delegation is work, not an answer. */
 .subagent-line-label {
   flex: 0 0 auto;
-  color: #191919;
-  font-weight: 600;
+  color: #8c8c8c;
+  font-weight: 500;
 }
 
 .subagent-line-text {
   min-width: 0;
   overflow: hidden;
-  color: #8a8a8a;
+  color: #8c8c8c;
   font-weight: 400;
   text-overflow: ellipsis;
+}
+
+.subagent-line:hover .subagent-line-label {
+  color: #191919;
 }
 
 .subagent-line:hover .subagent-line-text {
@@ -4228,6 +4574,38 @@ body.is-resizing {
   width: 100%;
   max-width: 760px;
   margin: 0 auto;
+}
+
+.subagent-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 14px;
+  border-bottom: 1px solid #ececec;
+  color: #4d4d4d;
+  font-size: 13px;
+}
+
+.subagent-status-icon {
+  display: inline-grid;
+  place-items: center;
+  color: #1476ff;
+}
+
+.subagent-status.is-failed .subagent-status-icon,
+.subagent-status.is-timed_out .subagent-status-icon {
+  color: #d84a3a;
+}
+
+.subagent-status-meta {
+  color: #9a9a9a;
+  font-size: 12px;
+}
+
+.subagent-status-meta::before {
+  margin-right: 8px;
+  color: #b3b3b3;
+  content: "·";
 }
 
 .subagent-error {
