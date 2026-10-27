@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { ApiClient } from "../api/client.js";
 import {
@@ -59,6 +59,9 @@ interface Props {
   revealSubmitOnSuccess?: boolean;
   /** Wording for the test button while it is the wizard's primary action. */
   testLabel?: string;
+  /** Rendered at the end of the action row. The wizard puts 返回上一步 here so
+   *  it sits beside the continue button instead of below the form. */
+  trailingAction?: ReactNode;
 }
 
 type Verdict = { kind: "fail" | "ok" | "testing"; message: string };
@@ -120,6 +123,7 @@ export function ModelForm({
   revealSubmitOnSuccess = false,
   submitLabel,
   testLabel,
+  trailingAction,
 }: Props) {
   const [presetId, setPresetId] = useState<string>(presets[0]?.id ?? CUSTOM);
   const preset = presets.find((candidate) => candidate.id === presetId);
@@ -489,6 +493,7 @@ export function ModelForm({
             {TEXT.menu.cancel}
           </button>
         ) : null}
+        {trailingAction}
       </div>
     </>
   );

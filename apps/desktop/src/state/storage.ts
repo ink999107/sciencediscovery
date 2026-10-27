@@ -47,6 +47,10 @@ export const RIGHT_PANEL_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:right-panel`;
 export const LOCALE_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:locale`;
 /** How wide the user dragged the workspace panel, in CSS pixels. */
 export const PANEL_WIDTH_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:panel-width`;
+/** The workspace directory recorded in the first-run wizard. This is a note to
+ *  self, not a setting: the live data directory is fixed by the launcher, so
+ *  writing this never moves existing data. */
+export const DATA_DIR_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:data-dir`;
 
 function safeRead(storage: ReadableStorage, key: string): string | null {
   try {

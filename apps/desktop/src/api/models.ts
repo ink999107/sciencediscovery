@@ -31,7 +31,9 @@ import type {
  *  backend is up", never "you are authenticated". */
 export interface HealthReport {
   memoryGraph?: string;
-  runner?: { status?: string };
+  // The route forwards the runner's own health body, which carries the
+  // execution capability the first-run self-check gates on.
+  runner?: { execution?: { ready?: boolean }; status?: string };
   service?: string;
   status?: string;
 }
