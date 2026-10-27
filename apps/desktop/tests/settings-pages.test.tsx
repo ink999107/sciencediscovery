@@ -40,7 +40,7 @@ import { RunnerSection } from "../src/views/settings/RemoteHosts.js";
 import { NetworkSettings } from "../src/views/settings/NetworkSettings.js";
 import { RuntimeSettings } from "../src/views/settings/RuntimeSettings.js";
 import { SkillForm } from "../src/views/settings/SkillForm.js";
-import { SkillsSettings } from "../src/views/settings/SkillsSettings.js";
+import { enabledAfterCreate, skillMeta, SkillsSettings } from "../src/views/settings/SkillsSettings.js";
 import { AbilityPicker } from "../src/views/settings/system/AbilityPicker.js";
 import { McpServers } from "../src/views/settings/system/McpServers.js";
 import { SpecialistForm } from "../src/views/settings/system/SpecialistForm.js";
@@ -556,6 +556,71 @@ describe("the add-skill form", () => {
     );
     assert.ok(markup.includes(TEXT.settings.skills.add), "the modal is not labelled 新增技能");
     assert.ok(markup.includes(TEXT.settings.skills.namePlaceholder), "the authoring form is not open");
+  });
+});
+
+describe("the skill card", () => {
+  const skill = (fields: Partial<SkillDescriptor> = {}) => ({
+    currentRevision: 1,
+    description: "审阅初稿",
+    diagnostics: [],
+    hash: "hash",
+    id: "draft-review",
+    name: "draft-review",
+    readOnly: false,
+    resourceSummary: { bytes: 0, files: 0, kinds: { asset: 0, other: 0, reference: 0, script: 0 } },
+    source: "managed",
+    version: "revision:1",
+    ...fields,
+  }) as SkillDescriptor;
+
+  it("names the revision a skill was installed at instead of the server's label", () => {
+    // The server's own label for an undeclared version is `revision:1`; put
+    // after a `v` it read as `vrevision:1`.
+    const meta = skillMeta(skill());
+    assert.ok(meta.includes("第 1 版"), `the revision is not spelled out: ${meta}`);
+    assert.ok(!meta.includes("vrevision"), "the server's revision label is being read as a version");
+    assert.ok(meta.includes(TEXT.settings.skills.source.managed), "the card does not say where the skill came from");
+  });
+
+  it("reads a declared version as a version", () => {
+    const meta = skillMeta(skill({ declaredVersion: "1.2.0", currentRevision: 4 }));
+    assert.ok(meta.includes("v1.2.0"), `the declared version is missing: ${meta}`);
+    assert.ok(!meta.includes("第 4 版"), "the revision is shown even though a version was declared");
+  });
+
+  it("counts the SKILL.md every package has", () => {
+    // `resourceSummary.files` counts the files beside SKILL.md, so a skill
+    // whose package is SKILL.md and nothing else used to read `0 个文件`.
+    assert.ok(skillMeta(skill()).includes(TEXT.workspace.filesCount(1)), "a bare skill does not count SKILL.md");
+    const withScript = skill({
+      resourceSummary: {
+        bytes: 2048,
+        files: 3,
+        kinds: { asset: 0, other: 0, reference: 1, script: 2 },
+      },
+    });
+    assert.ok(
+      skillMeta(withScript).includes(TEXT.workspace.filesCount(4)),
+      "the resources do not count alongside SKILL.md",
+    );
+    assert.ok(skillMeta(skill({ source: "built-in" })).includes(TEXT.settings.skills.source.builtIn));
+  });
+});
+
+describe("a skill created from the form", () => {
+  it("joins a project's explicit selection", () => {
+    // `selected` carries an explicit list, so a new package would arrive off.
+    assert.deepEqual(enabledAfterCreate("selected", ["a", "b"], "c"), ["a", "b", "c"]);
+    assert.equal(enabledAfterCreate("selected", ["a", "c"], "c"), undefined, "an already-selected skill is written twice");
+  });
+
+  it("needs no write where the mode already means every installed skill", () => {
+    // `all` is the default and resolves to the whole catalog, so the new
+    // package is on without a write — and writing the list would pin the
+    // project to `selected` and freeze the catalog behind it.
+    assert.equal(enabledAfterCreate("all", ["a"], "c"), undefined);
+    assert.equal(enabledAfterCreate(undefined, [], "c"), undefined);
   });
 });
 

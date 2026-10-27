@@ -15,8 +15,8 @@
 import { useState } from "react";
 
 import type { ApiClient } from "../../api/client.js";
-import { getProjectSettings, listSkills, setEnabledSkills } from "../../api/settings.js";
-import type { RuntimeSettingsOverrides, SkillDescriptor } from "../../api/types.js";
+import { getProjectSettings, getSkill, listSkills, setEnabledSkills } from "../../api/settings.js";
+import type { RuntimeSettingsOverrides, SkillDescriptor, SkillDetail, SkillSource } from "../../api/types.js";
 import { useLoaded } from "../../app/use-loaded.js";
 import { TEXT } from "../../text.js";
 import { SettingsModal } from "./SettingsModal.js";
@@ -37,6 +37,61 @@ interface SkillPage {
   skills: SkillDescriptor[];
 }
 
+/** The expanded card's SKILL.md body: absent while it is being read. */
+interface OpenDetail {
+  failed?: boolean;
+  id: string;
+  instructions?: string;
+}
+
+const SOURCE_LABEL: Record<SkillSource, string> = {
+  "built-in": TEXT.settings.skills.source.builtIn,
+  managed: TEXT.settings.skills.source.managed,
+};
+
+/**
+ * The line under a card's description: where the skill came from, which
+ * version it is, and how many files it ships.
+ *
+ * Two of those used to be the server's own labels rather than a reader's.
+ * `version` is `revision:N` for a package that declared none, and printing it
+ * after a `v` produced `vrevision:1`; a declared version is a version and
+ * reads as one, and a package without one is described by its revision.
+ *
+ * `resourceSummary.files` counts the files *beside* SKILL.md — that is what a
+ * skill's resources are — so a skill whose package is SKILL.md and nothing
+ * else counted zero files. A reader counting the skill's files counts
+ * SKILL.md, and the package always has it.
+ */
+export function skillMeta(skill: SkillDescriptor): string {
+  const version = skill.declaredVersion === undefined
+    ? TEXT.settings.skills.revision(skill.currentRevision)
+    : `v${skill.declaredVersion}`;
+  return [
+    SOURCE_LABEL[skill.source],
+    version,
+    TEXT.workspace.filesCount(skill.resourceSummary.files + 1),
+  ].join(" · ");
+}
+
+/**
+ * What the project's enabled list becomes once a new skill is created, or
+ * `undefined` when the project needs no write.
+ *
+ * `all` is the default mode and it resolves to everything installed, so a
+ * package created under it is on already. `selected` carries an explicit list,
+ * and a package missing from that list would be off the moment it was made —
+ * the same write a toggle makes. Enabling it is what 新增技能 promises.
+ */
+export function enabledAfterCreate(
+  mode: RuntimeSettingsOverrides["skillSelectionMode"],
+  enabled: string[],
+  skillId: string,
+): string[] | undefined {
+  if (mode !== "selected" || enabled.includes(skillId)) return undefined;
+  return [...enabled, skillId];
+}
+
 /**
  * 设置 › 技能.
  *
@@ -49,6 +104,7 @@ interface SkillPage {
 export function SkillsSettings({ activeProjectId, adding, client, onAddingChange }: Props) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string>();
+  const [detail, setDetail] = useState<OpenDetail>();
   const [openId, setOpenId] = useState<string>();
 
   const loaded = useLoaded<SkillPage>(async () => {
@@ -80,6 +136,50 @@ export function SkillsSettings({ activeProjectId, adding, client, onAddingChange
     }
   };
 
+  /**
+   * Opening a card reads the skill itself, because what closes it is the one
+   * thing the list does not carry: the body of SKILL.md, which is what the
+   * model is actually told. The summary above the divider is the description;
+   * this is the instructions.
+   */
+  const reveal = (skill: SkillDescriptor) => {
+    if (openId === skill.id) {
+      setOpenId(undefined);
+      setDetail(undefined);
+      return;
+    }
+    setOpenId(skill.id);
+    setDetail({ id: skill.id });
+    getSkill(client, skill.id).then(
+      (found) => setDetail((current) => (
+        current?.id === skill.id ? { id: skill.id, instructions: found.instructions.trim() } : current
+      )),
+      () => setDetail((current) => (
+        current?.id === skill.id ? { failed: true, id: skill.id } : current
+      )),
+    );
+  };
+
+  /** A skill created from the form is on — see `enabledAfterCreate`. */
+  const afterCreate = async (skill: SkillDetail) => {
+    onAddingChange(false);
+    if (activeProjectId) {
+      try {
+        const project = await getProjectSettings(client, activeProjectId);
+        const effective = project.effective as { enabledSkillIds?: string[] } | undefined;
+        const enabled = enabledAfterCreate(
+          project.overrides.skillSelectionMode,
+          effective?.enabledSkillIds ?? [],
+          skill.id,
+        );
+        if (enabled !== undefined) await setEnabledSkills(client, activeProjectId, enabled);
+      } catch (reason) {
+        setFailure(reason instanceof Error ? reason.message : TEXT.settings.saveFailed);
+      }
+    }
+    loaded.reload();
+  };
+
   return (
     <>
       <Group>
@@ -98,7 +198,7 @@ export function SkillsSettings({ activeProjectId, adding, client, onAddingChange
                       <span className="settings-card-mark">{skill.name.slice(0, 1).toUpperCase()}</span>
                       <button
                         className="settings-card-main"
-                        onClick={() => setOpenId(open ? undefined : skill.id)}
+                        onClick={() => reveal(skill)}
                         type="button"
                       >
                         <strong>
@@ -110,10 +210,16 @@ export function SkillsSettings({ activeProjectId, adding, client, onAddingChange
                         <small>{skill.description}</small>
                         {open ? (
                           <span className="settings-detail">
-                            {skill.description}
-                            <small className="settings-detail-meta">
-                              {skill.source} · v{skill.version} · {TEXT.workspace.filesCount(skill.resourceSummary.files)}
-                            </small>
+                            <span className="settings-detail-heading">
+                              {TEXT.settings.skills.instructionsHeading}
+                            </span>
+                            <span className={`settings-detail-body${detail?.instructions ? "" : " is-muted"}`}>
+                              {detail?.instructions
+                                ?? (detail?.failed
+                                  ? TEXT.settings.skills.instructionsFailed
+                                  : TEXT.settings.skills.instructionsLoading)}
+                            </span>
+                            <small className="settings-detail-meta">{skillMeta(skill)}</small>
                           </span>
                         ) : null}
                       </button>
@@ -140,10 +246,7 @@ export function SkillsSettings({ activeProjectId, adding, client, onAddingChange
           <SkillForm
             client={client}
             onCancel={() => onAddingChange(false)}
-            onSaved={() => {
-              onAddingChange(false);
-              loaded.reload();
-            }}
+            onSaved={(skill) => void afterCreate(skill)}
           />
         </SettingsModal>
       ) : null}

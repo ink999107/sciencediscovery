@@ -16,16 +16,16 @@ import { useState } from "react";
 
 import type { ApiClient } from "../../api/client.js";
 import { createSkill } from "../../api/settings.js";
-import type { CreateSkillPackageRequest } from "../../api/types.js";
+import type { CreateSkillPackageRequest, SkillDetail } from "../../api/types.js";
 import { TEXT } from "../../text.js";
 
 interface Props {
   client: ApiClient;
   /** Called when 取消, × or the scrim closes the form. */
   onCancel: () => void;
-  /** Called after the server has installed the package; the list reloads
-   *  behind the modal, so the caller closes it here. */
-  onSaved: () => void;
+  /** Called after the server has installed the package, with what it installed;
+   *  the list reloads behind the modal, so the caller closes it here. */
+  onSaved: (skill: SkillDetail) => void;
 }
 
 interface Draft {
@@ -91,8 +91,7 @@ export function SkillForm({ client, onCancel, onSaved }: Props) {
     setBusy(true);
     setFailure(undefined);
     try {
-      await createSkill(client, bodyOf(draft));
-      onSaved();
+      onSaved(await createSkill(client, bodyOf(draft)));
     } catch (reason) {
       setFailure(reason instanceof Error ? reason.message : TEXT.settings.saveFailed);
     } finally {

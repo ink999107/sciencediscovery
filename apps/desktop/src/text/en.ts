@@ -387,6 +387,17 @@ export const EN: Text = {
       versionPlaceholder: "Optional, for example 1.0.0",
       compatibility: "Compatibility",
       compatibilityPlaceholder: "Optional, for example: needs Python 3.11 and network access",
+      /** A skill that declared no version is still described by the revision it
+       *  is installed at; the word carries it, so the card does not print the
+       *  server's `revision:1` after a `v`. */
+      revision: (revision: number) => `revision ${revision}`,
+      source: {
+        builtIn: "built-in",
+        managed: "managed",
+      },
+      instructionsHeading: "Instructions",
+      instructionsLoading: "Reading the instructions…",
+      instructionsFailed: "The instructions could not be read.",
     },
     network: {
       heading: "Network",

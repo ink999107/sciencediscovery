@@ -411,6 +411,17 @@ export const ZH = {
       versionPlaceholder: "可选，例如 1.0.0",
       compatibility: "兼容性",
       compatibilityPlaceholder: "可选，例如：需要 Python 3.11 与网络访问",
+      /** A skill that declared no version is still described by the revision it
+       *  is installed at; the word carries it, so the card does not print the
+       *  server's `revision:1` after a `v`. */
+      revision: (revision: number) => `第 ${revision} 版`,
+      source: {
+        builtIn: "内置",
+        managed: "自建",
+      },
+      instructionsHeading: "指令",
+      instructionsLoading: "正在读取指令…",
+      instructionsFailed: "没有读到指令。",
     },
     network: {
       heading: "网络",

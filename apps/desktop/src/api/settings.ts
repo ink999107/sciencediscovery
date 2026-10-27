@@ -127,6 +127,12 @@ export function listSkills(client: ApiClient): Promise<SkillDescriptor[]> {
   return client.request<SkillDescriptor[]>("/api/skills");
 }
 
+/** One installed skill with the parts the list does not carry: its SKILL.md
+ *  body and its files. Read when a card is expanded, not with the list. */
+export function getSkill(client: ApiClient, skillId: string): Promise<SkillDetail> {
+  return client.request<SkillDetail>(`/api/skills/${encodeURIComponent(skillId)}`);
+}
+
 /** Author a new skill package from the form. The server turns the fields into
  *  SKILL.md and installs the first revision. */
 export function createSkill(

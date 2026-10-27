@@ -331,6 +331,25 @@ a.secondary-button {
   font-family: var(--font-mono);
   font-size: 11px;
 }
+/* The expanded skill card shows the body of SKILL.md, which is the one thing
+   the row above the divider does not already say. The heading names it, and
+   the body is capped: a long skill should not push the rest of the list off
+   the page, and a reader who wants the whole text can scroll this box. */
+.settings-detail-heading {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+}
+.settings-detail-body {
+  display: block;
+  max-height: 12em;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.settings-detail-body.is-muted { color: var(--text-faint); }
 
 /* A failed read is not an empty result, and it must not look like one. */
 .settings-empty.is-error {
