@@ -75,7 +75,7 @@ export async function runIdeaResearchProtocolJourney({ pythonExecutable = resolv
       await new Promise(r => portReservation.listen(0, '127.0.0.1', r));
       const apiPort = portReservation.address().port;
       await new Promise(r => portReservation.close(r));
-      origin = await start(process.execPath, [resolve(repoRoot, 'services/api/dist/server.js')], { SCIENCE_AGENT_DATA_DIR: resolve(root, 'api'), SCIENCE_AGENT_AUTH_TOKEN: secret, SCIENCE_AGENT_HOST: '127.0.0.1', SCIENCE_AGENT_PORT: String(apiPort), SCIENCE_AGENT_EVOLVE_URL: sidecarOrigin, SCIENCE_AGENT_EVOLVE_INTERNAL_TOKEN: internal, SCIENCE_AGENT_RUNNER_URL: 'http://127.0.0.1:1', SCIENCE_AGENT_MEMORY_GRAPH_URL: 'http://127.0.0.1:1' }, /listening on (http:\/\/127\.0\.0\.1:\d+)/, 'api');
+      origin = await start(process.execPath, [resolve(repoRoot, 'services/api/dist/server.js')], { SCIENCE_AGENT_DATA_DIR: resolve(root, 'api'), SCIENCE_AGENT_AUTH_TOKEN: secret, SCIENCE_AGENT_HOST: '127.0.0.1', SCIENCE_AGENT_PORT: String(apiPort), SCIENCE_AGENT_EVOLVE_URL: sidecarOrigin, SCIENCE_AGENT_EVOLVE_INTERNAL_TOKEN: internal, SCIENCE_AGENT_RUNNER_URL: 'http://127.0.0.1:1', SCIENCE_AGENT_MEMORY_GRAPH_URL: 'http://127.0.0.1:1', SCIENCE_AGENT_SAMPLE_SESSION: '0' }, /listening on (http:\/\/127\.0\.0\.1:\d+)/, 'api');
       api = async (path, body, method = body ? 'POST' : 'GET') => { const r = await fetch(origin + path, { method, headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(10000) }); const text = await r.text(); assert.ok(!text.includes(providerKey) && !text.includes(internal)); return { status: r.status, body: JSON.parse(text) }; };
       assert.equal((await fetch(origin + '/api/models')).status, 401);
       assert.equal((await fetch(sidecarOrigin + '/idea-tree/research/command', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 401);
@@ -87,7 +87,9 @@ export async function runIdeaResearchProtocolJourney({ pythonExecutable = resolv
       await step(`2. Register ${apiProtocol} without automatic calls`, 'Qualified saved native model, no provider probes', async () => {
         const before = requests.length;
         const model = await api('/api/models', { model: `synthetic-${apiProtocol}`, name: 'Synthetic research model', baseUrl: providerOrigin + '/v1', apiProtocol, apiToken: providerKey, proxyPolicy: 'none' }); assert.equal(model.status, 201);
-        const project = await api('/api/projects', { name: 'Synthetic research' });
+        // One Project per protocol: Project names are unique, and this loop
+        // runs the same journey once for each family.
+        const project = await api('/api/projects', { name: `Synthetic research ${apiProtocol}` });
         session = (await api(`/api/projects/${project.body.id}/sessions`, { title: 'Synthetic native research', modelId: model.body.id })).body;
         assert.equal(requests.length, before); return 'Saved explicit protocol and token; zero probes';
       });

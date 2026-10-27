@@ -297,6 +297,15 @@ interface StagedDeletion {
   committed?: boolean;
 }
 
+/**
+ * A Project starts with every installed skill on.
+ *
+ * The three keys are written explicitly rather than left to the global
+ * default, so the Project carries the choice it was made with and a later
+ * change to 全局 › 技能 does not silently move it. `all` with no libraries
+ * mounted is "everything installed", which is what a user who has not
+ * curated anything means by not having curated anything.
+ */
 function withDefaultProjectSkillSettings(input: RuntimeSettingsOverrides): RuntimeSettingsOverrides {
   if (
     hasOwn(input, "enabledSkillIds")
@@ -309,8 +318,15 @@ function withDefaultProjectSkillSettings(input: RuntimeSettingsOverrides): Runti
     ...input,
     enabledSkillIds: [],
     enabledSkillLibraries: [],
-    skillSelectionMode: "selected",
+    skillSelectionMode: "all",
   };
+}
+
+/** How two Project names are compared: the whitespace `cleanLabel` collapses
+ *  is collapsed here too, and case is ignored, because the sidebar cannot
+ *  tell "Notes" from "notes" apart any better than the user can. */
+function projectNameKey(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLocaleLowerCase();
 }
 
 function normalizeProjectDescription(value: unknown): string {
@@ -2708,10 +2724,28 @@ export class SessionStore {
     runnerIds?: string[],
     description?: string,
   ): Promise<Project> {
-    const project = this.buildProject(name, input, remoteRunnerHostIds, runnerIds, description);
-    this.catalog.projects.push(project);
-    await this.saveCatalog();
-    return project;
+    // Two Projects with one name are two rows the sidebar cannot tell apart,
+    // and the user's only handle on a Project is the word they typed. The
+    // queue is the same one settings writes use, so two creates racing on the
+    // same name cannot both pass the check.
+    return this.withSettingsMutation(async () => {
+      const project = this.buildProject(name, input, remoteRunnerHostIds, runnerIds, description);
+      this.assertProjectNameFree(project.name);
+      this.catalog.projects.push(project);
+      await this.saveCatalog();
+      return project;
+    });
+  }
+
+  /** Throws when another Project already answers to `name`. */
+  private assertProjectNameFree(name: string, exceptId?: string): void {
+    const wanted = projectNameKey(name);
+    const clash = this.catalog.projects.find(
+      (project) => project.id !== exceptId && projectNameKey(project.name) === wanted,
+    );
+    if (clash) {
+      throw new SessionStoreHttpError(`A Project named "${clash.name}" already exists`, 409);
+    }
   }
 
   /**
@@ -2796,7 +2830,11 @@ export class SessionStore {
       delete project.runnerIds;
       project.remoteRunnerHostIds = ids;
     }
-    if (name !== undefined) project.name = name;
+    if (name !== undefined) {
+      // A rename is the same collision as a create: the name is the handle.
+      this.assertProjectNameFree(name, project.id);
+      project.name = name;
+    }
     if (changes.description !== undefined) {
       if (description) project.description = description;
       else delete project.description;

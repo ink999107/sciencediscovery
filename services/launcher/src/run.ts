@@ -121,6 +121,8 @@ function buildSettingsOverrides(runSettings: RunSettings, input: ResolvedInput):
   return overrides;
 }
 
+/** The Project a `run` without `--project` puts its Session in. */
+const CLI_PROJECT_NAME = "cli";
 const THINKING_MODE: Record<ThinkingSwitch, string> = { auto: "auto", off: "disabled", on: "enabled" };
 const THINKING_SWITCH: Record<string, ThinkingSwitch> = { auto: "auto", disabled: "off", enabled: "on" };
 
@@ -217,10 +219,22 @@ export async function runCommand(context: RunContext, log: (message: string) => 
   let createdFirstSession = false;
 
   if (!projectId && !sessionId) {
-    const created = await client.createProject({ name: "cli" });
-    projectId = String(created.id ?? created.project?.id ?? "");
-    sessionId = String(created.firstSession?.id ?? "");
-    createdFirstSession = Boolean(sessionId);
+    // A second `run` in the same install belongs where the first one did:
+    // Project names are unique, so asking for "cli" again is a 409 rather than
+    // a second column the user cannot tell from the first. Reusing it keeps
+    // every CLI run in one 项目, with one 会话 per invocation.
+    const existing = await client.listProjects()
+      .then((projects) => projects.find((project) => project.name === CLI_PROJECT_NAME))
+      .catch(() => undefined);
+    const existingId = existing?.id;
+    if (typeof existingId === "string" && existingId !== "") {
+      projectId = existingId;
+    } else {
+      const created = await client.createProject({ name: CLI_PROJECT_NAME });
+      projectId = String(created.id ?? created.project?.id ?? "");
+      sessionId = String(created.firstSession?.id ?? "");
+      createdFirstSession = Boolean(sessionId);
+    }
   }
   if (!sessionId && projectId) {
     const session = await client.createSession(projectId, buildSessionBody(input, approvalMode, runSettings));

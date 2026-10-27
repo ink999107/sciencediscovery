@@ -122,7 +122,9 @@ export class ControlPlaneClient {
     }
   }
 
-  listProjects(): Promise<unknown[]> {
+  /** Only what is needed to recognise a Project by name; the CLI has no use
+   *  for the rest of the row. */
+  listProjects(): Promise<Array<{ id: string; name: string }>> {
     return this.request("/api/projects");
   }
 

@@ -17,6 +17,7 @@ const { test } = createTest(import.meta.url, { tags: ["category:ut", "os:linux",
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { access, chmod, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer, type ServerResponse } from "node:http";
 import { connect, type AddressInfo } from "node:net";
@@ -120,6 +121,7 @@ import { offlineMcpTransport } from "./mcp/offline-transport.fixture.js";
 import { createJiuwenSwarmAgentFactory } from "./agent-run/jiuwenswarm-agent.js";
 import type { NativeAgentOptions } from "./native-agent/index.js";
 import { createPublicBiomedSources } from "@sciencediscovery/mcp-sources";
+import { SAMPLE_SESSION_MARKER } from "./sample-session/index.js";
 import { SessionStore } from "./store.js";
 import type { McpCatalog, McpInvokeResponse } from "@sciencediscovery/schema";
 import type { McpTransportClient } from "@sciencediscovery/data-source";
@@ -697,6 +699,33 @@ async function jsonRequest<T>(url: string, init?: RequestInit): Promise<{ body: 
   const response = await fetch(url, init);
   return { body: (await response.json()) as T, response };
 }
+
+test("a first start seeds the sample Session, and a later one does not repeat it", async (context) => {
+  const root = resolve(process.cwd(), ".tmp", `sample-session-${Date.now()}-${process.pid}`);
+  await mkdir(root, { recursive: true });
+  context.after(() => removeTestRoot(root));
+  const { origin } = await startTestApi(context, root, undefined, { sampleSession: true });
+
+  const projects = await jsonRequest<Project[]>(`${origin}/api/projects`, { headers: authorization });
+  const sample = projects.body.find((project) => project.name === "示例项目");
+  assert.ok(sample, "the sample Project is listed like any other");
+  const sessions = await jsonRequest<Session[]>(`${origin}/api/projects/${sample.id}/sessions`, { headers: authorization });
+  assert.deepEqual(sessions.body.map((session) => session.title), ["Session 10-26 01:40"]);
+  // The transcript replays two finished runs, which is what makes the sample
+  // worth opening: the process, not just the answer.
+  const runs = await jsonRequest<unknown[]>(`${origin}/api/sessions/${sessions.body[0]!.id}/runs`, {
+    headers: authorization,
+  });
+  assert.equal(runs.body.length, 2);
+  const files = await jsonRequest<{ path: string }[]>(`${origin}/api/sessions/${sessions.body[0]!.id}/files`, {
+    headers: authorization,
+  });
+  assert.ok(files.body.some((file) => file.path === "analysis_summary.md"));
+
+  // The marker is what makes this a one-time gift: the next boot on this
+  // directory finds a user's own install, not another empty one.
+  assert.ok(existsSync(resolve(root, SAMPLE_SESSION_MARKER)));
+});
 
 // Metadata-only requests never start a specialist or contact a model provider.
 for (const kind of ["codex", "claude-code", "acp"] as const) {
@@ -6140,11 +6169,13 @@ test("hierarchical settings and Project/Session lifecycle APIs preserve and dele
     headers: { ...authorization, "content-type": "application/json" },
     method: "POST",
   });
+  // A new Project starts with every installed skill on: an empty enable list
+  // under `all` is what that means, not "none of them".
   assert.deepEqual(project.body.settingsOverrides, {
     enabledSkillIds: [],
     enabledSkillLibraries: [],
     reviewModelId: modelB.id,
-    skillSelectionMode: "selected",
+    skillSelectionMode: "all",
   });
   const renamedProject = await jsonRequest<Project>(`${origin}/api/projects/${project.body.id}`, {
     body: JSON.stringify({ name: "Renamed lifecycle project" }),
@@ -8235,8 +8266,17 @@ test("CLI approval flags, explicit Projects and existing Sessions preserve inten
       const created = requests.find(row => row.method === "POST" && row.path.endsWith("/sessions"));
       assert.equal(created?.body?.approvalMode,scenario.expected,"explicit Project creation sends the CLI mode");
     } else {
-      const patched = requests.find(row => row.method === "PATCH");
-      assert.deepEqual(patched?.body,{approvalMode:scenario.expected},scenario.name+": separate intentional mode PATCH before Run");
+      // The mode is stated by whichever write made the Session: the CLI's own
+      // POST when it adds one to the 项目 it already has, or a PATCH on the
+      // first Session a freshly created Project came with. Either way the Run
+      // never inherits the saved default.
+      const created = requests.find(row => row.method === "POST" && /^\/api\/projects\/[^/]+\/sessions$/.test(row.path));
+      if (created) {
+        assert.equal(created.body?.approvalMode, scenario.expected, scenario.name+": Session creation states the CLI mode");
+      } else {
+        const patched = requests.find(row => row.method === "PATCH");
+        assert.deepEqual(patched?.body,{approvalMode:scenario.expected},scenario.name+": separate intentional mode PATCH before Run");
+      }
     }
     console.log("CLI real HTTP matrix", JSON.stringify({scenario:scenario.name,tty:scenario.tty,storedMode:saved.body.approvalMode,reportedIntent:summary}));
   }

@@ -1838,7 +1838,7 @@ test("SessionStore migrates legacy runtime settings once and preserves effective
   assert.deepEqual(await readPersistedCatalog(tempRoot), firstPersisted);
 });
 
-test("SessionStore defaults new projects to selected mode with no mounted skill libraries", async (context) => {
+test("SessionStore defaults new projects to every installed skill, with no mounted libraries", async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `catalog-default-skills-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => rm(tempRoot, { force: true, recursive: true }));
@@ -1857,17 +1857,43 @@ test("SessionStore defaults new projects to selected mode with no mounted skill 
   assert.deepEqual(project.settingsOverrides, {
     enabledSkillIds: [],
     enabledSkillLibraries: [],
-    skillSelectionMode: "selected",
+    skillSelectionMode: "all",
   });
 
   const session = await store.createSession(project.id, "Default skill session");
   const settings = store.getSessionSettings(session.id);
-  assert.deepEqual(settings.effective.enabledSkillIds, []);
+  assert.deepEqual(settings.effective.enabledSkillIds, ["life-science-evidence-brief", "managed-skill"]);
   assert.deepEqual(settings.effective.enabledSkillLibraries, []);
-  assert.equal(settings.effective.skillSelectionMode, "selected");
+  assert.equal(settings.effective.skillSelectionMode, "all");
   assert.equal(settings.sources.enabledSkillIds, "project");
   assert.equal(settings.sources.enabledSkillLibraries, "project");
   assert.equal(settings.sources.skillSelectionMode, "project");
+});
+
+test("SessionStore refuses a second project with the same name", async (context) => {
+  const tempRoot = resolve(process.cwd(), ".tmp", `catalog-project-names-${Date.now()}-${process.pid}`);
+  await mkdir(tempRoot, { recursive: true });
+  context.after(() => rm(tempRoot, { force: true, recursive: true }));
+
+  const store = new SessionStore(tempRoot);
+  await store.load();
+  const notes = await store.createProject("Notes");
+
+  // Case and stray whitespace are the same name to a reader, so they are the
+  // same name here.
+  await assert.rejects(store.createProject("  notes "), (error: unknown) => {
+    assert.ok(error instanceof SessionStoreHttpError);
+    assert.equal(error.statusCode, 409);
+    return true;
+  });
+  assert.deepEqual(store.listProjects().map((project) => project.name), ["Notes"]);
+
+  // A rename collides the same way; re-saving a Project's own name does not.
+  const other = await store.createProject("Other");
+  await store.updateProject(other.id, { name: "OTHER" });
+  await assert.rejects(store.updateProject(other.id, { name: "Notes" }), /already exists/);
+  assert.equal(store.getProject(other.id)?.name, "OTHER");
+  assert.equal(store.getProject(notes.id)?.name, "Notes");
 });
 
 test("SessionStore resolves and persists hierarchical runtime settings", async (context) => {
@@ -4516,7 +4542,9 @@ test("an SSH machine keeps its optional port, and a Session pinned under the old
     const candidate = await store.registerRemoteHost({ alias: "node-check", capabilities: {
       ...capabilities, nodeVersion, runnerCommandAvailable: false,
     } });
-    const accepted = await store.createProject("SEA does not require remote Node", {}, [candidate.id]);
+    // One Project per candidate: Project names are unique now, and each of
+    // these is a different machine under the same rule.
+    const accepted = await store.createProject(`SEA does not require remote Node ${nodeVersion ?? "unset"}`, {}, [candidate.id]);
     assert.deepEqual(accepted.remoteRunnerHostIds, [candidate.id]);
   }
 
