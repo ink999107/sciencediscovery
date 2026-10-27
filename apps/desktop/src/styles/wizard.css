@@ -177,7 +177,6 @@
 .wizard-page .field-secret { position: relative; display: flex; }
 .wizard-page .field-secret .field-input {
   padding-right: 58px;
-  font-family: inherit;
 }
 .wizard-page .field-secret-toggle {
   position: absolute;
@@ -362,9 +361,11 @@
 .field-input::placeholder { color: var(--text-faint); }
 .field-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 /* API key: masked by default, reveal is a display toggle only — the stored value is
-   untouched, and it re-masks when focus leaves. */
+   untouched, and it re-masks when focus leaves. The field keeps the form's own
+   face: a key is one more value in this form, and dressing it in the code face
+   made its placeholder read as a different kind of field from its neighbours. */
 .field-secret { position: relative; display: flex; }
-.field-secret .field-input { padding-right: 74px; font-family: var(--font-mono); }
+.field-secret .field-input { padding-right: 74px; }
 .field-secret-toggle {
   position: absolute;
   right: 5px;
