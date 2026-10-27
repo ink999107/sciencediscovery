@@ -370,7 +370,9 @@ test("two versions of one artifact are one row, opening the newest", () => {
   });
   assert.equal(count(markup, 'class="label">trace.md<'), 1);
   assert.match(markup, /title="app\/trace\.md"/, "the row is the newest version");
-  assert.doesNotMatch(markup, /label-meta/);
+  // No folder hint on the row: the name is unique, so the folder would be a
+  // column of the same value twice. The group heading's `当前会话` is not it.
+  assert.doesNotMatch(markup, /class="label-meta" title=/);
 });
 
 test("distinct artifact names get no folder column", () => {
@@ -387,7 +389,7 @@ test("distinct artifact names get no folder column", () => {
       },
     ] as never,
   });
-  assert.doesNotMatch(markup, /label-meta/);
+  assert.doesNotMatch(markup, /class="label-meta" title=/);
 });
 
 test("a document belongs to the group it was opened from", () => {
@@ -463,9 +465,10 @@ test("the artifact list shows every session's output, the open one first", () =>
   );
 });
 
-test("one session's artifacts need no heading above them", () => {
-  // A heading over the only group is a line of chrome saying what the panel
-  // already says. It appears when there is a second session to tell apart.
+test("the heading names the session even when it is the only one", () => {
+  // An artifact belongs to a Session, and the list is grouped by the Session
+  // that made it. Heading only the second group made the list change shape as
+  // a Project grew; the name is there from the first artifact on.
   const markup = render(initialTabState(), {
     activeGroup: "artifacts",
     outputs: [{
@@ -476,7 +479,9 @@ test("one session's artifacts need no heading above them", () => {
     sessions: [{ id: "s-now", title: "会话" }] as never,
   });
   assert.match(markup, /now\.md/);
-  assert.doesNotMatch(markup, /panel-output-head/);
+  assert.equal(count(markup, 'class="panel-output-head'), 1);
+  assert.match(markup, /class="panel-output-head is-current is-open"/);
+  assert.match(markup, /<span class="label">会话<\/span>/);
 });
 
 test("a loading document shows a spinner rather than an empty body", () => {

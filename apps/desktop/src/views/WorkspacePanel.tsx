@@ -195,10 +195,9 @@ function ArtifactList({
       </div>
     );
   }
-  // One Session's artifacts need no heading: the list is theirs. As soon as a
-  // second Session appears — or the only one is not the open one — the heading
-  // is what says whose file this is.
-  const headed = groups.some((group) => !group.isCurrent);
+  // Every group is headed by the Session that made its files, even when there
+  // is only one: an artifact belongs to a Session, and a list that names the
+  // Session only once a second one exists changes shape as a Project grows.
   return (
     <>
       {shown.map(({ group, outputs }) => {
@@ -208,19 +207,17 @@ function ArtifactList({
         const open = needle !== "" || (opened[group.sessionId] ?? group.isCurrent);
         return (
           <div className="panel-output" key={group.sessionId}>
-            {headed ? (
-              <button
-                aria-expanded={open}
-                className={`panel-output-head${group.isCurrent ? " is-current" : ""}${open ? " is-open" : ""}`}
-                onClick={() => setOpened((current) => ({ ...current, [group.sessionId]: !open }))}
-                title={group.title}
-                type="button"
-              >
-                <span aria-hidden="true" className="tree-chev">▸</span>
-                <span className="label">{group.title}</span>
-                {group.isCurrent ? <span className="label-meta">{TEXT.workspace.currentSession}</span> : null}
-              </button>
-            ) : null}
+            <button
+              aria-expanded={open}
+              className={`panel-output-head${group.isCurrent ? " is-current" : ""}${open ? " is-open" : ""}`}
+              onClick={() => setOpened((current) => ({ ...current, [group.sessionId]: !open }))}
+              title={group.title}
+              type="button"
+            >
+              <span aria-hidden="true" className="tree-chev">▸</span>
+              <span className="label">{group.title}</span>
+              {group.isCurrent ? <span className="label-meta">{TEXT.workspace.currentSession}</span> : null}
+            </button>
             {!open ? null : outputs.map((output) => {
               const name = artifactName(output);
               // One row per artifact, keyed by the artifact: its versions are

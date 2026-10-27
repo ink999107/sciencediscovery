@@ -77,9 +77,10 @@ export function App({ initialToken }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(() =>
     readStoredFlag(localStorage, RIGHT_PANEL_STORAGE_KEY),
   );
-  /** Which of the panel's three groups is showing. Opening an artifact or a
-   *  file from elsewhere in the app lands on the group that lists it. */
-  const [panelGroup, setPanelGroup] = useState<PanelGroup>("files");
+  /** Which of the panel's groups is showing. Opening an artifact or a file from
+   *  elsewhere in the app lands on the group that lists it; a panel that is
+   *  simply being opened lands on 产物, which is what a run produces. */
+  const [panelGroup, setPanelGroup] = useState<PanelGroup>("artifacts");
   /** The subagent whose execution the panel is showing, if any. It is a
    *  mode of the panel rather than a fourth tab: the transcript's line opens
    *  it, and the panel's own back arrow closes it. */
@@ -325,6 +326,10 @@ export function App({ initialToken }: Props) {
     setWorkspaceOpen(false);
     setOpenSubagentId(undefined);
     setOpenTool(undefined);
+    // The group belongs to the panel being open in the same way: a panel the
+    // reader asked for again opens on 产物, not on the file tree they happened
+    // to be browsing when they closed it.
+    setPanelGroup("artifacts");
   };
 
   // The column width is published as a custom property rather than written into
