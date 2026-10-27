@@ -436,7 +436,9 @@ function VersionPicker({
       <button
         aria-expanded={open}
         aria-haspopup="menu"
-        aria-label={TEXT.workspace.version}
+        aria-label={shown === undefined
+          ? TEXT.workspace.version
+          : `${TEXT.workspace.version} v${shown.version.version}`}
         className={`doc-version-button${open ? " is-open" : ""}`}
         onClick={() => setOpen((value) => !value)}
         ref={trigger}
@@ -453,6 +455,9 @@ function VersionPicker({
           current={shown?.version.id}
           onSelect={(version) => {
             setOpen(false);
+            // The menu unmounts with the pick, and focus would land on the
+            // body; the trigger is what the reader is looking at now.
+            trigger.current?.focus();
             onSelect(version);
           }}
           versions={versions}
@@ -674,6 +679,9 @@ export function WorkspacePanel({
               {active !== undefined && activeVersions.length > 1 ? (
                 <VersionPicker
                   current={active.versionId}
+                  // Keyed by the open document: a menu left open belongs to the
+                  // document it was opened on, not to whatever replaces it.
+                  key={active.id}
                   onSelect={(output) => void actions.selectArtifactVersion(active.id, output)}
                   versions={activeVersions}
                 />

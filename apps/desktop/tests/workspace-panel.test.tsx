@@ -299,7 +299,7 @@ test("the open artifact chooses its version from the document's top right", () =
   // is drawn here rather than left to a native select, whose popup is the
   // platform's own square list; the menu is a card of the panel's own.
   assert.equal(count(markup, 'class="doc-versions"'), 1);
-  assert.match(markup, /aria-label="版本"[^>]*>v2</u);
+  assert.match(markup, /aria-label="版本 v2"[^>]*>v2</u);
   assert.match(markup, /aria-haspopup="menu"/u);
   assert.match(markup, /aria-expanded="false"/u);
   assert.doesNotMatch(markup, /<select/u);
