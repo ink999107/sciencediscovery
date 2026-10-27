@@ -21,6 +21,7 @@ import {
   closeTab,
   homeTab,
   initialTabState,
+  patchVersion,
   placeDocument,
   type PreviewSlot,
 } from "../src/app/preview-tabs.js";
@@ -239,4 +240,41 @@ test("closing an id that is not open changes nothing", () => {
   const result = closeTab(state.tabs, state.activeTabId, "tab-99");
   assert.equal(result.collapse, false);
   assert.equal(result.tabs.length, 1);
+});
+
+test("a version's answer lands only while the tab still shows that version", () => {
+  const state = initialTabState();
+  const placed = placeDocument(state.tabs, state.activeTabId, {
+    artifactId: "a1",
+    label: "trace.md",
+    path: "trace.md",
+    source: "artifact",
+    versionId: "v2",
+  });
+  const stale = patchVersion(placed, placed.activeTabId, "v1", { content: "older" });
+  assert.equal(stale.tabs[0]?.content, undefined, "an answer for a version the tab left is dropped");
+  const fresh = patchVersion(placed, placed.activeTabId, "v2", { content: "newest", loading: false });
+  assert.equal(fresh.tabs[0]?.content, "newest");
+  assert.equal(fresh.tabs[0]?.loading, false);
+});
+
+test("a version's answer leaves tabs showing another version untouched", () => {
+  const one = placeDocument(initialTabState().tabs, HOME_TAB_ID, {
+    artifactId: "a1",
+    label: "one.md",
+    path: "one.md",
+    source: "artifact",
+    versionId: "v1",
+  });
+  const two = placeDocument(one.tabs, one.activeTabId, {
+    artifactId: "a2",
+    label: "two.md",
+    path: "two.md",
+    source: "artifact",
+    versionId: "v9",
+  });
+  const patched = patchVersion(two, one.activeTabId, "v1", { content: "one" });
+  assert.equal(patched.tabs.find((tab) => tab.id === one.activeTabId)?.content, "one");
+  assert.equal(patched.tabs.find((tab) => tab.id === two.activeTabId)?.content, undefined);
+  assert.equal(patched.activeTabId, two.activeTabId, "the active tab is not disturbed");
 });

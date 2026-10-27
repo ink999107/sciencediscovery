@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useCallback, useRef, useState, type PointerEvent, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
 
 import {
   DOC_MIN_WIDTH,
@@ -43,6 +43,10 @@ export interface PanelSplitHandle {
    *  closed edge does. */
   reset(): void;
   start(event: PointerEvent<HTMLElement>): void;
+  /** The body's measured width, or 0 until it has been measured. The rendered
+   *  list width is clamped against it — see `listWidth` — because the panel can
+   *  be made narrower after the divider was moved. */
+  width: number;
 }
 
 /**
@@ -70,6 +74,20 @@ export function usePanelSplit(body: RefObject<HTMLDivElement | null>): PanelSpli
   if (!split.docClosed) lastOpen.current = split.list;
 
   const panelWidth = () => body.current?.getBoundingClientRect().width ?? 0;
+
+  /** The body's width, kept in state so the render can clamp the list against
+   *  it: a drag is measured when it happens, but the panel can also be narrowed
+   *  afterwards, and the list has to give way then too. */
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const node = body.current;
+    if (node === null) return;
+    const measure = () => setWidth(node.getBoundingClientRect().width);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [body]);
 
   const openDoc = useCallback(() => {
     setSplit((value) => (value.docClosed ? { docClosed: false, list: lastOpen.current } : value));
@@ -129,5 +147,5 @@ export function usePanelSplit(body: RefObject<HTMLDivElement | null>): PanelSpli
     [body, reset],
   );
 
-  return { nudge, openDoc, reset, split, start };
+  return { nudge, openDoc, reset, split, start, width };
 }

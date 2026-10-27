@@ -23,6 +23,7 @@ import { formatByteLimit, splitBySize } from "./upload.js";
 import {
   closeTab as closeTabIn,
   initialTabState,
+  patchVersion,
   placeDocument,
   type DocumentRequest,
   type PreviewSlot,
@@ -1189,11 +1190,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   /** The same write, gated on the version the read was made for: a pick that
    *  replaces one still in flight must not be overwritten by the older answer. */
   const settleVersion = useCallback((id: string, versionId: string, patch: Partial<PreviewSlot>) => {
-    setTabs((current) => ({
-      ...current,
-      tabs: current.tabs.map((tab) =>
-        tab.id === id && tab.versionId === versionId ? { ...tab, ...patch } : tab),
-    }));
+    setTabs((current) => patchVersion(current, id, versionId, patch));
   }, []);
 
   const openPreview = useCallback(
@@ -1212,14 +1209,23 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         return;
       }
       const openedId = placed.activeTabId;
+      // The open read and a version pick can race: the picker can move the tab
+      // to another version before this read lands, and the newer choice has to
+      // win. A file has no version to hold the tab to, so only an artifact's
+      // answer is gated.
+      const versionId = request.versionId;
+      const settle = (patch: Partial<PreviewSlot>) => {
+        if (versionId === undefined) settleTab(openedId, patch);
+        else settleVersion(openedId, versionId, patch);
+      };
       setTabs(placed);
       try {
-        settleTab(openedId, { content: await read(target), loading: false });
+        settle({ content: await read(target), loading: false });
       } catch (reason) {
-        settleTab(openedId, { error: errorMessage(reason), loading: false });
+        settle({ error: errorMessage(reason), loading: false });
       }
     },
-    [settleTab, tabs.activeTabId, tabs.tabs],
+    [settleTab, settleVersion, tabs.activeTabId, tabs.tabs],
   );
 
   const openFile = useCallback(

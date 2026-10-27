@@ -19,7 +19,7 @@ import type { PreviewSlot, TabState, WorkspaceActions } from "../app/use-workspa
 import { artifactGroups, type ArtifactGroup } from "../app/artifact-groups.js";
 import { artifactHints, artifactName, artifactPath, versionsOf } from "../app/artifact-labels.js";
 import { buildFileTree, filterFileTree, type FileTreeNode } from "../app/file-tree.js";
-import { DOC_MIN_WIDTH, LIST_MIN_WIDTH, LIST_NUDGE_STEP, isListClosed } from "../app/panel-split.js";
+import { DOC_MIN_WIDTH, LIST_MIN_WIDTH, LIST_NUDGE_STEP, isListClosed, listWidth } from "../app/panel-split.js";
 import { usePanelSplit } from "../app/use-panel-split.js";
 import { fileFolder, fileName } from "../app/paths.js";
 import { PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, PANEL_NUDGE_STEP, PANEL_NUDGE_STRIDE } from "../app/panel-width.js";
@@ -527,14 +527,22 @@ export function WorkspacePanel({
       return actions.openFile(file);
     },
   };
-  const listMax = Math.max(LIST_MIN_WIDTH, resize.width - DOC_MIN_WIDTH);
+  // What the list actually gets: the panel can be narrowed after the divider
+  // was moved, and the document column keeps its minimum — otherwise the reader
+  // would lose the page with nothing marked closed and no edge to click.
+  const listPx = panel.width > 0 ? listWidth(panel.split, panel.width) : panel.split.list;
+  // The separator reports the same measured body the drag uses, so its value
+  // never sits outside its own range when the panel is narrower than the drag.
+  // Before the first measurement it falls back to the panel's own width.
+  const bodyWidth = panel.width > 0 ? panel.width : resize.width;
+  const listMax = Math.max(LIST_MIN_WIDTH, Math.round(bodyWidth) - DOC_MIN_WIDTH);
   const splitter = (
     <div
       aria-label={closed ? TEXT.workspace.expand : TEXT.workspace.resizeList}
       aria-orientation="vertical"
       aria-valuemax={listMax}
       aria-valuemin={0}
-      aria-valuenow={listClosed ? 0 : Math.min(panel.split.list, listMax)}
+      aria-valuenow={listClosed ? 0 : Math.min(listPx, listMax)}
       className="panel-splitter"
       onKeyDown={(event) => {
         if (closed && (event.key === "Enter" || event.key === " ")) {
@@ -772,7 +780,7 @@ export function WorkspacePanel({
         <div
           className={`panel-body${panel.split.docClosed ? " is-doc-closed" : ""}${listClosed ? " is-list-closed" : ""}`}
           ref={splitBody}
-          style={{ "--panel-list-width": `${panel.split.list}px` } as CSSProperties}
+          style={{ "--panel-list-width": `${listPx}px` } as CSSProperties}
         >
           {activeGroup === "artifacts" ? (
             <>

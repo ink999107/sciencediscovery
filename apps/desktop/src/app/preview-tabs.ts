@@ -167,6 +167,27 @@ function documentSlot(request: DocumentRequest, id: string): PreviewSlot {
   };
 }
 
+/**
+ * Apply `patch` to one tab, but only while it still shows `versionId`.
+ *
+ * A version is read for one document and one version of it. Another pick can
+ * move the tab before the answer lands; writing it then would leave the picker
+ * naming one version while the page showed another. The check is what makes
+ * the later request the winner, whichever read finishes last.
+ */
+export function patchVersion(
+  tabs: TabState,
+  id: string,
+  versionId: string,
+  patch: Partial<PreviewSlot>,
+): TabState {
+  return {
+    ...tabs,
+    tabs: tabs.tabs.map((tab) =>
+      tab.id === id && tab.versionId === versionId ? { ...tab, ...patch } : tab),
+  };
+}
+
 export interface CloseResult extends TabState {
   /** Set when the close emptied the panel, which collapses it. */
   collapse: boolean;
