@@ -21,7 +21,7 @@ import { useLoaded } from "../../app/use-loaded.js";
 import { TEXT } from "../../text.js";
 import { SettingsModal } from "./SettingsModal.js";
 import { SkillForm } from "./SkillForm.js";
-import { Group, LoadGate, Switch, Tag } from "./rows.js";
+import { BulkToggles, Group, LoadGate, Switch, Tag } from "./rows.js";
 
 interface Props {
   activeProjectId?: string;
@@ -137,6 +137,28 @@ export function SkillsSettings({ activeProjectId, adding, client, onAddingChange
   };
 
   /**
+   * 一键启用 / 一键关闭, as one write: the list the project keeps is the whole
+   * answer, so "all" is every installed id and "none" is the empty list. Under
+   * `all` the project carries no list at all, which is why disabling has to
+   * write one — `setEnabledSkills` flips the mode to `selected` with it.
+   */
+  const setAll = async (next: boolean) => {
+    if (!activeProjectId) return;
+    const page = loaded.value;
+    if (!page) return;
+    setBusy(true);
+    setFailure(undefined);
+    try {
+      await setEnabledSkills(client, activeProjectId, next ? page.skills.map((skill) => skill.id) : []);
+    } catch (reason) {
+      setFailure(reason instanceof Error ? reason.message : TEXT.settings.saveFailed);
+    } finally {
+      setBusy(false);
+      loaded.reload();
+    }
+  };
+
+  /**
    * Opening a card reads the skill itself, because what closes it is the one
    * thing the list does not carry: the body of SKILL.md, which is what the
    * model is actually told. The summary above the divider is the description;
@@ -190,6 +212,7 @@ export function SkillsSettings({ activeProjectId, adding, client, onAddingChange
             }
             return (
               <div className="settings-list">
+                <BulkToggles busy={busy} onAll={(next) => void setAll(next)} />
                 {page.skills.map((skill) => {
                   const on = page.enabled.includes(skill.id);
                   const open = openId === skill.id;

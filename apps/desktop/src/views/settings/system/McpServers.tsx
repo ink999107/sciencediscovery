@@ -34,13 +34,10 @@ import type { ConfirmRequest } from "../../../app/use-workspace.js";
 import { useLoaded } from "../../../app/use-loaded.js";
 import { TEXT } from "../../../text.js";
 import { SettingsModal } from "../SettingsModal.js";
-import { Group, LoadGate, Row, Select, Switch, Tag } from "../rows.js";
+import { BulkToggles, Group, LoadGate, Row, Select, Switch, Tag } from "../rows.js";
 
 interface Props {
-  /** Owned by the settings surface, where the 新增服务器 button lives. */
-  adding: boolean;
   client: ApiClient;
-  onAddingChange: (next: boolean) => void;
   onConfirm: (request: ConfirmRequest) => void;
   onToast: (message: string) => void;
 }
@@ -225,11 +222,11 @@ function initialOf(name: string): string {
  * flipped. Secrets are write-only: saved slots come back as keys with null
  * values, and this form sends them back untouched unless a value is typed.
  *
- * Creating and editing share one modal, as 添加模型 does: the list stays in
- * place behind the scrim, and a built-in entry expands in place because it has
- * nothing to edit.
+ * A server's 编辑 opens the record in a modal, as 添加模型 does: the list stays
+ * in place behind the scrim, and a built-in entry expands in place because it
+ * has nothing to edit.
  */
-export function McpServers({ adding, client, onAddingChange, onConfirm, onToast }: Props) {
+export function McpServers({ client, onConfirm, onToast }: Props) {
   const loaded = useLoaded<Page>(async () => {
     const [servers, sources, settings] = await Promise.all([
       listMcpServers(client),
@@ -251,19 +248,16 @@ export function McpServers({ adding, client, onAddingChange, onConfirm, onToast 
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string>();
 
-  useEffect(() => setFailure(undefined), [adding, draft]);
+  useEffect(() => setFailure(undefined), [draft]);
 
-  // 新增服务器 lives on the page header, so its empty draft is derived from
-  // `adding` rather than stored twice.
-  const current = draft ?? (adding ? emptyDraft() : undefined);
+  // Only a saved server opens the form, so there is never an empty draft: the
+  // record being edited is the source of every field.
+  const current = draft;
   const editing = current?.id !== undefined;
   const change = (patch: Partial<Draft>) =>
     setDraft((previous) => ({ ...(previous ?? emptyDraft()), ...patch }));
 
-  const closeForm = () => {
-    setDraft(undefined);
-    onAddingChange(false);
-  };
+  const closeForm = () => setDraft(undefined);
 
   const write = async (server: CustomMcpServerDetails, body: CustomMcpServerInput) => {
     setBusy(true);
@@ -295,6 +289,37 @@ export function McpServers({ adding, client, onAddingChange, onConfirm, onToast 
           [key]: { ...(overrides.plugins?.[key] ?? {}), enabled: next },
         },
       });
+      loaded.reload();
+    } catch (reason) {
+      setFailure(reason instanceof Error ? reason.message : TEXT.settings.saveFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** 一键启用 / 一键关闭 over both kinds of server: a custom server's own
+   *  `enabled` flag, and a built-in's plugin override. A server is written
+   *  whole, so each custom one is resaved from its own record — sequentially,
+   *  because some of them reconnect on the way in. */
+  const setAll = async (next: boolean) => {
+    const page = loaded.value;
+    if (!page) return;
+    setBusy(true);
+    setFailure(undefined);
+    try {
+      for (const server of page.servers) {
+        if (server.enabled === next) continue;
+        await saveMcpServer(client, { ...inputOf(draftOf(server)), enabled: next }, server.id);
+      }
+      if (page.builtins.length > 0) {
+        const overrides = page.overrides ?? {};
+        const plugins = { ...overrides.plugins };
+        for (const source of page.builtins) {
+          const key = `connector.${source.manifest.id}`;
+          plugins[key] = { ...(plugins[key] ?? {}), enabled: next };
+        }
+        await putGlobalSettings(client, { ...overrides, plugins });
+      }
       loaded.reload();
     } catch (reason) {
       setFailure(reason instanceof Error ? reason.message : TEXT.settings.saveFailed);
@@ -337,6 +362,7 @@ export function McpServers({ adding, client, onAddingChange, onConfirm, onToast 
               <p className="settings-empty">{TEXT.settings.system.mcp.empty}</p>
             ) : (
               <div className="settings-list">
+                <BulkToggles busy={busy} onAll={(next) => void setAll(next)} />
                 {page.servers.map((server) => (
                   <div className="settings-card" key={server.id}>
                     <span className="settings-card-mark">{initialOf(server.name)}</span>
@@ -484,9 +510,7 @@ export function McpServers({ adding, client, onAddingChange, onConfirm, onToast 
 
       {current ? (
         <SettingsModal
-          label={editing
-            ? TEXT.settings.system.mcp.editTitle
-            : TEXT.settings.system.mcp.add}
+          label={TEXT.settings.system.mcp.editTitle}
           onClose={closeForm}
           wide
         >

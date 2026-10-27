@@ -60,6 +60,9 @@ export const EN: Text = {
     noProjects: "No projects yet",
     newProject: "New project",
     projectName: "Project name",
+    /** Said under the name field when another Project already has that name;
+     *  the service refuses the same name with a 409. */
+    projectNameTaken: (name: string) => `A project named "${name}" already exists`,
     /** The `+` on a Project fold; the name is in it because a column of
      *  identical buttons is not distinguishable to a screen reader. */
     newSessionInProject: (name: string) => `New session in ${name}`,
@@ -98,10 +101,11 @@ export const EN: Text = {
     experts: "Experts",
     expertsNone: "None",
     expertsHint: "Bind a personal expert to this conversation.",
-    expertsCreate: "New…",
     expertsSearch: "Search by name",
     expertsEmpty: "No matching experts.",
     expertsLoading: "Loading experts…",
+    /** The `/` palette's name, for its listbox role. */
+    skillsPalette: "Choose a skill",
     permission: "Ask for approval",
     permissionMode: "Permission mode",
     permissionAskShort: "Ask",
@@ -330,6 +334,10 @@ export const EN: Text = {
     loading: "Loading…",
     retry: "Retry",
     edit: "Edit",
+    /** The pair above 技能 / MCP 服务器 / 专家's lists, which writes every row
+     *  of the list at once. */
+    enableAll: "Enable all",
+    disableAll: "Disable all",
     saveFailed: "Save failed. Try again.",
     cancel: "Cancel",
     model: {
@@ -637,7 +645,6 @@ export const EN: Text = {
         help: "Custom servers can be added and changed at any time. Built-in servers ship with the product, start enabled, and get their tools from the server catalog. The switch controls the server itself; which sources a session may use is still chosen per session.",
         builtin: "Built-in",
         empty: "No custom MCP servers registered yet.",
-        add: "Add server",
         editTitle: "Edit server",
         name: "Name",
         description: "Description",
@@ -756,7 +763,6 @@ export const EN: Text = {
         builtIn: "Built-in",
         enabled: "Enabled",
         disabled: "Disabled",
-        add: "Add specialist",
         editTitle: "Edit specialist",
         name: "Name",
         namePlaceholder: "For example, RNA-seq reviewer",

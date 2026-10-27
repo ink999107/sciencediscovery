@@ -206,6 +206,9 @@
   color: var(--muted);
   font-size: 11px;
 }
+/* The one small line that is a refusal rather than a hint. */
+.form-field > small.form-field-problem { color: var(--danger); }
+.form-field input[aria-invalid="true"] { border-color: var(--danger); }
 .form-field input[type="text"],
 .form-field select {
   width: 100%;

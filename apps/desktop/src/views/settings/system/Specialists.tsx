@@ -27,14 +27,11 @@ import type { ConfirmRequest } from "../../../app/use-workspace.js";
 import { useLoaded } from "../../../app/use-loaded.js";
 import { TEXT } from "../../../text.js";
 import { SettingsModal } from "../SettingsModal.js";
-import { Group, LoadGate, Switch, Tag } from "../rows.js";
+import { BulkToggles, Group, LoadGate, Switch, Tag } from "../rows.js";
 import { SpecialistForm } from "./SpecialistForm.js";
 
 interface Props {
-  /** Owned by the settings surface, where the 新增专家 button lives. */
-  adding: boolean;
   client: ApiClient;
-  onAddingChange: (next: boolean) => void;
   onConfirm: (request: ConfirmRequest) => void;
 }
 
@@ -52,10 +49,10 @@ interface Page {
  * specialist is always enabled, so the switch is drawn only where it means
  * something.
  *
- * Creating and editing share one modal, as 添加模型 does: the list stays in
- * place behind the scrim, and the same form serves a row's 编辑.
+ * A row's 编辑 opens the same form 添加模型 uses: the list stays in place
+ * behind the scrim, and the specialist's own record is what it edits.
  */
-export function SpecialistsSettings({ adding, client, onAddingChange, onConfirm }: Props) {
+export function SpecialistsSettings({ client, onConfirm }: Props) {
   const loaded = useLoaded<Page>(async () => {
     const [specialists, connectors, skills] = await Promise.all([
       listSpecialists(client),
@@ -68,10 +65,7 @@ export function SpecialistsSettings({ adding, client, onAddingChange, onConfirm 
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string>();
 
-  const close = () => {
-    onAddingChange(false);
-    setEditing(undefined);
-  };
+  const close = () => setEditing(undefined);
 
   const toggle = async (specialist: Specialist, next: boolean) => {
     setBusy(true);
@@ -86,7 +80,27 @@ export function SpecialistsSettings({ adding, client, onAddingChange, onConfirm 
     }
   };
 
-  const open = adding || editing !== undefined;
+  /** 一键启用 / 一键关闭. Only a built-in has a switch of its own — a specialist
+   *  the user wrote is always on — so those are the rows this writes. */
+  const setAll = async (next: boolean) => {
+    const page = loaded.value;
+    if (!page) return;
+    setBusy(true);
+    setFailure(undefined);
+    try {
+      for (const specialist of page.specialists) {
+        if (!specialist.builtIn || (specialist.enabled !== false) === next) continue;
+        await updateSpecialist(client, specialist.id, { enabled: next });
+      }
+      loaded.reload();
+    } catch (reason) {
+      setFailure(reason instanceof Error ? reason.message : TEXT.settings.saveFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const open = editing !== undefined;
 
   return (
     <LoadGate loaded={loaded}>
@@ -98,6 +112,7 @@ export function SpecialistsSettings({ adding, client, onAddingChange, onConfirm 
               <p className="settings-empty">{TEXT.settings.system.specialists.empty}</p>
             ) : (
               <div className="settings-list">
+                <BulkToggles busy={busy} onAll={(next) => void setAll(next)} />
                 {page.specialists.map((specialist) => {
                   const on = specialist.enabled !== false;
                   return (
@@ -165,9 +180,7 @@ export function SpecialistsSettings({ adding, client, onAddingChange, onConfirm 
 
           {open ? (
             <SettingsModal
-              label={editing === undefined
-                ? TEXT.settings.system.specialists.add
-                : TEXT.settings.system.specialists.editTitle}
+              label={TEXT.settings.system.specialists.editTitle}
               onClose={close}
               wide
             >

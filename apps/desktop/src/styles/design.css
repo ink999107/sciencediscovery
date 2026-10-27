@@ -2224,6 +2224,33 @@ body.is-resizing {
   color: #8c8c8c;
 }
 
+/* A skill's mark is the slash that opened the palette. */
+.expert-mark.is-skill {
+  background: #eef2ff;
+  color: #4a7cf5;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+/* The `/` palette, anchored to the input it belongs to: it floats above the
+   composer rather than pushing the page down, because the draft underneath is
+   still the thing being written. */
+.composer-skills {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  max-height: min(340px, 52vh);
+  overflow-y: auto;
+  scrollbar-color: #dedede transparent;
+  scrollbar-width: thin;
+}
+
 .expert-mark.is-blue { background: #4a7cf5; }
 .expert-mark.is-pink { background: #ef5da8; }
 .expert-mark.is-amber { background: #f5a524; }

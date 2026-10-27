@@ -625,29 +625,25 @@ describe("a skill created from the form", () => {
 });
 
 describe("the MCP servers page", () => {
-  const page = (adding: boolean) =>
+  const page = () =>
     renderToStaticMarkup(
-      <McpServers
-        adding={adding}
-        client={client}
-        onAddingChange={noConfirm}
-        onConfirm={noConfirm}
-        onToast={noConfirm}
-      />,
+      <McpServers client={client} onConfirm={noConfirm} onToast={noConfirm} />,
     );
 
   it("reads one card list, not the custom/built-in tabs", () => {
-    const markup = page(false);
+    const markup = page();
     assert.ok(markup.includes("settings-section"), "MCP 服务器 rendered no section");
     assert.ok(markup.includes(loading), "MCP 服务器 did not start a read");
     assert.ok(!markup.includes('role="tablist"'), "the custom/built-in tabs are back");
     assert.ok(markup.includes(TEXT.settings.system.mcp.help), "the page does not say what 内置 means");
   });
 
-  it("is what 新增服务器 opens", () => {
-    const markup = page(true);
-    assert.ok(markup.includes(TEXT.settings.system.mcp.add), "the modal is not labelled 新增服务器");
-    assert.ok(markup.includes(TEXT.settings.system.mcp.name), "the server form is not open");
+  it("opens no blank form", () => {
+    // 新增服务器 is gone: a server is written from the row that already has
+    // one, so the page mounts with every form closed and offers no way in.
+    const markup = page();
+    assert.ok(!markup.includes("settings-card is-form"), "a form is mounted before a row was picked");
+    assert.ok(!markup.includes(TEXT.settings.system.mcp.add), "新增服务器 is still drawn");
   });
 });
 
@@ -679,7 +675,7 @@ describe("each settings page", () => {
   it("专家 renders and asks for its data", () => {
     asksForItsData(
       "专家",
-      <SpecialistsSettings adding={false} client={client} onAddingChange={noConfirm} onConfirm={noConfirm} />,
+      <SpecialistsSettings client={client} onConfirm={noConfirm} />,
     );
   });
 

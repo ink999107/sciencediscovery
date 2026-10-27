@@ -49,7 +49,6 @@ function render(
       onApprovalMode={() => {}}
       onCreateProject={() => {}}
       onOpenSettings={() => {}}
-      onOpenSpecialists={() => {}}
       onSelectModel={() => {}}
       onSelectProject={() => {}}
       onSend={() => {}}
@@ -73,7 +72,6 @@ function settingsMenu(approvalMode?: "ask_for_dangerous" | "always_allow", runni
       approvalMode={approvalMode}
       onApprovalMode={() => {}}
       onClose={() => {}}
-      onOpenSpecialists={() => {}}
       running={running}
     />,
   );
@@ -148,7 +146,6 @@ test("专家's flyout lists the experts with what each one does", () => {
     <ExpertFlyout
       loading={false}
       onClose={() => {}}
-      onOpenSpecialists={() => {}}
       onSelect={() => {}}
       selectedId="e2"
       specialists={EXPERTS}
@@ -159,9 +156,11 @@ test("专家's flyout lists the experts with what each one does", () => {
     assert.match(markup, new RegExp(expert.name));
     assert.match(markup, new RegExp(expert.description));
   }
-  // 无 stays the way to unbind, and 新建 the way to an expert not listed.
+  // 无 stays the way to unbind, and stays at the top of the list. Creating an
+  // expert is 设置's job now, so the flyout is only ever a choice.
   assert.match(markup, /class="expert-mark is-none"/);
-  assert.match(markup, /新建…/);
+  assert.ok(markup.indexOf("expert-mark is-none") < markup.indexOf("code-engineer"));
+  assert.doesNotMatch(markup, /新建…/);
   // Exactly the bound expert is marked, and it is the one identified to AT.
   const selected = markup.match(/aria-current="true"[^>]*>[\s\S]*?class="expert-name">([^<]+)</g) ?? [];
   assert.equal(selected.length, 1);
@@ -174,7 +173,6 @@ test("the 专家 row names the bound expert rather than saying 无", () => {
       experts={EXPERTS}
       onApprovalMode={() => {}}
       onClose={() => {}}
-      onOpenSpecialists={() => {}}
       running={false}
       selectedSpecialistId="e2"
     />,
@@ -201,7 +199,6 @@ test("an empty catalog says so instead of showing a blank card", () => {
     <ExpertFlyout
       loading={false}
       onClose={() => {}}
-      onOpenSpecialists={() => {}}
       onSelect={() => {}}
       specialists={[]}
     />,

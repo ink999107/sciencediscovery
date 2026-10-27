@@ -15,9 +15,17 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { ApiClient } from "../api/client.js";
-import { listSpecialists } from "../api/settings.js";
-import type { ApprovalMode, ModelProfile, ModelProvider, Project, Specialist } from "../api/types.js";
+import { listSkills, listSpecialists } from "../api/settings.js";
+import type {
+  ApprovalMode,
+  ModelProfile,
+  ModelProvider,
+  Project,
+  SkillDescriptor,
+  Specialist,
+} from "../api/types.js";
 import type { LandingCategory, LandingSeed } from "../app/landing.js";
+import { skillChoices, skillDraft, slashQuery } from "../app/slash.js";
 import { TEXT } from "../text.js";
 import { filterExperts } from "./expert-catalog.js";
 import { modelBrand } from "./model-brand.js";
@@ -52,7 +60,6 @@ interface Props {
   /** 新建项目 from the landing strip: a Project needs nothing but a name. */
   onCreateProject: (name: string) => void;
   onOpenSettings: () => void;
-  onOpenSpecialists: () => void;
   onSelectModel: (modelId: string) => void;
   /** Point the next conversation at a Project, or at none (`undefined`). */
   onSelectProject: (projectId?: string) => void;
@@ -255,7 +262,6 @@ export function SessionSettingsMenu({
   expertsLoading,
   onApprovalMode,
   onClose,
-  onOpenSpecialists,
   onSelectSpecialist,
   running,
   selectedSpecialistId,
@@ -268,7 +274,6 @@ export function SessionSettingsMenu({
   expertsLoading?: boolean;
   onApprovalMode: (mode: ApprovalMode) => void;
   onClose: () => void;
-  onOpenSpecialists: () => void;
   onSelectSpecialist?: (specialistId?: string) => void;
   running: boolean;
   selectedSpecialistId?: string;
@@ -343,7 +348,6 @@ export function SessionSettingsMenu({
           <ExpertFlyout
             loading={expertsLoading ?? false}
             onClose={onClose}
-            onOpenSpecialists={onOpenSpecialists}
             onSelect={(specialistId) => {
               onSelectSpecialist?.(specialistId);
               onClose();
@@ -383,23 +387,20 @@ function expertTone(id: string): string {
  *
  * The reference lists them the way a catalog does — a search line, then one
  * row per expert with its initial and its one-line description — rather than
- * as a menu of names. 无 and 新建 keep their place below the list: the first is
- * how a binding is undone, the second is the way to an expert this list does
- * not have yet.
+ * as a menu of names. 无 keeps its place at the top of the list: it is how a
+ * binding is undone.
  *
  * Exported because it is only mounted while its row is open.
  */
 export function ExpertFlyout({
   loading,
   onClose,
-  onOpenSpecialists,
   onSelect,
   selectedId,
   specialists,
 }: {
   loading: boolean;
   onClose: () => void;
-  onOpenSpecialists: () => void;
   onSelect: (specialistId?: string) => void;
   selectedId?: string;
   specialists: Specialist[];
@@ -481,17 +482,6 @@ export function ExpertFlyout({
           <p className="expert-note">{TEXT.composer.expertsEmpty}</p>
         ) : null}
       </div>
-      <div className="session-menu-divider" />
-      <button
-        className="session-flyout-row is-action"
-        onClick={() => {
-          onClose();
-          onOpenSpecialists();
-        }}
-        type="button"
-      >
-        <span className="session-flyout-label">{TEXT.composer.expertsCreate}</span>
-      </button>
     </div>
   );
 }
@@ -604,7 +594,6 @@ export function Composer({
   onApprovalMode,
   onCreateProject,
   onOpenSettings,
-  onOpenSpecialists,
   onSelectModel,
   onSelectProject,
   onSelectSpecialist,
@@ -650,6 +639,48 @@ export function Composer({
       cancelled = true;
     };
   }, [client]);
+
+  /** The skills `/` can offer. Read once with the experts: both are small
+   *  catalogs, and the palette has to have something to draw the moment the
+   *  slash is typed. */
+  const [skills, setSkills] = useState<SkillDescriptor[]>([]);
+  useEffect(() => {
+    if (client === undefined) return;
+    let cancelled = false;
+    void listSkills(client)
+      .then((rows) => {
+        if (!cancelled) setSkills(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setSkills([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  // The palette is derived from the draft rather than opened by a key: it is
+  // showing exactly while the draft is one `/` command (see `slashQuery`), so
+  // typing the space that starts the request closes it without any state to
+  // keep in step. Only the highlighted row and an explicit Escape are state.
+  const query = slashQuery(text);
+  const choices = query === undefined ? [] : skillChoices(skills, query);
+  const [highlight, setHighlight] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => setHighlight(0), [query]);
+  useEffect(() => setDismissed(false), [query]);
+  const open = choices.length > 0 && !dismissed;
+  const active = Math.min(highlight, Math.max(choices.length - 1, 0));
+
+  const pickSkill = (skill: SkillDescriptor) => {
+    setText(skillDraft(skill));
+    setDismissed(true);
+    const node = area.current;
+    if (!node) return;
+    node.focus();
+    const end = node.value.length;
+    node.setSelectionRange(end, end);
+  };
 
   const selected = models.find((model) => model.id === selectedModelId) ?? models[0];
   /** The stored name is the server's; the pill shows it in the interface's
@@ -705,6 +736,34 @@ export function Composer({
 
   return (
     <div className={`composer${landing ? " is-landing" : ""}`}>
+      {open ? (
+        <div aria-label={TEXT.composer.skillsPalette} className="composer-skills" role="listbox">
+          {choices.map((skill, index) => (
+            <button
+              aria-selected={index === active}
+              className={`expert-row${index === active ? " is-selected" : ""}`}
+              key={skill.id}
+              onMouseDown={(event) => {
+                // The press would otherwise move the caret out of the draft
+                // before the click lands, and choosing a skill is a write to
+                // that draft.
+                event.preventDefault();
+                pickSkill(skill);
+              }}
+              role="option"
+              type="button"
+            >
+              <span className="expert-mark is-skill" aria-hidden="true">/</span>
+              <span className="expert-text">
+                <span className="expert-name">{skill.name}</span>
+                {skill.description === "" ? null : (
+                  <span className="expert-desc">{skill.description}</span>
+                )}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="composer-input">
         {tag ? (
           <span className="composer-tag">
@@ -725,6 +784,32 @@ export function Composer({
           id="composer-textarea"
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
+            // The palette claims the keys it navigates with before the
+            // composer reads Enter as send — but only while it is showing
+            // rows, so a draft with no matching skill still sends.
+            if (open) {
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setHighlight((current) => (current + 1) % choices.length);
+                return;
+              }
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setHighlight((current) => (current - 1 + choices.length) % choices.length);
+                return;
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setDismissed(true);
+                return;
+              }
+              if (event.key === "Tab" || (event.key === "Enter" && !event.shiftKey)) {
+                event.preventDefault();
+                const choice = choices[active];
+                if (choice !== undefined) pickSkill(choice);
+                return;
+              }
+            }
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               submit();
@@ -769,7 +854,6 @@ export function Composer({
               expertsLoading={expertsLoading}
               onApprovalMode={onApprovalMode}
               onClose={() => setMenu(undefined)}
-              onOpenSpecialists={onOpenSpecialists}
               onSelectSpecialist={onSelectSpecialist}
               running={running}
               selectedSpecialistId={selectedSpecialistId}

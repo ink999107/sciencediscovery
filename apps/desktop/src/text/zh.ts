@@ -55,6 +55,9 @@ export const ZH = {
     noProjects: "还没有项目",
     newProject: "新建项目",
     projectName: "项目名称",
+    /** Said under the name field when another Project already has that name;
+     *  the service refuses the same name with a 409. */
+    projectNameTaken: (name: string) => `已存在同名项目「${name}」，请换一个名称`,
     /** The `+` on a Project fold; the name is in it because a row of several
      *  identical buttons is not distinguishable to a screen reader. */
     newSessionInProject: (name: string) => `在「${name}」中新建会话`,
@@ -96,10 +99,11 @@ export const ZH = {
     experts: "专家",
     expertsNone: "无",
     expertsHint: "为此对话绑定一位个人专家。",
-    expertsCreate: "新建…",
     expertsSearch: "请输入关键字搜索",
     expertsEmpty: "没有匹配的专家。",
     expertsLoading: "正在读取专家…",
+    /** The `/` palette's name, for its listbox role. */
+    skillsPalette: "选择技能",
     permission: "请求批准",
     permissionMode: "权限模式",
     permissionAskShort: "询问",
@@ -354,6 +358,10 @@ export const ZH = {
     loading: "正在读取…",
     retry: "重试",
     edit: "编辑",
+    /** The pair above 技能 / MCP 服务器 / 专家's lists, which writes every row
+     *  of the list at once. */
+    enableAll: "一键启用",
+    disableAll: "一键关闭",
     saveFailed: "保存失败，请重试。",
     cancel: "取消",
     model: {
@@ -660,7 +668,6 @@ export const ZH = {
         help: "自定义服务器可以随时增删改；内置服务器随产品提供、默认开启，工具由服务端目录维护。开关只控制服务器本身，会话能用哪些数据源仍由会话决定。",
         builtin: "内置",
         empty: "还没有登记自定义 MCP 服务器。",
-        add: "新增服务器",
         editTitle: "编辑服务器",
         name: "名称",
         description: "说明",
@@ -778,7 +785,6 @@ export const ZH = {
         builtIn: "内置",
         enabled: "已启用",
         disabled: "已停用",
-        add: "新增专家",
         editTitle: "编辑专家",
         name: "名称",
         namePlaceholder: "例如：RNA-seq 审查员",

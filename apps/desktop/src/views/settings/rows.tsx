@@ -88,6 +88,33 @@ export function Switch({
   );
 }
 
+/**
+ * The two writes that act on a whole list: every row on, every row off.
+ *
+ * 技能, MCP 服务器 and 专家 all present a list of switches, and a user who
+ * wants none of them should not have to press each one. The buttons sit above
+ * the list and say what they will do to it; the page decides what "all" means,
+ * because only the page knows which of its rows have a switch of their own.
+ */
+export function BulkToggles({
+  busy,
+  onAll,
+}: {
+  busy?: boolean;
+  onAll: (enabled: boolean) => void;
+}) {
+  return (
+    <div className="settings-bulk">
+      <button className="link-button" disabled={busy} onClick={() => onAll(true)} type="button">
+        {TEXT.settings.enableAll}
+      </button>
+      <button className="link-button" disabled={busy} onClick={() => onAll(false)} type="button">
+        {TEXT.settings.disableAll}
+      </button>
+    </div>
+  );
+}
+
 /** A select whose options are plain strings; used where the value is already
  *  the wire format and translating it would only add a mapping to maintain. */
 export function Select({

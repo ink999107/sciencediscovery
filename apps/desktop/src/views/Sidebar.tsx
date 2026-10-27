@@ -14,6 +14,7 @@
 
 import { useState } from "react";
 
+import { projectWithName } from "../app/project-name.js";
 import type { WorkspaceActions } from "../app/use-workspace.js";
 import { byRecency } from "../app/session-order.js";
 import { formatStars, REPO_URL, useGithubStars } from "../app/use-github-stars.js";
@@ -331,6 +332,10 @@ export function Sidebar({
           }}
           placeholder={TEXT.sidebar.projectName}
           title={TEXT.sidebar.newProject}
+          validate={(name) =>
+            projectWithName(projects, name) === undefined
+              ? undefined
+              : TEXT.sidebar.projectNameTaken(name)}
         />
       ) : null}
 

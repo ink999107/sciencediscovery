@@ -15,6 +15,7 @@
 import { useRef, useState } from "react";
 
 import type { Project } from "../api/types.js";
+import { projectWithName } from "../app/project-name.js";
 import { TEXT } from "../text.js";
 import { PromptDialog } from "./PromptDialog.js";
 import { RowMenu, type MenuItem, type MenuState } from "./RowMenu.js";
@@ -160,6 +161,10 @@ export function ProjectPicker({
           }}
           placeholder={TEXT.sidebar.projectName}
           title={TEXT.sidebar.newProject}
+          validate={(name) =>
+            projectWithName(projects, name) === undefined
+              ? undefined
+              : TEXT.sidebar.projectNameTaken(name)}
         />
       ) : null}
     </>

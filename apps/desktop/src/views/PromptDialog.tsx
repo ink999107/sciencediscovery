@@ -25,6 +25,11 @@ interface Props {
   onSubmit: (value: string) => void;
   placeholder?: string;
   title: string;
+  /** A reason the value cannot be submitted, returned for a value the dialog
+   *  should refuse. The dialog stays open and prints it under the field; the
+   *  answer given here is also the one a server would give, so a refusal the
+   *  client did not foresee still surfaces as a toast rather than silently. */
+  validate?: (value: string) => string | undefined;
   value?: string;
 }
 
@@ -50,9 +55,11 @@ export function PromptDialog({
   onSubmit,
   placeholder,
   title,
+  validate,
   value = "",
 }: Props) {
   const [text, setText] = useState(value);
+  const [problem, setProblem] = useState<string>();
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -65,7 +72,12 @@ export function PromptDialog({
   const submit = () => {
     const trimmed = text.trim();
     if (trimmed === "") return;
-    onSubmit(trimmed);
+    // The refusal is about the value on screen. Editing it is the answer to
+    // the refusal, so the line goes away with the first keystroke rather than
+    // sitting there over a name that no longer has the problem.
+    const refusal = validate?.(trimmed);
+    setProblem(refusal);
+    if (refusal === undefined) onSubmit(trimmed);
   };
 
   const dialog = (
@@ -87,8 +99,12 @@ export function PromptDialog({
           <label className="form-field">
             <span>{fieldLabel}</span>
             <input
+              aria-invalid={problem !== undefined}
               autoFocus
-              onChange={(event) => setText(event.target.value)}
+              onChange={(event) => {
+                setText(event.target.value);
+                setProblem(undefined);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") submit();
               }}
@@ -96,6 +112,9 @@ export function PromptDialog({
               type="text"
               value={text}
             />
+            {problem === undefined ? null : (
+              <small className="form-field-problem" role="alert">{problem}</small>
+            )}
           </label>
         </div>
         <footer className="modal-footer">

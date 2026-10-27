@@ -18,6 +18,13 @@
    Settings: general, model, skills, network, runtime
    ============================================================================ */
 .settings-list { display: grid; gap: 8px; }
+/* 全部开启 / 全部关闭: the two writes that act on the list below them. */
+.settings-bulk {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 8px;
+}
 .settings-card {
   display: flex;
   align-items: center;

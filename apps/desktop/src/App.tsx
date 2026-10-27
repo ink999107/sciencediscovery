@@ -52,7 +52,6 @@ import { SetupWizard } from "./views/SetupWizard.js";
 import {
   SystemSettingsDialog,
   type SettingsGroup,
-  type SettingsIntent,
 } from "./views/SystemSettingsDialog.js";
 import { Sidebar } from "./views/Sidebar.js";
 import { Toasts } from "./views/Toasts.js";
@@ -72,10 +71,6 @@ export function App({ initialToken }: Props) {
    *  reopening lands where the user left off. */
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsGroup, setSettingsGroup] = useState<SettingsGroup>("general");
-  /** A pane can be opened to do one thing rather than to be read: 专家's 新建…
-   *  asks 设置 › 专家 for a blank form. The request lives until that pane has
-   *  taken it, so switching panes does not reopen the form on the way back. */
-  const [settingsIntent, setSettingsIntent] = useState<SettingsIntent>();
   /** The task sidebar folds away; the conversation's does too when the panel
    *  needs the room. */
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -319,8 +314,17 @@ export function App({ initialToken }: Props) {
 
   // The panel has no collapsed state of its own: closing its last tab lands
   // here, and so does the toolbar's panel toggle.
+  //
+  // A mode (a subagent's record, a tool block) belongs to the panel being
+  // open. Leaving it set would mean the next time the panel appears it shows
+  // the record that happened to be up when it was closed, and that the
+  // transcript's line for that record would then toggle it *off* instead of
+  // opening it — the reader closed the panel, not the record, and asking for
+  // the panel back asks for its groups.
   const collapsePanel = () => {
     setWorkspaceOpen(false);
+    setOpenSubagentId(undefined);
+    setOpenTool(undefined);
   };
 
   // The column width is published as a custom property rather than written into
@@ -329,9 +333,8 @@ export function App({ initialToken }: Props) {
   // once on the shell reaches both, and neither has to be told twice.
   const shellStyle = { "--panel-width": `${resize.width}px` } as CSSProperties;
 
-  const openSettings = (group: SettingsGroup, intent?: SettingsIntent) => {
+  const openSettings = (group: SettingsGroup) => {
     setSettingsGroup(group);
-    setSettingsIntent(intent);
     setSettingsOpen(true);
   };
 
@@ -347,7 +350,6 @@ export function App({ initialToken }: Props) {
     onApprovalMode: (mode) => void actions.setApprovalMode(mode),
     onCreateProject: (name) => void actions.createProject(name),
     onOpenSettings: () => openSettings("models"),
-    onOpenSpecialists: () => openSettings("specialists", "add-specialist"),
     onSelectModel: (modelId) => void actions.selectModel(modelId),
     onSelectProject: (projectId) => actions.selectProject(projectId),
     onSelectSpecialist: (specialistId) => void actions.selectSpecialist(specialistId),
@@ -466,13 +468,8 @@ export function App({ initialToken }: Props) {
           actions={actions}
           client={client}
           group={settingsGroup}
-          intent={settingsIntent}
-          onClose={() => {
-            setSettingsOpen(false);
-            setSettingsIntent(undefined);
-          }}
+          onClose={() => setSettingsOpen(false)}
           onGroupChange={setSettingsGroup}
-          onIntentHandled={() => setSettingsIntent(undefined)}
           state={state}
         />
       ) : null}

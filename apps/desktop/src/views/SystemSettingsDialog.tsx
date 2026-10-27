@@ -28,11 +28,6 @@ import { McpServers } from "./settings/system/McpServers.js";
 import { SpecialistsSettings } from "./settings/system/Specialists.js";
 import { TimeoutSettings } from "./settings/system/Timeouts.js";
 
-/** A pane can be opened to do one thing rather than to be read: 专家's 新建…
- *  asks 设置 › 专家 for a blank form. The request lives until that pane has
- *  taken it, so switching panes does not reopen the form on the way back. */
-export type SettingsIntent = "add-specialist";
-
 /** The original desktop nav, extended with MCP, 专家 and 超时. */
 export type SettingsGroup =
   | "general"
@@ -61,10 +56,8 @@ interface Props {
   actions: WorkspaceActions;
   client: ApiClient;
   group: SettingsGroup;
-  intent?: SettingsIntent;
   onClose: () => void;
   onGroupChange: (group: SettingsGroup) => void;
-  onIntentHandled?: () => void;
   state: WorkspaceState;
 }
 
@@ -81,10 +74,8 @@ export function SystemSettingsDialog({
   actions,
   client,
   group,
-  intent,
   onClose,
   onGroupChange,
-  onIntentHandled,
   state,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Partial<Record<CategoryId, boolean>>>({});
@@ -93,8 +84,6 @@ export function SystemSettingsDialog({
   const [navOpen, setNavOpen] = useState(true);
   const [addingModel, setAddingModel] = useState(false);
   const [addingSkill, setAddingSkill] = useState(false);
-  const [addingMcp, setAddingMcp] = useState(false);
-  const [addingSpecialist, setAddingSpecialist] = useState(false);
 
   // A group picked from the directory opens its category, so a collapsed one
   // never hides the choice the user just made.
@@ -107,18 +96,7 @@ export function SystemSettingsDialog({
   useEffect(() => {
     setAddingModel(false);
     setAddingSkill(false);
-    setAddingMcp(false);
-    setAddingSpecialist(false);
   }, [group]);
-
-  // A pane opened to do one thing has already said which form to show. The
-  // request is taken here rather than re-read, so the pane's own close — and
-  // its unmount when the reader leaves — stays in charge afterwards.
-  useEffect(() => {
-    if (intent !== "add-specialist") return;
-    setAddingSpecialist(true);
-    onIntentHandled?.();
-  }, [intent, onIntentHandled]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -159,22 +137,13 @@ export function SystemSettingsDialog({
       case "mcp":
         return (
           <McpServers
-            adding={addingMcp}
             client={client}
-            onAddingChange={setAddingMcp}
             onConfirm={actions.confirmAction}
             onToast={(message) => actions.toast(message)}
           />
         );
       case "specialists":
-        return (
-          <SpecialistsSettings
-            adding={addingSpecialist}
-            client={client}
-            onAddingChange={setAddingSpecialist}
-            onConfirm={actions.confirmAction}
-          />
-        );
+        return <SpecialistsSettings client={client} onConfirm={actions.confirmAction} />;
       case "sandbox-network":
         return (
           <NetworkSettings
@@ -273,14 +242,6 @@ export function SystemSettingsDialog({
               ) : group === "skills" ? (
                 <button className="pill-button is-dark" onClick={() => setAddingSkill(true)} type="button">
                   {TEXT.settings.skills.add}
-                </button>
-              ) : group === "mcp" ? (
-                <button className="pill-button is-dark" onClick={() => setAddingMcp(true)} type="button">
-                  {TEXT.settings.system.mcp.add}
-                </button>
-              ) : group === "specialists" ? (
-                <button className="pill-button is-dark" onClick={() => setAddingSpecialist(true)} type="button">
-                  {TEXT.settings.system.specialists.add}
                 </button>
               ) : null}
             </header>

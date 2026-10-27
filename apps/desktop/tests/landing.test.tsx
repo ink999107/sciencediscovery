@@ -42,7 +42,6 @@ function landing(): string {
         onApprovalMode: () => {},
         onCreateProject: () => {},
         onOpenSettings: () => {},
-        onOpenSpecialists: () => {},
         onSelectModel: () => {},
         onSelectProject: () => {},
         onSend: () => {},
