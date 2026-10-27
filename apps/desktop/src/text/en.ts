@@ -688,7 +688,7 @@ export const EN: Text = {
       },
       mcp: {
         heading: "MCP servers",
-        help: "Custom servers can be added and changed at any time. Built-in servers ship with the product, start enabled, and get their tools from the server catalog. The switch controls the server itself; which sources a session may use is still chosen per session.",
+        help: "Built-in servers ship with the product, start enabled, and get their tools from the server catalog. The switch controls the server itself; which sources a session may use is still chosen per session.",
         builtin: "Built-in",
         empty: "No custom MCP servers registered yet.",
         editTitle: "Edit server",
