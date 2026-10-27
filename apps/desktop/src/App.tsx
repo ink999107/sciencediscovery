@@ -403,6 +403,7 @@ export function App({ initialToken }: Props) {
                 pending={state.pendingMessage}
                 replays={state.replays}
                 run={state.run}
+                workspaceFiles={state.panelFiles}
               />
               <Composer {...composerProps} />
             </>

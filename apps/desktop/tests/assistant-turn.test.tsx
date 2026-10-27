@@ -255,6 +255,41 @@ describe("a run folds into one line", () => {
   });
 });
 
+describe("a stopped run ends on a hairline, not a notice", () => {
+  it("draws the divider for a cancelled run, and not the server's wording", () => {
+    // Every stopped run is cancelled for the same reason, in the server's own
+    // language: printing it gave a Chinese transcript an English row with a
+    // blue mark on it.
+    const html = render({ cancelledReason: "Run cancelled", status: "cancelled", terminal: true });
+    assert.match(html, /class="message assistant is-divider"/u);
+    assert.match(html, /class="status-divider"/u);
+    assert.match(html, /已取消/u);
+    assert.doesNotMatch(html, /is-notice/u);
+    assert.doesNotMatch(html, /Run cancelled/u);
+  });
+
+  it("keeps a reason worth reading as the divider's tooltip", () => {
+    const html = render({ cancelledReason: "预算用尽", status: "cancelled", terminal: true });
+    assert.match(html, /title="预算用尽"/u);
+    assert.match(html, /<span>已取消<\/span>/u);
+  });
+
+  it("gives an interruption the same line", () => {
+    const html = render({ status: "interrupted", terminal: true });
+    assert.match(html, /is-divider/u);
+    assert.match(html, /已中断/u);
+  });
+
+  it("keeps the marked notice for what actually went wrong", () => {
+    // The divider is for a run that stopped; an error is a run that broke, and
+    // it still owes the reader a mark and the reason.
+    const html = render({ error: { message: "gateway died" }, status: "failed", terminal: true });
+    assert.match(html, /is-notice/u);
+    assert.match(html, /gateway died/u);
+    assert.doesNotMatch(html, /is-divider/u);
+  });
+});
+
 describe("tool calls sit between the answers they were made from", () => {
   const trace = (id: string) => ({
     id,

@@ -588,6 +588,18 @@ body.is-resizing {
   padding-left: 96px;
 }
 
+/* Files sent with the question sit above its bubble in one right-aligned
+ *  column: the attachment row is as wide as its cards, the bubble as wide as
+ *  what was typed, and both end at the same edge. */
+.message.user > .user-turn {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 16px;
+  min-width: 0;
+}
+
 /* The bubble is as wide as what was typed. `fit-content` on a flex item that
  *  no longer grows is what keeps a two-word question from being drawn as a
  *  560px block; the ceiling still wraps a long one before it reaches the
@@ -604,6 +616,130 @@ body.is-resizing {
   line-height: 23px;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* The attachment row: two cards at most, then a count card that opens the
+ *  rest. A card is 207px so two of them and the count fit inside the bubble's
+ *  560px ceiling; a narrow window shrinks the cards rather than dropping the
+ *  row off the edge. */
+.upload-cards {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* The row is exactly as wide as its cards ask for — 207px each, plus the gap
+ *  and the 40px count card — so a card is never squeezed by an intrinsic
+ *  width pass. A narrow window shrinks them as a last resort. */
+.upload-cards.is-one { width: 207px; }
+.upload-cards.is-two { width: 424px; }
+.upload-cards.is-two.has-more { width: 474px; }
+
+.upload-card {
+  flex: 0 1 207px;
+  min-width: 0;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 0 8px;
+  /* The handoff draws these on a grey page, where white alone is a card. The
+   *  transcript's page is white, so the edge has to be drawn. */
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.upload-glyph {
+  flex: 0 0 auto;
+  display: block;
+}
+
+.upload-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.upload-card-text strong {
+  overflow: hidden;
+  color: #191919;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-card-text small {
+  color: #a6a6a6;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.upload-more {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.upload-more-button {
+  width: 40px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  background: #fff;
+  color: #191919;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.upload-more-button:hover {
+  background: #fafafa;
+}
+
+/* The rest of the files: names, not cards, because the card already said what
+ *  was sent and this list is only for telling the folded ones apart. */
+.upload-more-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: max-content;
+  min-width: 223px;
+  max-width: 320px;
+  max-height: 214px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  overflow-y: auto;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .14);
+}
+
+.upload-more-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  color: #272727;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.upload-more-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The bubble is the body itself; an older rule also painted and padded the
@@ -866,12 +1002,19 @@ body.is-resizing {
 /* The run line has no glyph of its own — the sentence is the whole line — but
  *  a live run keeps its ring, which is the only thing on screen saying the
  *  model is still working. */
-.msg-collapse.run-fold .collapse-icon {
+/* `> summary >` rather than the descendant combinator: this rule is about the
+ *  run line's own glyph, and matching every descendant also hid the glyph of
+ *  each tool card and thinking block nested inside the fold. */
+.msg-collapse.run-fold > summary > .collapse-icon {
   display: none;
 }
 
-.msg-collapse.run-fold .collapse-icon:has(.run-spinner) {
+/* The ring is the run line's only icon, and it stands on the page itself:
+ *  the sunk tile the older fold drew behind its glyphs has no place on a line
+ *  of grey text. It sits after the sentence, with the row's own gap. */
+.msg-collapse.run-fold > summary > .collapse-icon:has(.run-spinner) {
   display: inline-grid;
+  background: transparent;
 }
 
 .msg-collapse .collapse-title {
@@ -1055,6 +1198,26 @@ body.is-resizing {
 
 .message.assistant > .avatar-mini + .body > .status-strip {
   margin-top: 0;
+}
+
+/* How a run that stopped says so: a hairline across the column, the word in
+ *  the middle, and nothing else. The mark-and-strip notice below is for what
+ *  went wrong or needs looking into; a stop the reader asked for is neither. */
+.status-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #a6a6a6;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.status-divider::before,
+.status-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #ededed;
 }
 
 /* Feedback under an answer: icon-only, like the handoff's row. */

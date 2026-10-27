@@ -175,6 +175,10 @@ export const EN: Text = {
     outputTruncated: "The output was truncated by the retention policy.",
     authorized: "Approved",
     resultUnavailable: "The result is temporarily unavailable.",
+    uploads: {
+      more: (count: number) => `${count} more ${count === 1 ? "file" : "files"}`,
+      rest: "The other uploaded files",
+    },
   },
 
   subagent: {

@@ -21,7 +21,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { ApiClient } from "../src/api/client.js";
-import type { ChatMessage, SessionDetail } from "../src/api/types.js";
+import type { ChatMessage, SessionDetail, WorkspaceFile } from "../src/api/types.js";
 import { emptyRunStream, type RunStreamState } from "../src/run-stream/model.js";
 import type { RunReplay } from "../src/run-stream/replay.js";
 import { Conversation } from "../src/views/Conversation.js";
@@ -65,6 +65,7 @@ function render(over: Partial<Parameters<typeof Conversation>[0]> = {}): string 
       onDecidePermission={() => Promise.resolve()}
       replays={[]}
       run={emptyRunStream()}
+      workspaceFiles={[]}
       {...over}
     />,
   );
@@ -267,4 +268,62 @@ test("an empty transcript draws nothing: the welcome page is not its furniture",
   assert.match(markup, /<section class="conversation">/u);
   assert.equal(markup.match(/class="message (?:user|assistant)/gu), null);
   assert.doesNotMatch(markup, /让科研发现更简单/u);
+});
+
+/** One uploaded file, as the workspace lists it: the provenance is what says
+ *  the reader sent it, and its timestamp is what ties it to a question. */
+function upload(name: string, at: string): WorkspaceFile {
+  return {
+    modifiedAt: at,
+    path: name,
+    provenance: { fileId: name, origin: "upload", recordedAt: at, revisionId: `${name}@${at}` },
+    size: 8,
+  };
+}
+
+function asked(id: string, content: string, at: string): ChatMessage {
+  return { content, createdAt: at, id, role: "user" };
+}
+
+test("files sent with a question are drawn above its bubble, two at most", () => {
+  const workspaceFiles = [
+    upload("行业分析报告.pdf", "2026-01-01T00:01:00.000Z"),
+    upload("各AI产品标注功能.xlsx", "2026-01-01T00:02:00.000Z"),
+    upload("附录数据.csv", "2026-01-01T00:03:00.000Z"),
+    upload("方法说明.docx", "2026-01-01T00:04:00.000Z"),
+  ];
+  const markup = render({
+    detail: detail([asked("q1", "QUESTION-A", "2026-01-01T00:10:00.000Z")]),
+    workspaceFiles,
+  });
+  // The cards come before the bubble: they are what was sent with it.
+  assert.ok(markup.indexOf("行业分析报告") < markup.indexOf("QUESTION-A"));
+  assert.match(markup, /class="upload-cards is-two has-more"/u);
+  assert.equal(markup.match(/class="upload-card"/gu)?.length, 2);
+  assert.match(markup, /<small>pdf<\/small>/u);
+  assert.match(markup, /<small>xlsx<\/small>/u);
+  // Two more than the two cards, and the folded ones stay out of the card row.
+  assert.match(markup, />\+2</u);
+  assert.match(markup, /aria-label="另外 2 个文件"/u);
+  assert.doesNotMatch(markup, /附录数据/u);
+  // A card can only ellipsize the name it shows; the whole one is still
+  // reachable as its tooltip.
+  assert.match(markup, /title="行业分析报告.pdf"/u);
+});
+
+test("a file uploaded after the last question waits above the next one", () => {
+  const markup = render({
+    detail: detail([asked("q1", "QUESTION-A", "2026-01-01T00:01:00.000Z")]),
+    workspaceFiles: [upload("waiting.pdf", "2026-01-01T00:20:00.000Z")],
+    pending: { content: "QUESTION-B" },
+  });
+  assert.ok(markup.indexOf("waiting") < markup.indexOf("QUESTION-B"));
+  // It belongs to the pending bubble only; the earlier question has no card.
+  assert.equal(markup.match(/class="upload-cards /gu)?.length, 1);
+});
+
+test("a question without files keeps the bare bubble", () => {
+  const markup = render({ detail: detail([asked("q1", "QUESTION-A", "2026-01-01T00:01:00.000Z")]) });
+  assert.doesNotMatch(markup, /class="upload-cards"/u);
+  assert.match(markup, /class="message user"><div class="body"><div class="text">QUESTION-A<\/div><\/div>/u);
 });

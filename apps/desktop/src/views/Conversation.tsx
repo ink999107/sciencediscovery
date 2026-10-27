@@ -16,11 +16,19 @@ import { Fragment, useEffect, useRef, useState } from "react";
 
 import type { PendingMessage } from "../app/use-workspace.js";
 import type { ApiClient } from "../api/client.js";
-import type { ChatMessage, PermissionDecision, PermissionRequest, SessionDetail } from "../api/types.js";
+import type {
+  ChatMessage,
+  PermissionDecision,
+  PermissionRequest,
+  SessionDetail,
+  WorkspaceFile,
+} from "../api/types.js";
 import type { RunStreamState } from "../run-stream/model.js";
 import { placeReplays, type RunReplay } from "../run-stream/replay.js";
 import { TEXT } from "../text.js";
 import { AnswerBlock, AssistantAvatar, AssistantTurns } from "./AssistantTurn.js";
+import { UploadCards } from "./UploadCards.js";
+import { placeUploads, type UploadedFile } from "./uploads.js";
 
 interface Props {
   client: ApiClient;
@@ -30,6 +38,9 @@ interface Props {
   /** Open one subagent's execution in the workspace panel. The transcript
    *  itself only ever draws its line. */
   onOpenSubagent?: (id: string) => void;
+  /** The session's workspace: the files whose provenance says they arrived by
+   *  upload are drawn above the question they were sent with. */
+  workspaceFiles: readonly WorkspaceFile[];
   pending?: PendingMessage;
   /** Every finished run of this session, each to be rendered in the place of
    *  the answer it wrote. */
@@ -65,18 +76,32 @@ function NoticeRow({ message }: { message: ChatMessage }) {
  * One of the reader's turns: the text alone, in the handoff's grey bubble
  * against the right edge. There is no avatar and no role line — the bubble's
  * side is the role, and a label saying 你 over every question was furniture.
+ *
+ * Files sent with the question sit above the bubble, in the same column, so
+ * the two read as one turn. A turn with no files keeps the bubble as the
+ * row's only child — an empty wrapper around it changes nothing on screen,
+ * and this markup is what every transcript assertion in the suite reads.
  */
-function UserRow({ content }: { content: string }) {
+function UserRow({ content, files }: { content: string; files?: readonly UploadedFile[] }) {
+  const bubble = (
+    <div className="body">
+      <div className="text">{content}</div>
+    </div>
+  );
+  if (files === undefined || files.length === 0) {
+    return <div className="message user">{bubble}</div>;
+  }
   return (
     <div className="message user">
-      <div className="body">
-        <div className="text">{content}</div>
+      <div className="user-turn">
+        <UploadCards files={files} />
+        {bubble}
       </div>
     </div>
   );
 }
 
-function MessageRow({ message }: { message: ChatMessage }) {
+function MessageRow({ message, uploads }: { message: ChatMessage; uploads?: readonly UploadedFile[] }) {
   // An automatic wake carries no user-authored body — the schema keeps the
   // model-facing prompt out of `content` precisely so a wake is never shown as
   // something the user typed — so a card for it was a blank strip with an
@@ -86,7 +111,7 @@ function MessageRow({ message }: { message: ChatMessage }) {
   // conversation instead of to the place it happened.
   if (message.kind === "wake_notice") return null;
   if (message.kind && message.kind !== "message") return <NoticeRow message={message} />;
-  if (message.role === "user") return <UserRow content={message.content} />;
+  if (message.role === "user") return <UserRow content={message.content} files={uploads} />;
   return (
     <div className="message assistant">
       {/* The handoff puts the mark and the name on their own line, with the
@@ -153,12 +178,23 @@ export function Conversation({
   pending,
   replays,
   run,
+  workspaceFiles,
 }: Props) {
   const scroller = useRef<HTMLElement>(null);
   const stick = useRef(true);
+  /** How tall the transcript was at the last pin. Growth after it is the
+   *  transcript getting longer, not the reader leaving the bottom — the scroll
+   *  event an appended answer fires would otherwise read as a scroll-away and
+   *  stop the transcript following the run, leaving the run's own line under
+   *  the composer, out of sight. */
+  const pinned = useRef({ height: 0 });
 
   const messages = detail?.messages ?? [];
   const { following, replacing, trailing } = placeReplays(replays, messages);
+  /** The files each question was sent with, and the ones still waiting for a
+   *  question. Uploads are workspace files rather than message fields, so they
+   *  are matched to turns by time — see `placeUploads`. */
+  const uploads = placeUploads(workspaceFiles, messages);
   const reconstructed = run.turns.length > 0 || run.finalContent !== undefined;
   /** A message just sent has no run events yet — the request is still in
    *  flight — but the run exists from the press, and its line is what says so.
@@ -170,18 +206,25 @@ export function Conversation({
   const placeholder = useAfter(pending !== undefined, RUN_LINE_DELAY_MS);
   const liveRun = reconstructed || placeholder;
 
+  // `liveRun` pins too: the run line is drawn a beat after the press, and a
+  // pin that skipped it would leave the one line saying the run exists below
+  // the composer for as long as the model takes to say anything.
   useEffect(() => {
     const node = scroller.current;
     if (!node || !stick.current) return;
     node.scrollTop = node.scrollHeight;
-  }, [messages, pending, replays, run]);
+    pinned.current = { height: node.scrollHeight };
+  }, [liveRun, messages, pending, replays, run]);
 
   const onScroll = () => {
     const node = scroller.current;
     if (!node) return;
     // Follow only while the user is already at the bottom: pulling someone
     // back down while they read an earlier turn is worse than not following.
-    stick.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+    // What counts is the distance the reader put there themselves, so the
+    // text appended since the last pin is discounted.
+    const grown = Math.max(0, node.scrollHeight - pinned.current.height);
+    stick.current = node.scrollHeight - node.scrollTop - node.clientHeight <= 80 + grown;
   };
 
   return (
@@ -192,7 +235,7 @@ export function Conversation({
           return (
             <Fragment key={message.id}>
               {replacement === undefined ? (
-                <MessageRow message={message} />
+                <MessageRow message={message} uploads={uploads.byMessage.get(message.id)} />
               ) : (
                 <AssistantTurns
                   client={client}
@@ -228,7 +271,7 @@ export function Conversation({
             sessionId={detail?.id}
           />
         ))}
-        {pending ? <UserRow content={pending.content} /> : null}
+        {pending ? <UserRow content={pending.content} files={uploads.trailing} /> : null}
         {/* No persisted answer to stand in for yet — the run is still going,
             or the session was created by sending into it. A replayed run is
             never here: it is in `replays`, anchored to its own answer. */}

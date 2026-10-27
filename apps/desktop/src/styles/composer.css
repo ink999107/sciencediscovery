@@ -152,10 +152,12 @@
   border: 2px solid rgba(0,0,0,.1);
   border-top-color: var(--text-faint);
   border-radius: 50%;
+  /* No `transform` on the ring itself: an `!important` reset here used to sit
+     in this rule and, being important, outranked every keyframe in every
+     sheet — so no ring in the app turned. */
   animation: spin .8s linear infinite;
-  transform: none !important;
 }
-@keyframes spin { to { transform: rotate(360deg) !important; } }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* composer dropdown */
 @keyframes popIn {

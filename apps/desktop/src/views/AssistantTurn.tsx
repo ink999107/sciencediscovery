@@ -301,12 +301,36 @@ function PendingCards({ context, requests }: { context: ToolContext; requests: P
   );
 }
 
+/** The server's own wording for a cancellation nobody needs to read twice: it
+ *  is the same sentence for every stopped run, and it arrives in the server's
+ *  language, not the reader's. */
+const GENERIC_CANCEL_REASONS = new Set(["Run cancelled", "Run cancelled before execution"]);
+
+/** How a stopped run ends its turn: a hairline across the column with the word
+ *  in the middle. Nothing failed, so the line carries no mark and no box — a
+ *  run the reader stopped themselves is not an event to be flagged. */
+function StopDivider({ reason, word }: { reason?: string; word: string }) {
+  return (
+    <div className="message assistant is-divider">
+      <div className="status-divider" title={reason}>
+        <span>{word}</span>
+      </div>
+    </div>
+  );
+}
+
 /** The status band under a finished turn. It only appears when it has
- *  something to say, so a clean run leaves no residue. */
+ *  something to say, so a clean run leaves no residue.
+ *
+ *  Two shapes live here, because two different things are being said: a run
+ *  that stopped without failing gets the divider (cancelled, interrupted), and
+ *  anything that went wrong or is worth investigating — an error, dropped
+ *  events, a stream that ended without saying — keeps the marked notice row. */
 function RunStatusLine({ run }: { run: RunStreamState }) {
   const lines: string[] = [];
   if (run.droppedEvents > 0) lines.push(TEXT.conversation.droppedEvents(run.droppedEvents));
   if (run.unknownEvents > 0) lines.push(TEXT.conversation.unknownEvents(run.unknownEvents));
+  let stop: { reason?: string; word: string } | undefined;
   if (run.error) {
     // The whole line comes from TEXT: the code's brackets and the colon are
     // punctuation of the language, not of the render.
@@ -316,26 +340,33 @@ function RunStatusLine({ run }: { run: RunStreamState }) {
         : TEXT.conversation.errorWithCode(run.error.code, run.error.message),
     );
   } else if (run.status === "cancelled") {
-    lines.push(run.cancelledReason ?? TEXT.conversation.cancelled);
+    const reason = run.cancelledReason !== undefined && !GENERIC_CANCEL_REASONS.has(run.cancelledReason)
+      ? run.cancelledReason
+      : undefined;
+    stop = { reason, word: TEXT.conversation.cancelled };
   } else if (run.status === "interrupted") {
-    lines.push(TEXT.conversation.interrupted);
+    stop = { word: TEXT.conversation.interrupted };
   } else if (run.terminal && run.status === undefined) {
     lines.push(TEXT.conversation.streamEnded);
   }
-  if (lines.length === 0) return null;
   return (
-    <div className="message assistant is-notice">
-      <div aria-hidden="true" className="avatar-mini">
-        !
-      </div>
-      <div className="body">
-        {lines.map((line) => (
-          <div className="status-strip" key={line}>
-            {line}
+    <>
+      {stop === undefined ? null : <StopDivider reason={stop.reason} word={stop.word} />}
+      {lines.length === 0 ? null : (
+        <div className="message assistant is-notice">
+          <div aria-hidden="true" className="avatar-mini">
+            !
           </div>
-        ))}
-      </div>
-    </div>
+          <div className="body">
+            {lines.map((line) => (
+              <div className="status-strip" key={line}>
+                {line}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -531,15 +562,18 @@ export function AssistantTurns({
           {fold ? (
             <details className="msg-collapse run-fold">
               <summary>
-                {/* A ring that turns while the model works; a still glyph
-                    otherwise. The box is the same either way, so the line does
-                    not shift when the run stops. */}
+                {/* The sentence starts the line, at the column's left edge,
+                    where the name above it and the composer below it start.
+                    The ring that turns while the model works follows the
+                    words rather than leading them: a leading ring would push
+                    the sentence in by its own width, which is what made the
+                    line look indented against everything else. */}
+                <span className="collapse-title">{label.title}</span>
                 <span className="collapse-icon">
                   {label.working
                     ? <span aria-hidden="true" className="spinner run-spinner" />
                     : label.icon}
                 </span>
-                <span className="collapse-title">{label.title}</span>
                 <span className="collapse-meta" {...collapseHint()} />
                 <span aria-hidden="true" className="collapse-chev">›</span>
               </summary>

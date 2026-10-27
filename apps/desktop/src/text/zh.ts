@@ -186,6 +186,11 @@ export const ZH = {
     /** The substream read failed — the trace is still shown, only its body is
      *  missing. Distinct from "the tool produced nothing". */
     resultUnavailable: "结果暂时读取不到。",
+    /** The folded card above a question, and the list it opens. */
+    uploads: {
+      more: (count: number) => `另外 ${count} 个文件`,
+      rest: "另外上传的文件",
+    },
   },
 
   /** One delegated subagent. It is named by what it was asked to do, never by a
