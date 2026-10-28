@@ -48,6 +48,14 @@ export interface ProjectRecord {
   updatedAt: string;
 }
 
+/** A file body the mock serves as-is. A picture, a PDF or a workbook is not
+ *  text, so the spec says both the bytes and the type the server would send —
+ *  which for these extensions is the type the app has to trust. */
+export interface FileContent {
+  body: Buffer | string;
+  contentType: string;
+}
+
 export interface SessionRecord {
   archivedAt?: string;
   createdAt: string;
@@ -88,8 +96,9 @@ export interface MockOptions {
   artifactContents?: Record<string, string>;
   files?: unknown[];
   /** The bytes behind `GET .../file?path=`, keyed by workspace path. A path
-   *  with no entry reads as the fixture's small CSV. */
-  fileContents?: Record<string, string>;
+   *  with no entry reads as the fixture's small CSV. A string is served as
+   *  `text/plain`; `FileContent` carries bytes of its own type. */
+  fileContents?: Record<string, FileContent | string>;
   runners?: unknown[];
   connectors?: JsonRecord[];
   skills?: JsonRecord[];
@@ -665,11 +674,10 @@ export async function installMockApi(page: Page, options: MockOptions = {}): Pro
       const file = /^\/api\/sessions\/([^/]+)\/file$/.exec(path);
       if (file && method === "GET") {
         const wanted = url.searchParams.get("path") ?? "";
-        return route.fulfill({
-          body: options.fileContents?.[wanted] ?? "a,b\n1,2\n",
-          contentType: "text/plain",
-          status: 200,
-        });
+        const entry = options.fileContents?.[wanted];
+        const body = typeof entry === "string" ? entry : entry?.body ?? "a,b\n1,2\n";
+        const contentType = typeof entry === "string" ? "text/plain" : entry?.contentType ?? "text/plain";
+        return route.fulfill({ body, contentType, status: 200 });
       }
 
       const cancel = /^\/api\/sessions\/([^/]+)\/runs\/([^/]+)\/cancel$/.exec(path);

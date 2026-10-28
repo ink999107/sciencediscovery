@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { PanelResize } from "../app/use-panel-width.js";
 import type { PreviewSlot, TabState, WorkspaceActions } from "../app/use-workspace.js";
@@ -23,18 +23,14 @@ import { DOC_MIN_WIDTH, LIST_MIN_WIDTH, LIST_NUDGE_STEP, isListClosed, listWidth
 import { usePanelSplit } from "../app/use-panel-split.js";
 import { fileFolder, fileName } from "../app/paths.js";
 import { PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, PANEL_NUDGE_STEP, PANEL_NUDGE_STRIDE } from "../app/panel-width.js";
-import { Markdown } from "../Markdown.js";
 import type { ToolDetail as ToolDetailData } from "../app/tool-io.js";
 import { detectStructureFormat } from "../molecular.js";
 import type { Session, SessionArtifactOutput, Subagent, WorkspaceFile } from "../api/types.js";
 import { subagentTask } from "../run-stream/subagent.js";
 import { TEXT } from "../text.js";
+import { DocumentPreview } from "./DocumentPreview.js";
 import { SubagentDetail } from "./SubagentDetail.js";
 import { ToolDetail } from "./ToolDetail.js";
-
-/** Loaded on the first structure that is opened. Mol* is an order of magnitude
- *  larger than the rest of the app together, and most sessions never show one. */
-const StructureViewer = lazy(() => import("./StructureViewer.js"));
 
 export type PanelGroup = "artifacts" | "files";
 
@@ -99,57 +95,29 @@ function previewName(label: string, path: string): string {
   return path === "" ? label : path;
 }
 
-interface Expandable {
-  expanded: boolean;
-  onExpand: (next: boolean) => void;
-}
-
-/** Markdown and JSON get a rendered/textual preview; a structure file gets the
- *  3D view; HTML is sandboxed in a frame, which is how the handoff shows a
- *  generated page. Everything else is shown as source. */
-function Preview({ content, expanded, label, onExpand, path }: Expandable & { content: string; label: string; path: string }) {
-  const name = previewName(label, path);
-  const format = detectStructureFormat({ content, name });
-  if (format !== undefined) {
-    return (
-      <Suspense fallback={<div className="doc-placeholder"><span className="spinner" /></div>}>
-        <StructureViewer content={content} expanded={expanded} format={format} name={name} onExpand={onExpand} />
-      </Suspense>
-    );
+/**
+ * Save the open document under the name the reader knows it by.
+ *
+ * A drawn document is already a data URL and is saved from it as it stands; a
+ * text one becomes a blob, which is the only thing a link will take for text.
+ * An artifact's file name comes from the artifact itself, since its version
+ * may carry no path at all.
+ */
+function downloadDocument(slot: PreviewSlot, artifact: SessionArtifactOutput | undefined): void {
+  const name = fileName(artifact === undefined ? slot.path : artifact.artifact.name);
+  if (slot.dataUrl !== undefined) {
+    const link = document.createElement("a");
+    link.download = name;
+    link.href = slot.dataUrl;
+    link.click();
+    return;
   }
-  const lower = name.toLowerCase();
-  if (lower.endsWith(".html") || lower.endsWith(".htm")) {
-    return <iframe className="artifact-html-frame" sandbox="allow-scripts" srcDoc={content} title={name} />;
-  }
-  if (lower.endsWith(".md") || lower.endsWith(".markdown")) {
-    return (
-      <div className="text">
-        <Markdown>{content}</Markdown>
-      </div>
-    );
-  }
-  if (lower.endsWith(".json")) {
-    let pretty = content;
-    try {
-      pretty = JSON.stringify(JSON.parse(content), null, 2);
-    } catch {
-      // Not JSON after all; the raw text is what the user should see.
-    }
-    return <pre className="tab-content-source">{pretty}</pre>;
-  }
-  if (content === "") return <div className="doc-placeholder">{TEXT.workspace.unsupported}</div>;
-  // A .txt is a document that carries no markup rather than a source file: an
-  // answer, a note, a report. Set in the source font, inside a box that scrolls
-  // on its own, a page of paragraphs reads as a log; it gets the document's own
-  // type instead. Logs, tables and source stay monospaced, where columns line up.
-  const prose = lower.endsWith(".txt") || lower.endsWith(".text");
-  return <pre className={`tab-content-source${prose ? " is-prose" : ""}`}>{content}</pre>;
-}
-
-function Document({ expanded, onExpand, slot }: Expandable & { slot: PreviewSlot }) {
-  if (slot.loading) return <div className="doc-placeholder"><span className="spinner" /></div>;
-  if (slot.error !== undefined) return <div className="panel-empty">{slot.error}</div>;
-  return <Preview content={slot.content ?? ""} expanded={expanded} label={slot.label} onExpand={onExpand} path={slot.path} />;
+  const url = URL.createObjectURL(new Blob([slot.content ?? ""], { type: slot.mediaType ?? "text/plain" }));
+  const link = document.createElement("a");
+  link.download = name;
+  link.href = url;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 /* ── artifact and file lists ────────────────────────────────────────────── */
@@ -689,19 +657,11 @@ export function WorkspacePanel({
                   versions={activeVersions}
                 />
               ) : null}
-              {activeArtifact ? (
+              {active !== undefined ? (
                 <button
                   aria-label={TEXT.workspace.download}
                   className="panel-icon-button"
-                  onClick={() => {
-                    const blob = new Blob([active?.content ?? ""], { type: "text/plain" });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.download = fileName(activeArtifact.artifact.name);
-                    link.href = url;
-                    link.click();
-                    URL.revokeObjectURL(url);
-                  }}
+                  onClick={() => downloadDocument(active, activeArtifact)}
                   title={TEXT.workspace.download}
                   type="button"
                 >
@@ -716,10 +676,10 @@ export function WorkspacePanel({
             {active === undefined ? (
               <div className="doc-placeholder">{TEXT.workspace.open}</div>
             ) : structure ? (
-              <Document expanded={expanded} onExpand={setExpanded} slot={active} />
+              <DocumentPreview expanded={expanded} onExpand={setExpanded} slot={active} />
             ) : (
               <div className="artifact-canvas">
-                <Document expanded={expanded} onExpand={setExpanded} slot={active} />
+                <DocumentPreview expanded={expanded} onExpand={setExpanded} slot={active} />
               </div>
             )}
           </div>

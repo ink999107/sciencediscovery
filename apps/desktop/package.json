@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@sciencediscovery/schema": "workspace:*",
+    "fflate": "^0.8.3",
     "molstar": "^5.11.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",

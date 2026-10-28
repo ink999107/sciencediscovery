@@ -169,17 +169,25 @@ export function listArtifactOutputs(
   );
 }
 
-/** Artifact bytes, already decoded by the server: the CAS hash is not part of
- *  the URL, and the response carries the version's own media type. */
+/** A document as it came off the wire: the bytes, and the type the server gave
+ *  them. The panel decides what to do with the two together — decode the bytes
+ *  as text, or hand them to a renderer as a data URL. */
+export interface DocumentBytes {
+  bytes: Uint8Array;
+  mediaType: string;
+}
+
+/** Artifact bytes, as the CAS stored them: the hash is not part of the URL, and
+ *  the response carries the version's own media type. */
 export async function readArtifactVersion(
   client: ApiClient,
   sessionId: string,
   versionId: string,
-): Promise<string> {
+): Promise<DocumentBytes> {
   const response = await client.fetchStream(
     `/api/sessions/${encodeURIComponent(sessionId)}/artifact-versions/${encodeURIComponent(versionId)}/content`,
   );
-  return response.text();
+  return { bytes: new Uint8Array(await response.arrayBuffer()), mediaType: response.headers.get("content-type") ?? "" };
 }
 
 /** One workspace file's bytes, addressed by its workspace-relative path. The
@@ -188,11 +196,11 @@ export async function readWorkspaceFile(
   client: ApiClient,
   sessionId: string,
   path: string,
-): Promise<string> {
+): Promise<DocumentBytes> {
   const response = await client.fetchStream(
     `/api/sessions/${encodeURIComponent(sessionId)}/file?path=${encodeURIComponent(path)}`,
   );
-  return response.text();
+  return { bytes: new Uint8Array(await response.arrayBuffer()), mediaType: response.headers.get("content-type") ?? "" };
 }
 
 /** The server requires the id repeated back as confirmation, so a stray call

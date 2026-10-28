@@ -23,6 +23,7 @@ import {
   type Attachment,
 } from "./attachments.js";
 import { resolveCatalog, resolveConnection } from "./bootstrap.js";
+import { documentPayload } from "./document-payload.js";
 import { changedFiles } from "./file-changes.js";
 import { changesPanel, createPanelRefresh, type PanelRefresh } from "./panel-refresh.js";
 import { fileName } from "./paths.js";
@@ -55,6 +56,7 @@ import {
   listWorkspaceFiles,
   readArtifactVersion,
   readWorkspaceFile,
+  type DocumentBytes,
   updateSession,
   uploadWorkspaceFiles,
 } from "../api/sessions.js";
@@ -737,7 +739,11 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         // its answer is newer than this listing is.
         if (tab.source !== "file" || tab.loading || !changed.has(tab.path)) continue;
         void readWorkspaceFile(client, target, tab.path)
-          .then((content) => settleTab(tab.id, { content, error: undefined, loading: false }))
+          .then((document) => settleTab(tab.id, {
+            ...documentPayload(document.bytes, tab.path, document.mediaType),
+            error: undefined,
+            loading: false,
+          }))
           .catch(() => {
             // The document keeps what it had; the next write reads it again.
           });
@@ -1423,7 +1429,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
   }, []);
 
   const openPreview = useCallback(
-    async (request: DocumentRequest, read: (target: string) => Promise<string>) => {
+    async (request: DocumentRequest, read: (target: string) => Promise<DocumentBytes>) => {
       // An artifact carries the Session its version was written in: the list
       // shows every Session's output, so the open one is only the fallback.
       const target = request.sessionId ?? sessionRef.current;
@@ -1448,8 +1454,13 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
         else settleVersion(openedId, versionId, patch);
       };
       setTabs(placed);
+      const name = request.path === "" ? request.label : request.path;
       try {
-        settle({ content: await read(target), loading: false });
+        const document = await read(target);
+        // Text for a document that is read, a data URL for one that is drawn;
+        // which of the two is `documentPayload`'s decision, from the name and
+        // the type the server gave the bytes.
+        settle({ ...documentPayload(document.bytes, name, document.mediaType), loading: false });
       } catch (reason) {
         settle({ error: errorMessage(reason), loading: false });
       }
@@ -1509,6 +1520,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
             ? {
                 ...tab,
                 content: undefined,
+                dataUrl: undefined,
                 error: undefined,
                 loading: true,
                 // A version may have been written elsewhere than the one before
@@ -1519,8 +1531,11 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
             : tab),
       }));
       try {
-        const content = await readArtifactVersion(client, target, versionId);
-        settleVersion(tabId, versionId, { content, loading: false });
+        const document = await readArtifactVersion(client, target, versionId);
+        const name = output.version.sourcePath === undefined || output.version.sourcePath === ""
+          ? artifactName(output)
+          : output.version.sourcePath;
+        settleVersion(tabId, versionId, { ...documentPayload(document.bytes, name, document.mediaType), loading: false });
       } catch (reason) {
         settleVersion(tabId, versionId, { error: errorMessage(reason), loading: false });
       }

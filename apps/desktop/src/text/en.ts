@@ -1036,6 +1036,21 @@ export const EN: Text = {
     searchArtifacts: "Search artifacts",
     searchFiles: "Search files",
     searchEmpty: "Nothing matches.",
+    /** The caption under a table that holds all of the document's rows. */
+    tableRows: (count: number) => `${count} ${count === 1 ? "row" : "rows"}`,
+    /** The same caption when the panel holds only the head of a larger table. */
+    tableRowsShown: (shown: number, total: number) => `Showing the first ${shown} of ${total} rows`,
+    /** A column whose first cell named nothing, named by where it sits. */
+    tableColumn: (index: number) => `Column ${index}`,
+    tableEmpty: "This table has no data.",
+    workbookUnreadable: "This workbook could not be read. Download it to open it.",
+    worksheets: "worksheets",
+    imageAlt: (name: string) => `Preview of ${name}`,
+    imageActual: "Show at actual size",
+    imageFit: "Fit to the panel",
+    pdfFallback: "If the page does not appear, download it:",
+    tooLarge: "This file is too large to preview here. Download it to open it.",
+    sourceTruncated: "This file is long; only the beginning is shown.",
   },
 
   molstar: {

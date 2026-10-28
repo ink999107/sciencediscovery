@@ -1072,6 +1072,21 @@ export const ZH = {
     searchFiles: "搜索文件",
     /** A search that matched nothing, as opposed to a list that was empty. */
     searchEmpty: "没有匹配的内容。",
+    /** The caption under a table that holds all of the document's rows. */
+    tableRows: (count: number) => `共 ${count} 行`,
+    /** The same caption when the panel holds only the head of a larger table. */
+    tableRowsShown: (shown: number, total: number) => `显示前 ${shown} 行，共 ${total} 行`,
+    /** A column whose first cell named nothing, named by where it sits. */
+    tableColumn: (index: number) => `列 ${index}`,
+    tableEmpty: "这个表格没有数据。",
+    workbookUnreadable: "这个工作簿无法读取，请下载后查看。",
+    worksheets: "工作表",
+    imageAlt: (name: string) => `${name} 的预览`,
+    imageActual: "按原始尺寸显示",
+    imageFit: "适应面板宽度",
+    pdfFallback: "页面没有显示时可以下载后查看：",
+    tooLarge: "文件太大，暂时无法在面板内预览，请下载后查看。",
+    sourceTruncated: "文件较长，这里只显示了开头部分。",
   },
 
   /** The 三维 structure view that opens for structure files. */

@@ -119,7 +119,7 @@ describe("workspace files and artifacts", () => {
     assert.equal(stub.calls[2]!.path, "/api/sessions/session%2Fone/artifact-outputs");
   });
 
-  it("reads file and artifact bytes as text and encodes both path and id", async () => {
+  it("reads file and artifact bytes with their type, and encodes both path and id", async () => {
     const stub = new StubClient().stream("file body").stream("artifact body");
     const client = stub.asClient();
 
@@ -130,8 +130,12 @@ describe("workspace files and artifacts", () => {
     assert.equal(fileCall.pathname, "/api/sessions/session%2Fone/file");
     assert.equal(fileCall.query.get("path"), "data/a b.txt");
     assert.equal(stub.calls[1]!.path, "/api/sessions/session%2Fone/artifact-versions/version%2Fone/content");
-    assert.equal(file, "file body");
-    assert.equal(artifact, "artifact body");
+    // A picture or a workbook would arrive here too, so the reader hands back
+    // the bytes rather than the text a PNG would decode to.
+    assert.equal(new TextDecoder().decode(file.bytes), "file body");
+    assert.equal(new TextDecoder().decode(artifact.bytes), "artifact body");
+    assert.equal(file.mediaType, "text/plain;charset=UTF-8");
+    assert.equal(artifact.mediaType, "text/plain;charset=UTF-8");
   });
 });
 

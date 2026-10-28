@@ -36,16 +36,26 @@ export interface PreviewSlot {
    *  a property of the open document, chosen with the picker beside it, not
    *  separate tabs. */
   artifactId?: string;
+  /** The document's text, for everything the panel reads rather than draws. */
   content?: string;
+  /** The document's bytes as a data URL, for a picture, a PDF or a workbook —
+   *  the three kinds a text read would have turned into replacement
+   *  characters. Exactly one of this and `content` is set. */
+  dataUrl?: string;
   error?: string;
   /** The initial tab — still holding the artifacts section and the tree. */
   home: boolean;
   id: string;
   label: string;
   loading: boolean;
+  /** The type the document was served as, which the preview uses when the name
+   *  has no extension to go on. */
+  mediaType?: string;
   /** The workspace path, when the document has one. Artifacts may not. */
   path: string;
   source?: DocumentSource;
+  /** Too large to hold in the tab; the panel offers the download instead. */
+  tooLarge?: boolean;
   /** Which version of the artifact is on screen. */
   versionId?: string;
 }
