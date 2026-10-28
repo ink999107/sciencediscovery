@@ -67,6 +67,9 @@ export interface SessionRecord {
   updatedAt: string;
 }
 
+/** The title the service stores for a Session nobody has written in yet. */
+const UNTITLED_TITLE = "Untitled session";
+
 export interface ModelRecord {
   id: string;
   model: string;
@@ -542,7 +545,16 @@ export async function installMockApi(page: Page, options: MockOptions = {}): Pro
           updatedAt: UPDATED_AT,
         };
         state.projects.push(project);
-        return json(route, 201, { firstSession: makeSession({ projectId: project.id }), project });
+        // The server writes a Project's first Session with it, and that Session
+        // is untitled until a message names it. A spec can then tell a row the
+        // reader asked for from one a button made.
+        const firstSession = makeSession({
+          id: `session-${state.sessions.length + 1}`,
+          projectId: project.id,
+          title: UNTITLED_TITLE,
+        });
+        state.sessions.push(firstSession);
+        return json(route, 201, { firstSession, project });
       }
 
       const projectSessions = /^\/api\/projects\/([^/]+)\/sessions$/.exec(path);
@@ -555,7 +567,7 @@ export async function installMockApi(page: Page, options: MockOptions = {}): Pro
           const created = makeSession({
             id: `session-${state.sessions.length + 1}`,
             projectId,
-            title: "新会话",
+            title: UNTITLED_TITLE,
           });
           state.sessions.push(created);
           return json(route, 201, created);
@@ -595,6 +607,11 @@ export async function installMockApi(page: Page, options: MockOptions = {}): Pro
           role: "assistant",
         };
         session.messages = [...(session.messages ?? []), userMessage, assistantMessage];
+        // The service names a Session from its first message and publishes the
+        // rename ahead of the run; the mock does both, so a spec can watch the
+        // sidebar row appear with the message.
+        const renamed = session.title === UNTITLED_TITLE;
+        if (renamed) session.title = prompt.trim().slice(0, 24) || session.title;
         const run = {
           createdAt: CREATED_AT,
           finishedAt: CREATED_AT,
@@ -606,6 +623,7 @@ export async function installMockApi(page: Page, options: MockOptions = {}): Pro
         };
         return route.fulfill({
           body: sse([
+            ...(renamed ? [{ session, type: "session.updated" }] : []),
             { run, type: "run.queued" },
             { model: { name: "Qwen Max" }, runId: "run-1", settings: {}, type: "run.started" },
             { responseId: "response-1", turn: 1, type: "assistant.response.started" },

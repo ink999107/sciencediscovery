@@ -22,11 +22,12 @@ import {
   resumeOnBoot,
   resumeSession,
   untitled,
+  withConversation,
 } from "../src/app/session-order.js";
 
-const older = { id: "older", projectId: "p1", updatedAt: "2026-01-01T09:00:00.000Z" };
-const newer = { id: "newer", projectId: "p2", updatedAt: "2026-01-02T09:00:00.000Z" };
-const same = { id: "same", projectId: "p1", updatedAt: "2026-01-02T09:00:00.000Z" };
+const older = { id: "older", projectId: "p1", title: "Older session", updatedAt: "2026-01-01T09:00:00.000Z" };
+const newer = { id: "newer", projectId: "p2", title: "Newer session", updatedAt: "2026-01-02T09:00:00.000Z" };
+const same = { id: "same", projectId: "p1", title: "Same instant", updatedAt: "2026-01-02T09:00:00.000Z" };
 
 function draft(id: string, updatedAt: string, over: Record<string, unknown> = {}) {
   return { id, projectId: "p1", title: "Untitled session", updatedAt, ...over };
@@ -68,6 +69,21 @@ test("新建会话 reopens the empty Session it already made instead of adding o
   assert.equal(reusableDraft([blank, archived])?.id, "blank");
 });
 
+test("the sidebar lists a Session only once something has been said in it", () => {
+  // A Session appears when the first message names it; until then it is a page
+  // a button created, and a row for it would arrive before the user has even
+  // decided what to ask.
+  const blank = draft("blank", "2026-01-03T09:00:00.000Z");
+  const written = draft("written", "2026-01-04T09:00:00.000Z", { title: "TP53 expression" });
+  assert.deepEqual(withConversation([written, blank]).map((session) => session.id), ["written"]);
+  assert.deepEqual(withConversation([blank]), []);
+  assert.deepEqual(withConversation([]), []);
+  // The filter is not a sort: the caller keeps the server's order.
+  const listed = [older, written];
+  withConversation(listed);
+  assert.deepEqual(listed.map((session) => session.id), ["older", "written"]);
+});
+
 test("boot opens the newest Session instead of leaving a draft beside it", () => {
   // The first message from a draft would create a second Session next to the
   // one already on screen; resuming makes the composer and the list agree.
@@ -76,6 +92,19 @@ test("boot opens the newest Session instead of leaving a draft beside it", () =>
   // Nothing is opened over a Session the user (or an earlier boot) already
   // chose.
   assert.equal(resumeSession("older", [older, newer]), undefined);
+});
+
+test("boot does not open a Session that is only a draft", () => {
+  // It is not in the sidebar either, and a page whose row cannot be found
+  // reads as a Session that went missing. An empty draft says the same thing.
+  const blank = draft("blank", "2026-01-05T09:00:00.000Z");
+  assert.equal(resumeSession(undefined, [older, blank])?.id, "older");
+  assert.equal(resumeSession(undefined, [blank]), undefined);
+  assert.equal(
+    resumeSession(undefined, [older, blank, newer])?.id,
+    "newer",
+    "the newest Session that has a conversation, not the newest row",
+  );
 });
 
 test("boot opens the resumed Session in the Project it belongs to", () => {

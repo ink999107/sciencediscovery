@@ -13,9 +13,10 @@
 // limitations under the License.
 
 /**
- * The two writes a reader makes on the Session itself: rename and delete.
- * Both are proved against the mock's state and then against a reload, so the
- * assertions cannot be satisfied by local React state alone.
+ * The writes a reader makes on the Session itself — create, rename, delete —
+ * and when the sidebar admits one exists. Each is proved against the mock's
+ * state and mostly against a reload, so the assertions cannot be satisfied by
+ * local React state alone.
  */
 import { expect, test } from "@playwright/test";
 
@@ -101,4 +102,51 @@ test("deleting the open Session asks first, then returns to a draft", async ({ p
   // The reload resumes nothing, because the Session is gone on the server too.
   await expect(page.getByText("暂无会话", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "ScienceDiscovery" })).toBeVisible();
+});
+
+test("新建会话 writes no row until the first message names it", async ({ page }) => {
+  const mock = await installMockApi(page, { sessions: [makeSession()] });
+  await page.goto("/");
+  await expect(page.locator(".side-session-name")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "新建会话", exact: true }).click();
+
+  // The Session exists on the server — the composer writes into it — but the
+  // column lists conversations, and this one has nothing in it yet. A row here
+  // would be a page the user has not said anything on.
+  await expect.poll(() => mock.state.sessions.length).toBe(2);
+  await expect(page.locator(".task-head-title")).toHaveText("未命名会话");
+  await expect(page.locator(".side-session-name")).toHaveCount(1);
+
+  await page.locator("#composer-textarea").fill("请分析这个晶体结构");
+  await page.locator("#composer-textarea").press("Enter");
+
+  // The first message names the Session, and the row arrives with it.
+  await expect(page.locator(".side-session-name")).toHaveCount(2);
+  await expect(
+    page.locator(".side-session-name", { hasText: "请分析这个晶体结构" }),
+  ).toBeVisible();
+});
+
+test("a draft left in one Project is not carried to the next", async ({ page }) => {
+  const mock = await installMockApi(page, { sessions: [makeSession()] });
+  await page.goto("/");
+  await expect(page.locator(".side-session-name")).toHaveCount(1);
+
+  // A Session made and left empty stays where it was made: on the server, in
+  // its Project, and out of the sidebar until something is said in it.
+  await page.getByRole("button", { name: "新建会话", exact: true }).click();
+  await expect.poll(() => mock.state.sessions.length).toBe(2);
+
+  await page.getByRole("button", { name: "新建项目" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("项目名称").fill("钙钛矿");
+  await dialog.getByRole("button", { name: "确认" }).click();
+
+  // A new Project opens on its own empty Session, and neither Project lists a
+  // row for a conversation nobody has had.
+  await expect(page.locator(".side-project-toggle", { hasText: "钙钛矿" })).toBeVisible();
+  await expect(page.locator(".task-head-title")).toHaveText("未命名会话");
+  await expect(page.locator(".side-session-name")).toHaveCount(1);
+  await expect.poll(() => mock.state.sessions.length).toBe(3);
 });

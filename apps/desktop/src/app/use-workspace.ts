@@ -27,7 +27,7 @@ import { documentPayload } from "./document-payload.js";
 import { changedFiles } from "./file-changes.js";
 import { changesPanel, createPanelRefresh, type PanelRefresh } from "./panel-refresh.js";
 import { fileName } from "./paths.js";
-import { byRecency, reusableDraft, resumeOnBoot } from "./session-order.js";
+import { byRecency, reusableDraft, resumeOnBoot, withConversation } from "./session-order.js";
 import { sessionTitle } from "./session-title.js";
 import { formatByteLimit, splitBySize } from "./upload.js";
 import {
@@ -932,6 +932,12 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       (event, sequence) => {
         if (sessionRef.current !== target) return;
         updateRun((current) => reduceRunStream(current, event, sequence));
+        // The first message names its Session, and the name is what puts the
+        // row in the sidebar. The service publishes that rename on this stream,
+        // ahead of the run's own events, so the row appears with the message
+        // rather than at the end of its first answer. A later rename lands in
+        // the same list; the read is shared and rare.
+        if (event?.type === "session.updated") void refreshSessionLists();
         // 产物 and the workspace tree are read back from the service rather
         // than folded in from the event: the artifact list spans Sessions and
         // every version, and a read is what keeps it agreeing with the
@@ -943,7 +949,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
           panelRefresh.current?.request();
         }
       },
-    [updateRun],
+    [refreshSessionLists, updateRun],
   );
 
   /**
@@ -1634,11 +1640,22 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     [],
   );
 
+  // What the sidebar lists: the raw listing keeps the drafts as well, because
+  // 新建会话 reuses one and a draft is what a new Project opens on, but a
+  // Session nobody has written in is not a row the reader asked for.
+  const listedByProject = useMemo(() => {
+    const listed: Record<string, Session[]> = {};
+    for (const [projectId, sessions] of Object.entries(sessionsByProject)) {
+      listed[projectId] = withConversation(sessions);
+    }
+    return listed;
+  }, [sessionsByProject]);
+
   // 最近会话 is the inbox's own list, not every Session in the workspace: the
   // user's Projects show their Sessions under their own fold.
   const recent = useMemo(
-    () => (inboxProject === undefined ? [] : byRecency(sessionsByProject[inboxProject.id] ?? [])),
-    [inboxProject, sessionsByProject],
+    () => (inboxProject === undefined ? [] : byRecency(listedByProject[inboxProject.id] ?? [])),
+    [inboxProject, listedByProject],
   );
 
   // Which Project the open Session is in, or the inbox while none is open. The
@@ -1760,7 +1777,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
     running,
     selectedModelId,
     sessionId,
-    sessionsByProject,
+    sessionsByProject: listedByProject,
     tabs,
     toasts,
     uploadLimit,

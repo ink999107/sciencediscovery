@@ -50,6 +50,22 @@ export function untitled(title: string): boolean {
 }
 
 /**
+ * The Sessions the sidebar lists per Project, and the ones 最近会话 counts.
+ *
+ * An untitled Session is one nothing has been written in yet: the service names
+ * a Session from its first message, so a row that still carries the sentinel
+ * was created by a button — 新建会话, or the first Session the server writes
+ * with a new Project — and has not been used. Listing it would put a row in the
+ * sidebar the moment the button was pressed, and leave that row behind in the
+ * Project it was made in after the reader has moved to another. The row appears
+ * when the first message names it, which is the moment there is a conversation
+ * to list.
+ */
+export function withConversation<T extends { title: string }>(sessions: readonly T[]): T[] {
+  return sessions.filter((session) => !untitled(session.title));
+}
+
+/**
  * The Session 新建会话 should open instead of writing another one.
  *
  * The service names a Session from its first message, so one that is still
@@ -81,18 +97,22 @@ export function reusableDraft<T extends { archivedAt?: string; title: string; up
  * A Session already open wins, and yields nothing: on a re-run of the bootstrap
  * effect the user's choice (or the app's earlier resume) must not be replaced.
  *
+ * An untitled Session is not resumed. It holds no conversation, and it is not
+ * in the sidebar either — opening it on boot would show a page whose row the
+ * reader cannot find, where an empty draft says the same thing more plainly.
+ *
  * The whole Session is returned rather than its id because the listing spans
  * every Project. Resuming the newest Session without also adopting the Project
  * it belongs to would leave the app pointing at one Project while showing a
  * conversation from another, and the next 新增会话 or upload would be filed
  * under the wrong one.
  */
-export function resumeSession<T extends { id: string; updatedAt: string }>(
+export function resumeSession<T extends { id: string; title: string; updatedAt: string }>(
   open: string | undefined,
   sessions: readonly T[],
 ): T | undefined {
   if (open !== undefined) return undefined;
-  return byRecency(sessions)[0];
+  return byRecency(sessions).find((session) => !untitled(session.title));
 }
 
 /**
@@ -105,7 +125,7 @@ export function resumeSession<T extends { id: string; updatedAt: string }>(
  * A failed listing (`undefined`) is not an empty one, so it neither opens
  * anything nor counts as tried; the next bootstrap run gets to try again.
  */
-export function resumeOnBoot<T extends { id: string; projectId: string; updatedAt: string }>({
+export function resumeOnBoot<T extends { id: string; projectId: string; title: string; updatedAt: string }>({
   adoptProject,
   listed,
   open,
