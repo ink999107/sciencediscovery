@@ -109,10 +109,6 @@ Two cases need a state the fixture cannot create:
   throwaway stack.
 - the remote-resource case in `runner.real.spec.ts` runs only when the API
   reports a ready remote Runner with `runnerStatus.resources`.
-- `models.real.spec.ts` skips when the reused provider spends the probe's
-  synthetic output budget on reasoning and returns `finish_reason: length`.
-  The row then says support is inconclusive; the endpoint answered, but this
-  case cannot prove availability from that verdict.
 
 ## What is still not covered
 

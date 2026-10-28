@@ -19,8 +19,9 @@
  * Steps:
  *   1. Register an owned model profile from E2E_LLM_*, or reuse E2E_MODEL_ID.
  *   2. Open 设置 › 模型 and click that row's 测试连接.
- *   3. Require the success reading in the row; a provider that exhausts the
- *      probe's synthetic output budget skips as inconclusive.
+ *   3. Require the success reading in the row. A reasoning model that spends
+ *      the probe's synthetic budget on thinking still passes: the endpoint
+ *      answered, and the truncation is the probe's own limit.
  * Environment: Isolated product stack selected by E2E_BASE_URL, plus the
  *              desktop Vite entry on 4176.
  * Type: real
@@ -70,15 +71,10 @@ test("a model profile is tested against the real endpoint", { tag: [...REAL_TAGS
     // 测试连接 writes the profile before probing it, so the row is the same
     // one the API will use for a real request.
     const probe = row.locator(".model-row-probe");
-    await expect(probe).toContainText(/✓ 可用|Basic reply was truncated at the synthetic output limit/, { timeout: 60_000 });
-    // The probe asks for a very short reply. A reasoning model can spend that
-    // budget on reasoning and come back with `finish_reason: length`; the
-    // product then says support is inconclusive. The endpoint answered, but
-    // this case cannot prove availability with such a model, so it skips
-    // rather than calling the product broken.
-    if ((await probe.textContent())?.includes("synthetic output limit")) {
-      test.skip(true, `${profile.name} exhausts the probe's synthetic output budget; support is inconclusive`);
-    }
+    // Including a reasoning model: the probe asks for a very short reply, and
+    // one that spends the budget thinking comes back truncated. The endpoint
+    // answered, so that is a pass rather than a skipped journey.
+    await expect(probe).toContainText("✓ 可用", { timeout: 60_000 });
   } finally {
     if (owned) {
       await api(page, `/api/models/${encodeURIComponent(profile.id)}`, { method: "DELETE" }).catch(() => undefined);

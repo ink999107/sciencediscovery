@@ -45,8 +45,10 @@ share another 10-second ceiling. The entire sequential matrix therefore has a
 to 8 tokens for Chat/Messages and 16 for Responses; stream and tool outputs to 64 tokens per request, and response
 bodies to 64 KiB per request. Providers can ignore output limits; the byte and
 time ceilings still apply. A slow reasoning model may exhaust these small
-budgets: the result is inconclusive, not evidence that the model is unusable.
-API keys and upstream response/error bodies are not included in probe results.
+budgets before it writes any answer: the reply is then truncated at the probe's
+own limit, which counts as the endpoint answering, not as evidence that the
+model is unusable. API keys and upstream response/error bodies are not included
+in probe results.
 
 Authentication/authorization (401/403), rate/quota limits (429), endpoint/model
 not found (404), provider errors, network failures and timeouts are distinct
@@ -154,12 +156,13 @@ certification; Azure and other providers were not independently verified. No
 arbitrary runtime caller budget is globally clamped to16. Consent shows the
 different probe limits before any request; saving or changing scope sends nothing.
 
-A structurally valid reply ending at the synthetic output limit stays inconclusive,
-with reported usage preserved. The setup wizard retains the selected configuration
-and clearly says compatibility is unconfirmed instead of deleting it solely for
-this budget limitation. Authentication, provider and malformed/empty-response
-failures still roll back newly created setup records. No automatic larger probe
-is sent. Tool acknowledgement tolerates case, surrounding whitespace and one
+A structurally valid reply ending at the synthetic output limit passes the basic
+check, with reported usage preserved: the endpoint accepted the key, answered on
+the configured protocol, and stopped at a limit the probe itself wrote. A
+reasoning model that spends the budget on thinking is the usual case — it
+returns `finish_reason: length` with no final text. Authentication, provider and
+malformed/empty-response failures still fail. No automatic larger probe is sent.
+Tool acknowledgement tolerates case, surrounding whitespace and one
 terminal period/exclamation mark; tool ID, arguments, native state and result replay
 checks remain strict. Other answer text is inconclusive, not proof of incompatibility.
 

@@ -274,7 +274,7 @@ test("malformed native blocks cannot certify a basic capability", async () => {
   });
 });
 
-for (const apiProtocol of ["openai-chat-completions", "openai-responses", "anthropic-messages"] as const) test(`${apiProtocol} known basic truncation is inconclusive while its usage stays independently available`, async () => {
+for (const apiProtocol of ["openai-chat-completions", "openai-responses", "anthropic-messages"] as const) test(`${apiProtocol} basic truncation at the probe's own limit still proves the endpoint answers`, async () => {
   await withProvider(async (request, response) => {
     const body = JSON.parse(await readRequest(request));
     response.setHeader("content-type", "application/json");
@@ -286,7 +286,12 @@ for (const apiProtocol of ["openai-chat-completions", "openai-responses", "anthr
   }, async origin => {
     const result = await testModelConnectivity({ apiToken: "synthetic", profile: { ...profile(origin), apiProtocol }, resolveProxy: directProxy, compatibility: true, timeoutMs: 1000 });
     const selected = result.protocols?.find(p => p.apiProtocol === apiProtocol); assert.ok(selected);
-    assert.equal(selected.basic.ok, false); assert.equal(selected.basic.category, "invalid_response"); assert.match(selected.basic.message, /truncated.*inconclusive/);
+    // A reasoning model answers this probe with `finish_reason: "length"` and
+    // no final text; the endpoint is reachable and speaks the protocol, so the
+    // truncated reply is a pass rather than a verdict of "incompatible".
+    assert.equal(selected.basic.ok, true); assert.equal(selected.basic.category, "ok");
+    assert.equal(selected.basic.inconclusiveReason, undefined);
+    assert.match(selected.basic.message, /cut at the probe's output limit/);
     assert.equal(selected.streaming.category, "authorization"); assert.match(selected.streaming.message, /API key is invalid or is not authorized/); assert.equal(selected.tools.category, "authorization"); assert.equal(selected.usage, "available");
   });
 });

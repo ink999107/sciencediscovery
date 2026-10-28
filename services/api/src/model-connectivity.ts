@@ -77,7 +77,16 @@ export async function testModelConnectivity(options: ModelConnectivityTestOption
         const payload = await response.json() as { usage?: unknown; choices?: Array<{ finish_reason?: string; message?: { content?: string; reasoning_content?: string; tool_calls?: unknown[]; anthropic_content?: unknown[]; response_items?: unknown[] } }> };
         if (normalizeUsage(payload.usage, "openai-chat-completions")) usage = "available";
         if (payload.choices?.[0]?.finish_reason === "length") {
-          basic = { category: "invalid_response", ok: false, inconclusiveReason: "output_limit", providerStatus: response.status, message: "Basic reply was truncated at the synthetic output limit; support remains inconclusive" };
+          // The probe asks for a reply of a handful of tokens. A reasoning
+          // model spends that budget thinking and comes back with
+          // `finish_reason: "length"` and no final text, which used to be
+          // reported as inconclusive — so configuring one failed a check that
+          // had already proved the thing it asks about. `completeChatRequest`
+          // has parsed and validated the envelope by the time this runs: the
+          // endpoint accepted the key, answered on the configured protocol,
+          // and stopped at a limit this check wrote. That the cut is ours is
+          // not evidence against the model.
+          basic = { category: "ok", ok: true, providerStatus: response.status, message: "Valid basic completion structure; the synthetic reply was cut at the probe's output limit" };
         } else {
           const message = payload.choices?.[0]?.message;
           if (!message || !(message.content || message.reasoning_content || message.tool_calls?.length || message.anthropic_content?.length || message.response_items?.length)) throw new Error("No basic completion evidence");
