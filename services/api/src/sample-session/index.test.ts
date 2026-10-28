@@ -42,7 +42,9 @@ test("an install with no conversation of its own opens on the sample Session", a
   assert.equal(sessions.length, 1);
   const [session] = sessions;
   assert.ok(session);
-  assert.equal(session.title, "脓毒症亚型聚类分析");
+  // The title the task was summarized into, not the "样例" the recorded
+  // Session later wore.
+  assert.equal(session.title, "脓毒症内型评分聚类分析");
 
   // The files landed under this install's own ids, not the originals: the
   // conversation is readable through the same path the store looks in, and
@@ -50,26 +52,47 @@ test("an install with no conversation of its own opens on the sample Session", a
   const messages = await readFile(resolve(root, "messages", `${session.id}.json`), "utf8");
   assert.doesNotMatch(messages, /__SESSION_ID__|__PROJECT_ID__|__DATA_DIR__/);
   const runs = await readFile(resolve(root, "session-runs", `${session.id}.json`), "utf8");
-  assert.equal(JSON.parse(runs).length, 2);
+  const [run] = JSON.parse(runs) as Array<{ id: string }>;
+  assert.ok(run, "the transcript replays one finished run");
+  // The run's stream names the Session it belongs to in every artifact event,
+  // so the recorded name has to be rewritten too — a transcript that calls the
+  // sidebar's Session something else is a sample that contradicts itself.
+  const mainStream = await readFile(resolve(root, "run-events", session.id, run.id, "main.jsonl"), "utf8");
+  assert.doesNotMatch(mainStream, /样例/);
+  assert.ok(mainStream.includes(session.title));
   const workspace = resolve(root, "projects", project.id, "sessions", session.id, "workspace");
   assert.ok((await stat(workspace)).isDirectory());
-  // The figures are images, so they are written as bytes rather than through
-  // utf8 — which would turn every non-ASCII byte into a replacement character.
-  const figure = await readFile(resolve(workspace, "out", "fig_corr_heatmap.png"));
-  assert.deepEqual([...figure.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  // The analysis's own deliverables and the scripts behind them landed.
+  assert.ok((await readFile(resolve(workspace, "app", "trace.md"), "utf8")).length > 50_000);
+  assert.ok((await readFile(resolve(workspace, "work", "sensitivity_summary.md"), "utf8")).length > 1_000);
   await assert.rejects(stat(resolve(workspace, "__pycache__")), /ENOENT/);
+  // The input table ships with the analysis: without it the trace's code has
+  // nothing to read, and the reader cannot follow or repeat a step.
+  assert.ok((await stat(resolve(workspace, "subspace_score_table.csv"))).size > 2_000_000);
 
   // The 产物 tab reads the catalog, not the workspace, so the sample has to
-  // publish its artifacts the way the run did. Both versions of trace.md are
-  // there — the analysis rewrote the file, and the picker beside the open
-  // document is what shows that history.
+  // publish its artifacts the way the run did. trace.md and answer.txt keep
+  // every draft the answer's "v4" refers to; the version picker is what shows
+  // that history.
   const outputs = store.listSessionArtifactOutputs(session.id);
   assert.deepEqual(
     outputs.map((output) => `${output.artifact.name}@v${output.version.version}`).toSorted(),
-    ["app/answer.txt@v1", "app/trace.md@v1", "app/trace.md@v2", "audit_report.md@v1"],
+    [
+      "app/answer.txt@v1", "app/answer.txt@v2", "app/answer.txt@v3", "app/answer.txt@v4",
+      "app/trace.md@v1", "app/trace.md@v2", "app/trace.md@v3", "app/trace.md@v4",
+      "work/sensitivity_summary.md@v1",
+    ],
   );
   assert.equal(new Set(outputs.map((output) => output.artifact.id)).size, 3);
   assert.ok(outputs.every((output) => output.version.turnId), "every row can attach to a turn");
+  // The answer cites the sensitivity summary by the id it had when recorded.
+  // Seeding mints new ids, so that chip has to be pointed at the seeded one.
+  const citations = (JSON.parse(messages) as Array<{ references?: Array<{ id: string; kind: string }> }>)
+    .flatMap((message) => message.references ?? [])
+    .filter((reference) => reference.kind === "artifact");
+  assert.equal(citations.length, 1);
+  assert.ok(outputs.some((output) => output.artifact.id === citations[0]!.id),
+    "the citation resolves to a seeded artifact");
   // The bytes are in the content store, at the size the version records — a
   // row that opens on nothing is worse than no row.
   const cas = new CasStore(root, "data");

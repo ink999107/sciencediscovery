@@ -711,17 +711,19 @@ test("a first start seeds the sample Session, and a later one does not repeat it
   const sample = projects.body.find((project) => project.name === "示例项目");
   assert.ok(sample, "the sample Project is listed like any other");
   const sessions = await jsonRequest<Session[]>(`${origin}/api/projects/${sample.id}/sessions`, { headers: authorization });
-  assert.deepEqual(sessions.body.map((session) => session.title), ["脓毒症亚型聚类分析"]);
-  // The transcript replays two finished runs, which is what makes the sample
+  assert.deepEqual(sessions.body.map((session) => session.title), ["脓毒症内型评分聚类分析"]);
+  // The transcript replays one finished run, which is what makes the sample
   // worth opening: the process, not just the answer.
   const runs = await jsonRequest<unknown[]>(`${origin}/api/sessions/${sessions.body[0]!.id}/runs`, {
     headers: authorization,
   });
-  assert.equal(runs.body.length, 2);
+  assert.equal(runs.body.length, 1);
   const files = await jsonRequest<{ path: string }[]>(`${origin}/api/sessions/${sessions.body[0]!.id}/files`, {
     headers: authorization,
   });
-  assert.ok(files.body.some((file) => file.path === "analysis_summary.md"));
+  assert.ok(files.body.some((file) => file.path === "work/sensitivity_summary.md"));
+  // The analysis's input travels with it, so the trace's steps can be followed.
+  assert.ok(files.body.some((file) => file.path === "subspace_score_table.csv"));
   // 产物 is served from the catalog, so the seed has to publish the artifacts
   // too — the workspace files alone leave that tab empty.
   const outputs = await jsonRequest<{ artifact: { name: string }; version: { version: number } }[]>(
@@ -729,7 +731,11 @@ test("a first start seeds the sample Session, and a later one does not repeat it
     { headers: authorization },
   );
   assert.deepEqual(outputs.body.map((output) => output.artifact.name).toSorted(),
-    ["app/answer.txt", "app/trace.md", "app/trace.md", "audit_report.md"]);
+    [
+      "app/answer.txt", "app/answer.txt", "app/answer.txt", "app/answer.txt",
+      "app/trace.md", "app/trace.md", "app/trace.md", "app/trace.md",
+      "work/sensitivity_summary.md",
+    ]);
 
   // The marker is what makes this a one-time gift: the next boot on this
   // directory finds a user's own install, not another empty one.
