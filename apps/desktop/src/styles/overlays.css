@@ -30,24 +30,36 @@
   pointer-events: none;
 }
 .tour-overlay[hidden] { display: none; }
+/* Transparent on purpose: the dimming is the spotlight's own shadow, which
+   leaves the element it frames at full brightness instead of tinting it with
+   everything else. This layer is here to take the clicks, so a press outside
+   the card neither reaches the page nor dismisses the guide. */
 .tour-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(11, 18, 32, .55);
-  backdrop-filter: blur(2px);
   pointer-events: auto;
 }
+/* The one case with no element to frame — the panel in a window too narrow
+   for it — has no shadow to dim with, so the backdrop does it. */
+.tour-overlay.is-bare .tour-backdrop { background: rgba(11, 18, 32, .55); }
 .tour-spotlight {
   position: absolute;
   border: 2px solid var(--primary);
   border-radius: 12px;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, .25);
+  /* The huge spread is the page-wide dim, with the element left out of it; the
+     ring is drawn on top of its own shadow. */
+  box-shadow:
+    0 0 0 4px rgba(37, 99, 235, .25),
+    0 0 0 9999px rgba(11, 18, 32, .55);
   transition: all .3s cubic-bezier(.2,.8,.2,1);
   pointer-events: none;
 }
 .tour-card {
   position: absolute;
-  max-width: 360px;
+  /* A fixed width, not a max: the card's own height decides where it lands,
+     and a card that reflowed to its text would move as the step changed. */
+  width: 336px;
+  max-width: calc(100vw - 32px);
   padding: 18px 20px;
   border: 1px solid var(--border);
   border-radius: var(--radius-l);
@@ -56,6 +68,12 @@
   pointer-events: auto;
   transition: all .3s cubic-bezier(.2,.8,.2,1);
 }
+/* The first frame, before the card has been measured. It is in the document
+   and announced; it is only not yet where it belongs. */
+.tour-card.is-measuring { visibility: hidden; }
+/* The card is focused so a screen reader reads it, not to show a focus ring
+   on a box that cannot be typed into. */
+.tour-card:focus { outline: none; }
 .tour-step {
   display: inline-block;
   padding: 3px 8px;
@@ -86,6 +104,14 @@
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+/* Smaller than the dialog pair the card borrows: three buttons and a sentence
+   in a 336px box, where a 38px-tall row would out-weigh the text. */
+.tour-actions .primary-button,
+.tour-actions .secondary-button {
+  min-height: 32px;
+  padding: 6px 14px;
+  font-size: 12px;
 }
 
 .new-badge {

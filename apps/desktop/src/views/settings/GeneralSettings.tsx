@@ -31,24 +31,37 @@ import { Group, Row } from "./rows.js";
  * OS-drawn popup in the system's own type and colours reads as a piece of the
  * operating system that wandered in.
  */
-export function GeneralSettings() {
+export function GeneralSettings({ onShowGuide }: { onShowGuide: () => void }) {
   const language = useLanguage();
   const text = TEXT.settings.general.language;
 
   return (
-    <Group heading={text.heading}>
-      <Row title={text.field}>
-        <ListSelect
-          caption={false}
-          choices={[
-            { label: text.chinese, value: "zh-CN" },
-            { label: text.english, value: "en" },
-          ]}
-          label={text.field}
-          onChange={(next) => setLanguage(next === "en" ? "en" : "zh-CN")}
-          value={language}
-        />
-      </Row>
-    </Group>
+    <>
+      <Group heading={text.heading}>
+        <Row title={text.field}>
+          <ListSelect
+            caption={false}
+            choices={[
+              { label: text.chinese, value: "zh-CN" },
+              { label: text.english, value: "en" },
+            ]}
+            label={text.field}
+            onChange={(next) => setLanguage(next === "en" ? "en" : "zh-CN")}
+            value={language}
+          />
+        </Row>
+      </Group>
+      {/* The guide is shown once and then only on request. The request lives
+          beside the language because both are preferences of this browser,
+          and because this is the page a user opens when they cannot find
+          something on the interface. */}
+      <Group heading={TEXT.settings.general.guide.heading}>
+        <Row hint={TEXT.settings.general.guide.hint} title={TEXT.settings.general.guide.field}>
+          <button className="secondary-button" onClick={onShowGuide} type="button">
+            {TEXT.settings.general.guide.action}
+          </button>
+        </Row>
+      </Group>
+    </>
   );
 }

@@ -220,6 +220,7 @@ describe("the settings directory", () => {
       group="general"
       onClose={noConfirm}
       onGroupChange={noConfirm}
+      onShowGuide={noConfirm}
       state={{} as unknown as WorkspaceState}
     />,
   );
@@ -311,7 +312,7 @@ describe("the model field of a provider-backed profile", () => {
 });
 
 describe("the language picker", () => {
-  const markup = renderToStaticMarkup(<GeneralSettings />);
+  const markup = renderToStaticMarkup(<GeneralSettings onShowGuide={() => {}} />);
 
   it("draws its own list instead of the platform's popup", () => {
     assert.ok(markup.includes("list-select-trigger"), "界面语言 went back to a native <select>");

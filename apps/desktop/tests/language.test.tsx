@@ -136,7 +136,7 @@ test("a permission card's buttons are drawn in the language in force", () => {
 });
 
 test("通用 offers both languages and shows the one in force", () => {
-  const chinese = renderToStaticMarkup(<GeneralSettings />);
+  const chinese = renderToStaticMarkup(<GeneralSettings onShowGuide={() => {}} />);
   assert.match(chinese, /list-select-trigger/);
   assert.match(chinese, /简体中文/);
   assert.match(chinese, /界面语言/);
@@ -144,7 +144,7 @@ test("通用 offers both languages and shows the one in force", () => {
   assert.doesNotMatch(chinese, /选择此浏览器中/);
 
   setLanguage("en");
-  const english = renderToStaticMarkup(<GeneralSettings />);
+  const english = renderToStaticMarkup(<GeneralSettings onShowGuide={() => {}} />);
   assert.match(english, /Interface language/);
   assert.match(english, /English/);
   assert.doesNotMatch(english, /Choose the language/);

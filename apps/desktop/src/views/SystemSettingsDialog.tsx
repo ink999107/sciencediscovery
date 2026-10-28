@@ -58,6 +58,9 @@ interface Props {
   group: SettingsGroup;
   onClose: () => void;
   onGroupChange: (group: SettingsGroup) => void;
+  /** Plays the first-run guide again. 通用 owns the row that asks for it, and
+   *  the surface closes before the cards appear over the page. */
+  onShowGuide: () => void;
   state: WorkspaceState;
 }
 
@@ -76,6 +79,7 @@ export function SystemSettingsDialog({
   group,
   onClose,
   onGroupChange,
+  onShowGuide,
   state,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Partial<Record<CategoryId, boolean>>>({});
@@ -114,7 +118,7 @@ export function SystemSettingsDialog({
   const pane = (() => {
     switch (group) {
       case "general":
-        return <GeneralSettings />;
+        return <GeneralSettings onShowGuide={onShowGuide} />;
       case "models":
         return (
           <ModelSettings

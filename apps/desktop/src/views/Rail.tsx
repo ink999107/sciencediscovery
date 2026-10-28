@@ -81,6 +81,7 @@ export function Rail({ onOpenSettings, onSelectTask, settingsOpen }: Props) {
         <button
           aria-current={settingsOpen ? "page" : undefined}
           className={`rail-item${settingsOpen ? " is-active" : ""}`}
+          data-guide="settings"
           onClick={onOpenSettings}
           title={TEXT.rail.settings}
           type="button"

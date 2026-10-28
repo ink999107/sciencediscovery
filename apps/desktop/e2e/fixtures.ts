@@ -29,6 +29,10 @@ import type { Page, Route } from "@playwright/test";
 
 export const TOKEN = "e2e-token";
 export const TOKEN_STORAGE_KEY = "sciencediscovery-token";
+/** `GUIDE_STORAGE_KEY` in `src/state/storage.ts`. Spelled out rather than
+ *  imported because these specs do not load the app's module graph; the
+ *  string is the contract between them. */
+export const GUIDE_STORAGE_KEY = "sciencediscovery-desktop:guide";
 
 const CREATED_AT = "2026-10-01T08:00:00.000Z";
 const UPDATED_AT = "2026-10-01T09:30:00.000Z";
@@ -112,6 +116,10 @@ export interface MockOptions {
   mcpTest?: "error" | "ok";
   /** What `POST /api/models/:id/test` answers. */
   modelTest?: { category?: string; latencyMs?: number; message?: string; ok: boolean };
+  /** Whether the browser has already read the first-run guide. Every spec but
+   *  the guide's own is about a returning user, and the guide covers the page
+   *  it would otherwise have to click through. Set `false` to get the guide. */
+  guideSeen?: boolean;
 }
 
 export interface RecordedCall {
@@ -196,6 +204,16 @@ function json(route: Route, status: number, body: unknown): Promise<void> {
 }
 
 export async function installMockApi(page: Page, options: MockOptions = {}): Promise<Mock> {
+  // Seeded before the app's first script runs, which is the only moment the
+  // guide's decision is made. A spec that wants the guide passes `guideSeen:
+  // false`; the rest get the page without it.
+  if (options.guideSeen !== false) {
+    await page.addInitScript(
+      ([key, value]) => localStorage.setItem(key, value),
+      [GUIDE_STORAGE_KEY, "1"] as const,
+    );
+  }
+
   const state: MockState = {
     artifacts: [...(options.artifacts ?? [])],
     connectors: [...(options.connectors ?? [])],

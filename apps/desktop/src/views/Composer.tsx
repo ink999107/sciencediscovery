@@ -735,7 +735,7 @@ export function Composer({
   const stop = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
   return (
-    <div className={`composer${landing ? " is-landing" : ""}`}>
+    <div className={`composer${landing ? " is-landing" : ""}`} data-guide="composer">
       {open ? (
         <div aria-label={TEXT.composer.skillsPalette} className="composer-skills" role="listbox">
           {choices.map((skill, index) => (

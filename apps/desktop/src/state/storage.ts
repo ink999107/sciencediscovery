@@ -51,6 +51,10 @@ export const PANEL_WIDTH_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:panel-width`;
  *  self, not a setting: the live data directory is fixed by the launcher, so
  *  writing this never moves existing data. */
 export const DATA_DIR_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:data-dir`;
+/** Set once the first-run guide has been read or skipped. It stays set after
+ *  the guide is replayed from 设置, so a replay that is abandoned half-way does
+ *  not bring it back on the next start. */
+export const GUIDE_STORAGE_KEY = `${CURRENT_PREFIX}-desktop:guide`;
 
 function safeRead(storage: ReadableStorage, key: string): string | null {
   try {

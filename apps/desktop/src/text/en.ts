@@ -253,6 +253,29 @@ export const EN: Text = {
     },
   },
 
+  guide: {
+    label: "Interface guide",
+    step: (index: number, total: number) => `Step ${index} of ${total}`,
+    skip: "Skip",
+    back: "Back",
+    next: "Next",
+    done: "Start using it",
+    steps: {
+      composer: {
+        title: "The composer",
+        body: "Type what you need below and press Enter to send. The + on the left attaches files, the picker on the right chooses the model and the permission mode, and typing / references a Skill or a command directly.",
+      },
+      settings: {
+        title: "Settings",
+        body: "“Settings” in the narrow left rail opens the configuration panel: models, Skills, MCP servers, specialists and networking all live there, and every change applies at once — there is nothing to save.",
+      },
+      panel: {
+        title: "The right panel",
+        body: "The workspace panel on the right lists the artifacts and files this session produces; open one to preview it. Drag the divider on its left to widen it, or use the button in its header to collapse it.",
+      },
+    },
+  },
+
   permission: {
     required: "Permission required",
     allowOnce: "Allow once",
@@ -380,6 +403,12 @@ export const EN: Text = {
         // A language names itself: the Chinese option has to be readable to
         // someone who cannot yet read the page it sits on.
         chinese: "简体中文",
+      },
+      guide: {
+        heading: "Interface guide",
+        field: "Interface tour",
+        hint: "The composer, settings and the right panel, in three cards.",
+        action: "Replay",
       },
     },
     loading: "Loading…",

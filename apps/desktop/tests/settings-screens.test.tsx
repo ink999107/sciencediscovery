@@ -142,6 +142,7 @@ describe("the settings dialog", () => {
         group={group}
         onClose={noop}
         onGroupChange={noop}
+        onShowGuide={noop}
         state={state()}
       />,
     );

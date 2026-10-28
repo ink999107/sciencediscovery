@@ -276,6 +276,31 @@ export const ZH = {
     },
   },
 
+  /** The first-run guide over the task page: three cards, one per part a new
+   *  user has to find. It is read once and can be replayed from 设置 › 通用. */
+  guide: {
+    label: "新手引导",
+    step: (index: number, total: number) => `第 ${index} / ${total} 步`,
+    skip: "跳过",
+    back: "上一步",
+    next: "下一步",
+    done: "开始使用",
+    steps: {
+      composer: {
+        title: "对话框",
+        body: "在下方输入研究需求，按 Enter 发送。左边的 + 可以上传文件，右边的下拉可以选择模型和权限模式，输入 / 可以直接引用技能和指令。",
+      },
+      settings: {
+        title: "设置",
+        body: "左侧窄栏里的「设置」打开配置面板：模型、技能、MCP 服务器、专家和网络都在这里，改完立即生效，不需要保存。",
+      },
+      panel: {
+        title: "右侧栏",
+        body: "右侧的工作区面板列出这次会话产生的产物和文件，点开即可预览；拖动它左边的分隔线可以调整宽度，顶部的按钮可以收起。",
+      },
+    },
+  },
+
   permission: {
     required: "需要权限",
     allowOnce: "仅允许一次",
@@ -401,6 +426,15 @@ export const ZH = {
         field: "界面语言",
         english: "English",
         chinese: "简体中文",
+      },
+      /** The row that plays the first-run guide again. It is here rather than
+       *  behind a help menu because 设置 › 通用 is where a user looks when the
+       *  interface is the problem. */
+      guide: {
+        heading: "新手引导",
+        field: "界面导览",
+        hint: "对话框、设置和右侧栏，三张卡片再看一遍。",
+        action: "重新查看",
       },
     },
     loading: "正在读取…",

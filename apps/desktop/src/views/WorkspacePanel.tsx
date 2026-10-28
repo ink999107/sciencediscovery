@@ -729,7 +729,7 @@ export function WorkspacePanel({
   );
 
   return (
-    <aside className="workspace-panel">
+    <aside className="workspace-panel" data-guide="panel">
       <div
         aria-label={TEXT.workspace.resize}
         aria-orientation="vertical"
