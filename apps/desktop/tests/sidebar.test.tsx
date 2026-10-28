@@ -91,6 +91,16 @@ test("every project row can start a session inside itself", () => {
   assert.match(markup, />新建会话</);
 });
 
+test("a project row offers rename and delete, like a session does", () => {
+  // A Project is the user's own container: it can be renamed and removed whole.
+  // Both live in the row's `⋯`, the same two items a session row carries, and
+  // the double-click gesture is announced the same way.
+  const markup = render({ projects: [project("p1", "脓毒症研究")] });
+  assert.match(markup, /title="脓毒症研究 · 双击改名"/u);
+  assert.match(markup, /aria-label="项目菜单"/u);
+  assert.match(markup, /在「脓毒症研究」中新建会话/u);
+});
+
 test("the projects section offers a way to make one", () => {
   const markup = render();
   assert.match(markup, /title="新建项目"/);
