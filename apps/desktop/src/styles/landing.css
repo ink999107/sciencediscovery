@@ -258,6 +258,16 @@
   background: #fff;
 }
 
+/* The tray sits on the card's grey, above the white input block — and takes
+   its own corners away from it, so the block reads as one shape below it. */
+.composer.is-landing .attach-tray {
+  padding: 10px 16px 10px;
+}
+
+.composer.is-landing.has-attachments .composer-input {
+  border-radius: 0;
+}
+
 .composer.is-landing .composer-footer {
   padding: 4px 12px 8px 14px;
   border-radius: 0 0 16px 16px;

@@ -38,9 +38,13 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
-test("a chosen file is uploaded to the open session and announced by its path", async ({ page }) => {
+test("a chosen file is uploaded to the open session and held in the composer's tray", async ({ page }) => {
   const mock = await installMockApi(page, { sessions: [makeSession()] });
   await page.goto("/");
+  // A resumed Session replaces the composer's state when it opens, and with it
+  // the files waiting there — so the gesture has to wait for that to have
+  // happened. The sidebar marks the row of the Session that is open.
+  await expect(page.locator(".side-row.is-active .side-session-name")).toHaveCount(1);
 
   // The actual gesture: the composer's attach button opens the picker.
   const chooserPromise = page.waitForEvent("filechooser");
@@ -51,7 +55,12 @@ test("a chosen file is uploaded to the open session and announced by its path", 
     name: "data.csv",
   });
 
-  await expect(page.getByText("已上传 data.csv", { exact: false })).toBeVisible();
+  // The card is the receipt: it says the file landed, and where it went is the
+  // panel's business, not a toast the user has to catch.
+  const card = page.locator(".attach-card");
+  await expect(card).toHaveCount(1);
+  await expect(card.locator(".attach-name")).toHaveText("data.csv");
+  await expect(card.locator(".attach-meta")).toHaveText("CSV 8B");
   expect(mock.state.files.map((file) => (file as { path: string }).path)).toEqual(["data.csv"]);
   expect(
     mock.calls.some(
@@ -85,6 +94,8 @@ test("a file over the health-reported ceiling is refused without a request", asy
 test("a file dragged over the window is announced, and dropping it uploads it", async ({ page }) => {
   const mock = await installMockApi(page, { sessions: [makeSession()] });
   await page.goto("/");
+  // See the first test: the resumed Session takes the tray with it when it opens.
+  await expect(page.locator(".side-row.is-active .side-session-name")).toHaveCount(1);
 
   const dragged = await transfer(page, "dropped.csv");
   await page.dispatchEvent("body", "dragenter", { dataTransfer: dragged });
@@ -98,7 +109,7 @@ test("a file dragged over the window is announced, and dropping it uploads it", 
   await page.dispatchEvent("body", "drop", { dataTransfer: dragged });
 
   await expect(page.locator(".drop-overlay")).toHaveCount(0);
-  await expect(page.getByText("已上传 dropped.csv", { exact: false })).toBeVisible();
+  await expect(page.locator(".attach-card .attach-name")).toHaveText("dropped.csv");
   expect(mock.state.files.map((file) => (file as { path: string }).path)).toEqual(["dropped.csv"]);
 });
 

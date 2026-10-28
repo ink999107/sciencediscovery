@@ -128,8 +128,22 @@ export const EN: Text = {
     unlimited: "unlimited",
     busy: "Uploading…",
     tooLarge: (name: string, limit: string) => `${name} exceeds ${limit} and was not uploaded.`,
-    uploaded: (path: string) => `Uploaded ${path}`,
+    tooMany: (max: number) => `A message holds at most ${max} attachments.`,
     failed: (name: string, reason: string) => `${name}: ${reason}`,
+  },
+
+  /** The cards the composer holds: one per file, from the moment it is chosen
+   *  until the message that carries it is sent. */
+  attachment: {
+    uploading: "Uploading…",
+    failed: "Upload failed",
+    retry: "Retry",
+    remove: (name: string) => `Remove ${name}`,
+    delete: "Delete",
+    clear: "Clear attachments",
+    /** The line under the name once the upload landed. */
+    detail: (type: string, size: string) => (type === "" ? size : `${type} ${size}`),
+    tray: "Attached files",
   },
 
   conversation: {

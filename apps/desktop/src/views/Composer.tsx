@@ -24,9 +24,11 @@ import type {
   SkillDescriptor,
   Specialist,
 } from "../api/types.js";
+import type { Attachment } from "../app/attachments.js";
 import type { LandingCategory, LandingSeed } from "../app/landing.js";
 import { skillChoices, skillDraft, skillMark, slashQuery } from "../app/slash.js";
 import { TEXT } from "../text.js";
+import { AttachmentTray } from "./AttachmentTray.js";
 import { filterExperts } from "./expert-catalog.js";
 import { modelBrand } from "./model-brand.js";
 import { modelLabel, providerName } from "./provider-name.js";
@@ -52,6 +54,8 @@ interface Props {
   client?: ApiClient;
   /** The per-file ceiling to state in that tooltip, already formatted. */
   attachLimit?: string;
+  /** The files this turn already holds, shown above the input. */
+  attachments: readonly Attachment[];
   /** The welcome page's arrangement: the card floats, and a grey strip under
    *  it carries the project and the permission mode. */
   landing?: boolean;
@@ -65,6 +69,12 @@ interface Props {
   onSelectProject: (projectId?: string) => void;
   /** Binds an expert to the session, or clears the binding. */
   onSelectSpecialist?: (specialistId?: string) => void;
+  /** Empty the attachment tray. */
+  onClearAttachments: () => void;
+  /** Take one attachment out of the tray. */
+  onRemoveAttachment: (id: string) => void;
+  /** Upload a failed attachment again. */
+  onRetryAttachment: (id: string) => void;
   onSend: (content: string) => void;
   onStop: () => void;
   onUpload: (files: File[]) => void;
@@ -588,12 +598,16 @@ export function Composer({
   approvalMode,
   attachBlocked,
   attachLimit,
+  attachments,
   client,
   landing = false,
   models,
   onApprovalMode,
+  onClearAttachments,
   onCreateProject,
   onOpenSettings,
+  onRemoveAttachment,
+  onRetryAttachment,
   onSelectModel,
   onSelectProject,
   onSelectSpecialist,
@@ -735,7 +749,10 @@ export function Composer({
   const stop = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
   return (
-    <div className={`composer${landing ? " is-landing" : ""}`} data-guide="composer">
+    <div
+      className={`composer${landing ? " is-landing" : ""}${attachments.length > 0 ? " has-attachments" : ""}`}
+      data-guide="composer"
+    >
       {open ? (
         <div aria-label={TEXT.composer.skillsPalette} className="composer-skills" role="listbox">
           {choices.map((skill, index) => (
@@ -763,6 +780,14 @@ export function Composer({
             </button>
           ))}
         </div>
+      ) : null}
+      {attachments.length > 0 ? (
+        <AttachmentTray
+          attachments={attachments}
+          onClear={onClearAttachments}
+          onRemove={onRemoveAttachment}
+          onRetry={onRetryAttachment}
+        />
       ) : null}
       <div className="composer-input">
         {tag ? (

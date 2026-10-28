@@ -41,6 +41,17 @@ async function upload(page: Page, name = "data.csv"): Promise<void> {
   await (await chooser).setFiles({ buffer: Buffer.from("a,b\n1,2\n"), mimeType: "text/csv", name });
 }
 
+/** 设置 › 网络 writes the sandbox policy and answers with the one info-tone
+ *  notice the app still raises: an upload that lands is reported by its card,
+ *  so the toast tests need a different gesture. The fixture starts on 开放网络,
+ *  which makes 无网络 a change worth writing. */
+async function saveNetworkPolicy(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "设置" });
+  await dialog.getByRole("button", { name: "网络", exact: true }).click();
+  await dialog.getByRole("button", { name: "无网络", exact: true }).click();
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(
     ([key, value]) => localStorage.setItem(key, value),
@@ -128,9 +139,9 @@ test.describe("Toast", () => {
     await installMockApi(page, { sessions: [makeSession()] });
     await page.goto("/");
 
-    await upload(page, "data.csv");
+    await saveNetworkPolicy(page);
     const notice = page.locator(".toast.toast-info");
-    await expect(notice).toContainText("已上传 data.csv");
+    await expect(notice).toContainText("沙箱网络已保存");
 
     await page.clock.fastForward(3_900);
     await expect(notice).toBeVisible();
@@ -160,7 +171,7 @@ test.describe("Toast", () => {
     await installMockApi(page, { sessions: [makeSession()] });
     await page.goto("/");
 
-    await upload(page);
+    await saveNetworkPolicy(page);
     const notice = page.locator(".toast.toast-info");
     await expect(notice).toBeVisible();
     await notice.getByRole("button", { name: "取消" }).click();

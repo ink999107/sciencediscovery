@@ -129,8 +129,22 @@ export const ZH = {
     unlimited: "不限",
     busy: "上传中…",
     tooLarge: (name: string, limit: string) => `${name} 超过 ${limit}，没有上传。`,
-    uploaded: (path: string) => `已上传 ${path}`,
+    tooMany: (max: number) => `单次对话最多上传${max}个附件。`,
     failed: (name: string, reason: string) => `${name}：${reason}`,
+  },
+
+  /** The cards the composer holds: one per file, from the moment it is chosen
+   *  until the message that carries it is sent. */
+  attachment: {
+    uploading: "上传中…",
+    failed: "上传失败",
+    retry: "重试",
+    remove: (name: string) => `移除 ${name}`,
+    delete: "删除",
+    clear: "清空附件",
+    /** The line under the name once the upload landed. */
+    detail: (type: string, size: string) => (type === "" ? size : `${type} ${size}`),
+    tray: "已选择的附件",
   },
 
   conversation: {

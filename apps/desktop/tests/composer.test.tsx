@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import type { Attachment } from "../src/app/attachments.js";
 import { Composer, ExpertFlyout, ModelMenu, PermissionFlyout, SessionSettingsMenu } from "../src/views/Composer.js";
 import { filterExperts } from "../src/views/expert-catalog.js";
 import { modelBrand } from "../src/views/model-brand.js";
@@ -30,6 +31,7 @@ function render(
   running = false,
   options: {
     activeProjectId?: string;
+    attachments?: Attachment[];
     blocked?: string;
     landing?: boolean;
     limit?: string;
@@ -44,11 +46,15 @@ function render(
       activeProjectId={options.activeProjectId}
       attachBlocked={options.blocked}
       attachLimit={options.limit}
+      attachments={options.attachments ?? []}
       landing={options.landing}
       models={[{ id: "m1", name: "测试模型" } as never]}
       onApprovalMode={() => {}}
+      onClearAttachments={() => {}}
       onCreateProject={() => {}}
       onOpenSettings={() => {}}
+      onRemoveAttachment={() => {}}
+      onRetryAttachment={() => {}}
       onSelectModel={() => {}}
       onSelectProject={() => {}}
       onSend={() => {}}
@@ -105,6 +111,26 @@ test("an upload in flight replaces the plus with a spinner rather than allowing 
   const markup = render(false, { uploading: true });
   assert.match(markup, /<button[^>]*aria-label="上传文件"[^>]*disabled=""/);
   assert.match(markup, /class="spinner"/);
+});
+
+test("the files the turn carries sit above the input, and an empty tray takes no room", () => {
+  const attachment: Attachment = {
+    file: new File(["x"], "报告.pdf"),
+    id: "a",
+    name: "报告.pdf",
+    size: 16896,
+    status: "uploaded",
+  };
+  const markup = render(false, { attachments: [attachment] });
+  // Above the input, inside the composer's own box: that is what makes the tray
+  // read as part of what the turn will carry rather than as a list beside it.
+  assert.match(markup, /class="composer has-attachments"/u);
+  assert.ok(markup.indexOf("attach-tray") < markup.indexOf("composer-input"));
+  assert.match(markup, /class="attach-name">报告\.pdf</u);
+  // Nothing chosen: no tray, and no height reserved for one.
+  const empty = render(false);
+  assert.doesNotMatch(empty, /attach-tray/u);
+  assert.match(empty, /class="composer"/u);
 });
 
 test("会话设置 carries 权限模式 and 专家, each with its current value", () => {

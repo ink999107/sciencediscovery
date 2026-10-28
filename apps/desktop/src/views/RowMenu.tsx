@@ -18,8 +18,9 @@ import { createPortal } from "react-dom";
 export interface MenuItem {
   /** A single glyph, or a small element where a glyph would be the wrong
    *  picture — the design has no icon font, and a Project is drawn with the
-   *  same folder mark everywhere else in the app. */
-  icon: ReactNode;
+   *  same folder mark everywhere else in the app. Absent where the entries are
+   *  two words that say all there is to say, as on an attachment card. */
+  icon?: ReactNode;
   label: string;
   /** Marks the entry the screen is already on, with a ✓. For menus that are a
    *  choice among several — the landing page's project picker — rather than a
@@ -135,7 +136,7 @@ export function RowMenu({ menu, onClose }: { menu?: MenuState; onClose: () => vo
             role="menuitem"
             type="button"
           >
-            <span aria-hidden="true" className="ctx-item-icon">{item.icon}</span>
+            {item.icon ? <span aria-hidden="true" className="ctx-item-icon">{item.icon}</span> : null}
             <span className="ctx-item-label">{item.label}</span>
             {item.checked ? <span aria-hidden="true" className="ctx-item-check">✓</span> : null}
           </button>

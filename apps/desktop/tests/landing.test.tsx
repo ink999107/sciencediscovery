@@ -38,10 +38,14 @@ function landing(): string {
     <Landing
       composer={{
         attachLimit: "1 GiB",
+        attachments: [],
         models: [{ id: "m1", name: "测试模型" } as never],
         onApprovalMode: () => {},
+        onClearAttachments: () => {},
         onCreateProject: () => {},
         onOpenSettings: () => {},
+        onRemoveAttachment: () => {},
+        onRetryAttachment: () => {},
         onSelectModel: () => {},
         onSelectProject: () => {},
         onSend: () => {},

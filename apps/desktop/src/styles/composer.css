@@ -82,6 +82,150 @@
    what a keyboard can reach, and `display: none` keeps the native control — whose
    styling cannot be made to match — out of the row entirely. */
 .composer-file-input { display: none; }
+
+/* ── the attachment tray ────────────────────────────────────────────────── */
+/* The files the composer is holding, above the input. Four to a row and two
+   rows before it scrolls, as the handoff fixes it: a fixed grid keeps the
+   cards' order matching the order they were chosen in, which a wrapping strip
+   with variable widths would not. */
+.attach-tray {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  /* Two rows plus a card's worth of a hint that there is more. */
+  max-height: 136px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 12px 4px;
+  scrollbar-color: #d4d4d4 transparent;
+  scrollbar-width: thin;
+}
+.attach-tray::-webkit-scrollbar { width: 6px; }
+.attach-tray::-webkit-scrollbar-thumb { border-radius: 3px; background: #d4d4d4; }
+.attach-tray::-webkit-scrollbar-track { background: transparent; }
+
+.attach-card {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface);
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.attach-card:hover,
+.attach-card:focus-within {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-2);
+}
+
+/* The type mark, at the size that still reads as a page rather than a blob.
+   `position: relative` is for the uploading ring, which is drawn over it. */
+.attach-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+}
+.attach-mark .file-badge { width: 32px; height: 32px; display: block; }
+.attach-mark.is-failed {
+  border-radius: 8px;
+  background: #e9e9e9;
+}
+.attach-mark.is-failed svg { width: 20px; height: 20px; }
+
+/* A file is in flight: the type mark stays, because it is still what is being
+   uploaded, and a ring on top says the route has not answered yet. */
+.attach-spin {
+  position: absolute;
+  inset: 0;
+  width: 18px;
+  height: 18px;
+  margin: auto;
+  border: 2px solid rgba(255, 255, 255, .45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: attach-spin .9s linear infinite;
+}
+@keyframes attach-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .attach-spin { animation-duration: 2.4s; }
+}
+
+.attach-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.attach-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attach-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.attach-meta.is-failed { color: var(--danger-bright); }
+.attach-retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  cursor: pointer;
+}
+.attach-retry:hover { text-decoration: underline; }
+
+/* Straddles the card's corner, the way the handoff draws it. Held back until
+   the card is under the pointer or the keyboard — a row of grey circles would
+   read as the tray's contents rather than as one action per card. */
+.attach-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  /* A button's own padding would be left in the grid's content box, and a glyph
+     wider than that box aligns to its start rather than to the circle's
+     centre — the × came out three pixels right of the middle. */
+  padding: 0;
+  border-radius: 50%;
+  background: #bdbdbd;
+  box-shadow: 0 0 0 2px var(--surface);
+  color: #fff;
+  opacity: 0;
+  transition: opacity .12s ease, background .12s ease;
+}
+.attach-card:hover .attach-remove,
+.attach-card:focus-within .attach-remove { opacity: 1; }
+.attach-remove:hover { background: #8f8f8f; }
+.attach-remove:focus-visible { opacity: 1; outline: 2px solid var(--primary); outline-offset: 1px; }
+
+/* The tray is a sibling of the input rather than part of it: on the welcome
+   page that puts the cards on the card's grey, as the handoff has them. In the
+   docked composer both are white, so the tray draws the line between them. */
+.composer:not(.is-landing) .attach-tray {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
 /* model selector pill (replaces previous icons) */
 .composer-model-pill {
   display: inline-flex;

@@ -116,6 +116,15 @@ export interface MockOptions {
   mcpTest?: "error" | "ok";
   /** What `POST /api/models/:id/test` answers. */
   modelTest?: { category?: string; latencyMs?: number; message?: string; ok: boolean };
+  /** The sandbox network policy behind 设置 › 网络. 开放网络 by default, so a
+   *  spec can save something by moving to 无网络 — the only info-tone notice the
+   *  app raises now that an upload is reported by its card. */
+  sandboxNetwork?: { allowedDomains: string[]; mode: string };
+  /** File names the upload route refuses per file, with a reason of its own.
+   *  Mutable through `Mock.state` so a spec can watch the tray's 重试 succeed on
+   *  the second attempt — the route answering "no" once is the only way to get
+   *  a failed card without also failing the request. */
+  uploadRejects?: string[];
   /** Whether the browser has already read the first-run guide. Every spec but
    *  the guide's own is about a returning user, and the guide covers the page
    *  it would otherwise have to click through. Set `false` to get the guide. */
@@ -143,10 +152,15 @@ export interface MockState {
   runners: JsonRecord[];
   /** Which NPU cards each Runner may hand to a sandbox. */
   npuSelections: Record<string, number[]>;
+  /** 设置 › 网络's sandbox policy. A `PUT` replaces it, so a spec can read back
+   *  what the page wrote. */
+  sandboxNetwork: { allowedDomains: string[]; mode: string };
   sessions: SessionRecord[];
   skills: JsonRecord[];
   specialists: JsonRecord[];
   timeouts: Record<string, number>;
+  /** Names the upload route refuses, per file. See `MockOptions.uploadRejects`. */
+  uploadRejects: string[];
 }
 
 export interface Mock {
@@ -231,9 +245,11 @@ export async function installMockApi(page: Page, options: MockOptions = {}): Pro
     providers: [],
     runners: structuredClone(options.runners ?? []) as JsonRecord[],
     npuSelections: {},
+    sandboxNetwork: structuredClone(options.sandboxNetwork ?? { allowedDomains: [], mode: "open" }),
     sessions: [...(options.sessions ?? [])],
     skills: [...(options.skills ?? [])],
     specialists: [...(options.specialists ?? [])],
+    uploadRejects: [...(options.uploadRejects ?? [])],
     timeouts: {
       gatewayIdleTimeoutMs: 240_000,
       gatewayTurnTimeoutMs: 0,
@@ -489,6 +505,15 @@ export async function installMockApi(page: Page, options: MockOptions = {}): Pro
         return json(route, 200, state.timeouts);
       }
 
+      if (path === "/api/sandbox-network-settings" && method === "GET") {
+        return json(route, 200, state.sandboxNetwork);
+      }
+
+      if (path === "/api/sandbox-network-settings" && method === "PUT") {
+        state.sandboxNetwork = JSON.parse(body ?? "{}") as MockState["sandboxNetwork"];
+        return json(route, 200, state.sandboxNetwork);
+      }
+
       if (path === "/api/projects" && method === "GET") {
         return json(route, 200, state.projects);
       }
@@ -618,13 +643,23 @@ export async function installMockApi(page: Page, options: MockOptions = {}): Pro
         // The filenames live in the multipart framing; reading them back is what
         // lets the result carry the path the server says each file landed on.
         const raw = request.postDataBuffer()?.toString("latin1") ?? "";
-        const names = [...raw.matchAll(/name="files"; filename="([^"]*)"/g)].map((match) => match[1]!);
+        // One match per part, decoded back to UTF-8: the browser writes the
+        // filename's bytes as they are, and reading the whole body as latin1 —
+        // which is the only way to keep the file bytes intact — would turn
+        // 报告.pdf into mojibake on the way out.
+        const names = [...raw.matchAll(/name="files"; filename="([^"]*)"/g)]
+          .map((match) => Buffer.from(match[1]!, "latin1").toString("utf8"));
+        const errors: { error: string; name: string }[] = [];
         const uploaded = names.map((name) => {
+          if (state.uploadRejects.includes(name)) {
+            errors.push({ error: "refused by the fixture", name });
+            return { error: "refused by the fixture", originalName: name, status: "failed" as const };
+          }
           const file = { modifiedAt: CREATED_AT, path: name, size: 16 };
           state.files.push(file);
           return { originalName: name, path: name, status: "stored" as const };
         });
-        return json(route, 200, { errors: [], uploaded });
+        return json(route, 200, { errors, uploaded });
       }
 
       const file = /^\/api\/sessions\/([^/]+)\/file$/.exec(path);
