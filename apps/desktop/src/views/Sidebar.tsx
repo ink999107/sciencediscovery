@@ -16,7 +16,7 @@ import { useState } from "react";
 
 import { projectWithName } from "../app/project-name.js";
 import type { WorkspaceActions } from "../app/use-workspace.js";
-import { byRecency } from "../app/session-order.js";
+import { byRecency, untitled } from "../app/session-order.js";
 import { formatStars, REPO_URL, useGithubStars } from "../app/use-github-stars.js";
 import type { Project, Session } from "../api/types.js";
 import { TEXT } from "../text.js";
@@ -138,6 +138,12 @@ export function Sidebar({
       if (name !== next.project.name) void actions.renameProject(next.project, name);
       return;
     }
+    // The sentinel is the service's name for "nobody has named this". Storing
+    // it as a Session's name would make a conversation the column and 最近会话
+    // are built not to list: the row would leave the sidebar while its
+    // messages stayed. 未命名会话 is what the field shows for an unnamed
+    // Session, and Enter on that text is not a rename to it either.
+    if (untitled(name)) return;
     // Compared against what the field showed, not what the service stored: an
     // untouched field on an unnamed Session holds 未命名会话, and Enter without
     // an edit is not a rename to that phrase.

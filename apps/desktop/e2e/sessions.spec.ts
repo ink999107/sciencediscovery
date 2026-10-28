@@ -61,6 +61,25 @@ test("a title renamed in the bar is written through and survives a reload", asyn
   await expect(page.locator(".task-head-title")).toHaveText("钙钛矿带隙");
 });
 
+test("a Session cannot be renamed to the sentinel that means it has no name", async ({ page }) => {
+  const mock = await installMockApi(page, { sessions: [makeSession()] });
+  await page.goto("/");
+
+  const name = page.locator(".side-session-name", { hasText: "晶体结构分析" });
+  await name.dblclick();
+  const field = page.locator(".side-rename-input");
+  await field.fill("Untitled session");
+  await field.press("Enter");
+
+  // The service stores that title for a Session nobody has named, and the
+  // column reads it as "no conversation yet". A conversation that took it as
+  // a name would leave the sidebar and 最近会话 with its messages intact, so
+  // the rename keeps the name it had and writes nothing.
+  await expect(name).toHaveText("晶体结构分析");
+  expect(mock.state.sessions[0]?.title).toBe("晶体结构分析");
+  expect(mock.calls.some((call) => call.method === "PATCH")).toBe(false);
+});
+
 test("deleting the open Session asks first, then returns to a draft", async ({ page }) => {
   const mock = await installMockApi(page, { sessions: [makeSession()] });
   await page.goto("/");

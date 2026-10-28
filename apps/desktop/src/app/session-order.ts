@@ -41,9 +41,15 @@ export function byRecency<T extends { updatedAt: string }>(sessions: readonly T[
  */
 const UNTITLED_SESSION_TITLE = "Untitled session";
 
-/** Whether a Session still has no name. The first message names it, so an
- *  unnamed Session is also one nothing has been written in — see
- *  `reusableDraft`. */
+/**
+ * Whether a Session still has no name.
+ *
+ * The service names a Session from its first message, at the write that stores
+ * the message rather than only on the run path, so an unnamed one is one
+ * nothing has been written in — see `reusableDraft`. The name is also taken
+ * away as a rename target: `Sidebar` refuses the sentinel, because a Session
+ * holding that title would be one this app cannot list.
+ */
 export function untitled(title: string): boolean {
   const trimmed = title.trim();
   return trimmed === "" || trimmed === UNTITLED_SESSION_TITLE;
@@ -52,14 +58,15 @@ export function untitled(title: string): boolean {
 /**
  * The Sessions the sidebar lists per Project, and the ones 最近会话 counts.
  *
- * An untitled Session is one nothing has been written in yet: the service names
- * a Session from its first message, so a row that still carries the sentinel
- * was created by a button — 新建会话, or the first Session the server writes
- * with a new Project — and has not been used. Listing it would put a row in the
- * sidebar the moment the button was pressed, and leave that row behind in the
- * Project it was made in after the reader has moved to another. The row appears
- * when the first message names it, which is the moment there is a conversation
- * to list.
+ * An untitled Session is one nothing has been written in yet, because the
+ * service names a Session from its first message wherever that message is
+ * written — the run path, or an Idea Tree research started without one. A row
+ * that still carries the sentinel was therefore created by a button, 新建会话
+ * or the first Session the server writes with a new Project, and has not been
+ * used. Listing it would put a row in the sidebar the moment the button was
+ * pressed, and leave that row behind in the Project it was made in after the
+ * reader has moved to another. The row appears when the first message names
+ * it, which is the moment there is a conversation to list.
  */
 export function withConversation<T extends { title: string }>(sessions: readonly T[]): T[] {
   return sessions.filter((session) => !untitled(session.title));

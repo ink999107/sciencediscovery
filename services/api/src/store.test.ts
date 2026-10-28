@@ -25,6 +25,7 @@ import { VersionStore, RefStore, workspaceHeadName, withWorkspaceMutation } from
 import type { ArtifactJob, ComposerReference, Environment, EnvironmentRevision, ExecutionRun, ModelInvocationUsage, Subagent } from "@sciencediscovery/schema";
 import {
   INBOX_PROJECT_NAME,
+  UNTITLED_SESSION_TITLE,
   lookupModelCatalog,
   resolveModelFacts,
   reviewerSpecialistSupportsLevel,
@@ -4804,4 +4805,39 @@ test("the recent-sessions Project is created once, hidden from user listings, an
   await reopened.load();
   assert.equal(reopened.listProjects().find((entry) => entry.id === inbox.id)?.kind, "inbox");
   assert.equal(reopened.listSessions(inbox.id, "all")[0]?.id, session.id);
+});
+
+test("the first user message names an untitled Session, whoever wrote the message", async (context) => {
+  const tempRoot = resolve(process.cwd(), ".tmp", `session-naming-${Date.now()}-${process.pid}`);
+  await mkdir(tempRoot, { recursive: true });
+  context.after(() => rm(tempRoot, { force: true, recursive: true }));
+  const store = new SessionStore(tempRoot);
+  await store.load();
+  const project = await store.createProject("Naming project");
+  const session = await store.createSession(project.id, "", {}, {}, { allowUnconfiguredModel: true });
+  assert.equal(session.title, UNTITLED_SESSION_TITLE);
+
+  // An Idea Tree research writes both sides of its first exchange without
+  // creating a run. Before the name is written, that Session holds messages
+  // the sidebar will not list, because the sentinel is how it tells a draft
+  // from a conversation.
+  await store.appendMessage(session.id, "user", "Compare the two arms");
+  assert.equal(store.getSession(session.id)?.title, "Compare the two arms");
+});
+
+test("an assistant message does not name an untitled Session", async (context) => {
+  const tempRoot = resolve(process.cwd(), ".tmp", `session-naming-assistant-${Date.now()}-${process.pid}`);
+  await mkdir(tempRoot, { recursive: true });
+  context.after(() => rm(tempRoot, { force: true, recursive: true }));
+  const store = new SessionStore(tempRoot);
+  await store.load();
+  const project = await store.createProject("Naming project");
+  const session = await store.createSession(project.id, "", {}, {}, { allowUnconfiguredModel: true });
+
+  await store.appendMessage(session.id, "assistant", "已启动 Idea Tree 研究。");
+  assert.equal(store.getSession(session.id)?.title, UNTITLED_SESSION_TITLE);
+  // A rename is not undone by the next message either.
+  await store.updateSession(session.id, { title: "My own name" });
+  await store.appendMessage(session.id, "assistant", "Still mine");
+  assert.equal(store.getSession(session.id)?.title, "My own name");
 });

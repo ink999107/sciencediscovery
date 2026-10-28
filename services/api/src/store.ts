@@ -179,6 +179,7 @@ import {
   SKILL_SELECTION_FIELDS,
   epochSandboxNetworkAccess,
   UNTITLED_SESSION_TITLE,
+  createLocalSessionTitle,
 } from "@sciencediscovery/schema";
 import {
   DEFAULT_SUBAGENT_MAX_TURNS,
@@ -5980,6 +5981,18 @@ export class SessionStore {
     messages.push(message);
     await mkdir(resolve(this.dataDir, "messages"), { recursive: true });
     await this.writeArray(this.messagesPath(sessionId), messages);
+    // The first message names the Session. A run names it as it is queued, but
+    // a message can also arrive without a run — an Idea Tree research started
+    // from the composer is one — and an unnamed Session that holds messages is
+    // a conversation no surface lists. The title is what every consumer reads
+    // to tell a draft from a conversation, so the rule lives at the write that
+    // creates one.
+    // A notice the runtime woke on its own is not what the user typed, and the
+    // service names a Session from the prompt it was given; the run path has
+    // already done that by the time this message is stored.
+    if (role === "user" && content.trim() !== "" && session.title === UNTITLED_SESSION_TITLE) {
+      session.title = createLocalSessionTitle(content, session.createdAt);
+    }
     session.updatedAt = message.createdAt;
     await this.saveCatalog();
     return message;
