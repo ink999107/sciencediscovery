@@ -21,12 +21,12 @@ import { apiBaseUrl, authorizationHeader } from './e2e-auth.js';
 for (const [kind, locale] of [['responses-min16', 'en'], ['reasoning-limit', 'en'], ['reasoning-limit', 'zh-CN'], ['auth', 'zh-CN'], ['empty', 'en']] as const) {
   /**
    * E2E-META
-   * Purpose: Save valid budget-limited model setup without certifying compatibility; preserve real failure rollback.
+   * Purpose: Save a setup whose probe reply was cut at the probe's own output limit as connected; preserve real failure rollback.
    * Steps:
    *   1. Start an owned native provider fixture without model requests.
    *   2. Open the wizard and select explicit custom model/protocol without probing.
    *   3. Read the bounded cost disclosure, consent and submit exactly one basic request.
-   *   4. Verify saved configuration or failed-setup rollback and accurate capability notice.
+   *   4. Verify saved configuration or failed-setup rollback, and that a reply truncated at the probe's own limit reads as connected.
    *   5. Inspect reachable warning/actions and horizontal overflow at390px.
    *   6. Inspect readable warning/actions and horizontal overflow at1440px.
    * Environment: Owned API/Web and loopback HTTP fixture; no Runner/full stack.
@@ -74,10 +74,15 @@ for (const [kind, locale] of [['responses-min16', 'en'], ['reasoning-limit', 'en
         await expect(wizard.locator('.wizard-probe-consent')).toContainText('16'); await wizard.locator('.wizard-probe-consent input').check(); await submit.click();
         await expect.poll(() => requests.length).toBe(1); expect(protocol === 'openai-responses' ? requests[0]!.max_output_tokens : requests[0]!.max_tokens).toBe(protocol === 'openai-responses' ? 16 : 8);
       });
-      await journey.step('Verify saved setup or precise rollback', 'Budget-only limitation saves an unconfirmed profile; real errors roll back', async () => {
+      await journey.step('Verify saved setup or precise rollback', 'A reply cut at the probe’s own limit saves as connected; real errors roll back', async () => {
         const failed = kind === 'auth' || kind === 'empty';
         await expect(wizard.locator(failed ? '.wizard-alert-error' : '[role="status"]')).toBeVisible();
-        if (kind === 'reasoning-limit') await expect(wizard).toContainText(locale === 'en' ? 'compatibility unconfirmed' : '兼容性未确认');
+        // The reasoning fixture spends the probe's eight tokens on reasoning
+        // and ends at `finish_reason: length` with no final text. The endpoint
+        // took the key, answered on the chosen protocol and stopped at a limit
+        // the probe itself wrote, so the check passes — and the wizard says so
+        // rather than marking the capability unconfirmed.
+        if (kind === 'reasoning-limit') await expect(wizard).toContainText(locale === 'en' ? 'Model connected and saved' : '模型已连接并保存');
         const providers = (await call('/api/providers')).providers.filter((p: any) => p.name === name); expect(providers).toHaveLength(failed ? 0 : 1);
         if (!failed) expect(providers[0].apiProtocol).toBe(protocol);
         expect(requests).toHaveLength(1);
