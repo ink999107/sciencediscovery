@@ -25,10 +25,12 @@ import { RowMenu, type MenuState } from "./RowMenu.js";
 import { sessionTitle } from "../app/session-title.js";
 import { SidebarToggle } from "./SidebarToggle.js";
 
-interface Renaming {
-  session: Session;
-  value: string;
-}
+/** One rename in progress, whichever kind of row it started from. A Project
+ *  and a Session both rename from a double-click and from their `⋯` menu, and
+ *  only one field is open at a time, so the two share a piece of state. */
+type Renaming =
+  | { kind: "project"; project: Project; value: string }
+  | { kind: "session"; session: Session; value: string };
 
 interface Props {
   actions: WorkspaceActions;
@@ -129,18 +131,29 @@ export function Sidebar({
   const commitRename = (next: Renaming) => {
     const name = next.value.trim();
     setRenaming(undefined);
+    if (name === "") return;
+    if (next.kind === "project") {
+      // A Project's name is shown exactly as stored, so the comparison is
+      // against the row the reader is looking at.
+      if (name !== next.project.name) void actions.renameProject(next.project, name);
+      return;
+    }
     // Compared against what the field showed, not what the service stored: an
     // untouched field on an unnamed Session holds 未命名会话, and Enter without
     // an edit is not a rename to that phrase.
-    if (name !== "" && name !== sessionTitle(next.session.title)) void actions.renameSession(next.session, name);
+    if (name !== sessionTitle(next.session.title)) void actions.renameSession(next.session, name);
   };
+
+  /** The field is the same for both rows; only the value being edited differs. */
+  const editValue = (value: string) =>
+    setRenaming((current) => (current === undefined ? current : { ...current, value }));
 
   const renameField = (next: Renaming) => (
     <input
       autoFocus
       className="side-rename-input"
       onBlur={() => commitRename(next)}
-      onChange={(event) => setRenaming({ ...next, value: event.target.value })}
+      onChange={(event) => editValue(event.target.value)}
       onKeyDown={(event) => {
         if (event.key === "Enter") commitRename(next);
         if (event.key === "Escape") setRenaming(undefined);
@@ -151,7 +164,7 @@ export function Sidebar({
 
   const sessionRow = (session: Session) => {
     const active = session.id === activeSessionId;
-    const editing = renaming !== undefined && renaming.session.id === session.id;
+    const editing = renaming?.kind === "session" && renaming.session.id === session.id;
     return (
       <div className={`side-row side-sub${active ? " is-active" : ""}`} key={session.id}>
         <button
@@ -159,7 +172,7 @@ export function Sidebar({
           onClick={() => void actions.openSession(session.id, session.projectId)}
           // Double-click is the design's own rename gesture; the `⋯` menu
           // beside the name opens the same field, which keeps it discoverable.
-          onDoubleClick={() => setRenaming({ session, value: sessionTitle(session.title) })}
+          onDoubleClick={() => setRenaming({ kind: "session", session, value: sessionTitle(session.title) })}
           title={`${basename(session)} · ${TEXT.sidebar.renameHint}`}
           type="button"
         >
@@ -180,7 +193,7 @@ export function Sidebar({
                   {
                     icon: "✎",
                     label: TEXT.menu.rename,
-                    onSelect: () => setRenaming({ session, value: sessionTitle(session.title) }),
+                    onSelect: () => setRenaming({ kind: "session", session, value: sessionTitle(session.title) }),
                   },
                   {
                     icon: "🗑",
@@ -248,25 +261,35 @@ export function Sidebar({
         {projects.map((project) => {
           const open = !folded.has(project.id);
           const sessions = byRecency(sessionsByProject[project.id] ?? []);
+          const editing = renaming?.kind === "project" && renaming.project.id === project.id;
           return (
             <div key={project.id}>
               <div
                 className={`side-row side-project${open ? " is-open" : ""}${project.id === activeProjectId ? " is-active" : ""}`}
               >
-                <button
-                  aria-expanded={open}
-                  className="side-project-toggle"
-                  onClick={() => toggleFold(project.id)}
-                  type="button"
-                >
-                  <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="15">
-                    <path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
-                  </svg>
-                  <span className="label">{project.name}</span>
-                  <svg aria-hidden="true" className="chev" fill="none" height="14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="14">
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
-                </button>
+                {editing ? (
+                  <div className="side-project-toggle">{renameField(renaming)}</div>
+                ) : (
+                  <button
+                    aria-expanded={open}
+                    className="side-project-toggle"
+                    onClick={() => toggleFold(project.id)}
+                    // The same gesture a Session has: a Project's name is the
+                    // one piece of it the user chose, and the `⋯` menu opens the
+                    // same field for anyone who does not guess double-click.
+                    onDoubleClick={() => setRenaming({ kind: "project", project, value: project.name })}
+                    title={`${project.name} · ${TEXT.sidebar.renameHint}`}
+                    type="button"
+                  >
+                    <svg aria-hidden="true" fill="none" height="15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="15">
+                      <path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
+                    </svg>
+                    <span className="label">{project.name}</span>
+                    <svg aria-hidden="true" className="chev" fill="none" height="14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="14">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </button>
+                )}
                 <div className="side-actions">
                   <button
                     aria-label={TEXT.sidebar.newSessionInProject(project.name)}
@@ -276,6 +299,31 @@ export function Sidebar({
                     type="button"
                   >
                     +
+                  </button>
+                  <button
+                    aria-label={TEXT.sidebar.projectMenu}
+                    className="side-mini-button"
+                    onClick={(event) =>
+                      setMenu({
+                        ...anchor(event),
+                        items: [
+                          {
+                            icon: "✎",
+                            label: TEXT.menu.rename,
+                            onSelect: () => setRenaming({ kind: "project", project, value: project.name }),
+                          },
+                          {
+                            icon: "🗑",
+                            label: TEXT.menu.delete,
+                            onSelect: () => actions.deleteProject(project),
+                          },
+                        ],
+                      })
+                    }
+                    title={TEXT.sidebar.projectMenu}
+                    type="button"
+                  >
+                    ⋯
                   </button>
                 </div>
               </div>

@@ -866,12 +866,27 @@ export async function installMockApi(page: Page, options: MockOptions = {}): Pro
       }
 
       const project = /^\/api\/projects\/([^/]+)$/.exec(path);
-      if (project && method === "PATCH") {
-        const index = state.projects.findIndex((entry) => entry.id === project[1]);
+      if (project) {
+        const id = project[1]!;
+        const index = state.projects.findIndex((entry) => entry.id === id);
         if (index === -1) return json(route, 404, { error: "project not found" });
-        const patch = JSON.parse(body ?? "{}") as JsonRecord;
-        state.projects[index] = { ...state.projects[index]!, ...patch, updatedAt: UPDATED_AT };
-        return json(route, 200, state.projects[index]);
+        if (method === "PATCH") {
+          const patch = JSON.parse(body ?? "{}") as JsonRecord;
+          state.projects[index] = { ...state.projects[index]!, ...patch, updatedAt: UPDATED_AT };
+          return json(route, 200, state.projects[index]);
+        }
+        if (method === "DELETE") {
+          // The server refuses a delete whose body does not repeat the id; a
+          // mock that accepted anything would let a broken client pass.
+          const { confirmationId } = JSON.parse(body ?? "{}") as { confirmationId?: string };
+          if (confirmationId !== id) {
+            return json(route, 400, { error: "Project deletion confirmation does not match the target" });
+          }
+          state.projects.splice(index, 1);
+          // A Project takes its Sessions with it.
+          state.sessions = state.sessions.filter((session) => session.projectId !== id);
+          return json(route, 200, { deleted: id });
+        }
       }
 
       return json(route, 404, { error: `not mocked: ${method} ${path}` });

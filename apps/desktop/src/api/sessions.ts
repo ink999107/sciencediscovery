@@ -212,6 +212,26 @@ export function deleteSession(client: ApiClient, sessionId: string): Promise<{ d
   });
 }
 
+/** A Project the user made goes away whole — its Sessions, their transcripts
+ *  and their workspaces. The inbox is not a Project the user made: the service
+ *  refuses it with a 409, so the sidebar never offers this for 最近会话. The id
+ *  is repeated back as confirmation, the same gate a Session has. */
+export function deleteProject(client: ApiClient, projectId: string): Promise<{ deleted: string }> {
+  return client.request<{ deleted: string }>(`/api/projects/${encodeURIComponent(projectId)}`, {
+    body: JSON.stringify({ confirmationId: projectId }),
+    method: "DELETE",
+  });
+}
+
+/** The name is the only field this sends, and the service answers with the
+ *  Project as stored — which is what the row should show, not what was typed. */
+export function renameProject(client: ApiClient, projectId: string, name: string): Promise<Project> {
+  return client.request<Project>(`/api/projects/${encodeURIComponent(projectId)}`, {
+    body: JSON.stringify({ name }),
+    method: "PATCH",
+  });
+}
+
 /**
  * Which execution machines a Project's Sessions may use.
  *

@@ -150,6 +150,30 @@ describe("writes that must not be loose", () => {
     assert.deepEqual(json(stub.calls[0]!), { confirmationId: "session/one" });
   });
 
+  it("deletes a project by repeating its id back as confirmation", async () => {
+    const stub = new StubClient().reply({ deleted: "project/one" });
+
+    await sessions.deleteProject(stub.asClient(), "project/one");
+
+    assert.equal(stub.calls[0]!.path, "/api/projects/project%2Fone");
+    assert.equal(stub.calls[0]!.init.method, "DELETE");
+    // A Project takes its Sessions with it, so the same id gate applies.
+    assert.deepEqual(json(stub.calls[0]!), { confirmationId: "project/one" });
+  });
+
+  it("renames a project with the name alone", async () => {
+    const stub = new StubClient().reply({ id: "project/one", name: "脓毒症研究" });
+
+    const renamed = await sessions.renameProject(stub.asClient(), "project/one", "脓毒症研究");
+
+    assert.equal(stub.calls[0]!.path, "/api/projects/project%2Fone");
+    assert.equal(stub.calls[0]!.init.method, "PATCH");
+    assert.deepEqual(json(stub.calls[0]!), { name: "脓毒症研究" });
+    // The answer is the stored Project — trimming and duplicate checks are the
+    // server's, and the row shows what it returned.
+    assert.equal(renamed.name, "脓毒症研究");
+  });
+
   it("sends the Runner allowlist whole, including an empty list", async () => {
     const stub = new StubClient().reply({}).reply({});
     const client = stub.asClient();

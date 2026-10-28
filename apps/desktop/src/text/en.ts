@@ -66,6 +66,7 @@ export const EN: Text = {
     /** The `+` on a Project fold; the name is in it because a column of
      *  identical buttons is not distinguishable to a screen reader. */
     newSessionInProject: (name: string) => `New session in ${name}`,
+    projectMenu: "Project menu",
     noTasks: "No sessions yet",
     showMore: "Show more",
     collapseSidebar: "Collapse sidebar",
@@ -1069,6 +1070,8 @@ export const EN: Text = {
     rename: "Rename failed",
     deleteWarning: (title: string) =>
       `Deleting "${title}" also removes its workspace data, and cannot be undone.`,
+    deleteProjectWarning: (name: string) =>
+      `Deleting the project "${name}" also removes its sessions, their workspaces and their artifacts, and cannot be undone.`,
   },
 
   status: {

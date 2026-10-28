@@ -45,6 +45,7 @@ import {
   cancelCurrentRun,
   createProject as createProjectRequest,
   createSession,
+  deleteProject as deleteProjectRequest,
   deleteSession,
   ensureInbox,
   getSession,
@@ -57,6 +58,7 @@ import {
   readArtifactVersion,
   readWorkspaceFile,
   type DocumentBytes,
+  renameProject as renameProjectRequest,
   updateSession,
   uploadWorkspaceFiles,
 } from "../api/sessions.js";
@@ -187,6 +189,9 @@ export interface WorkspaceActions {
   decidePermission: (requestId: string, decision: PermissionDecision) => Promise<void>;
   /** Opens the confirmation dialog; the deletion itself happens on accept. */
   deleteSession: (session: Session) => void;
+  /** The same gate for a Project: accepting removes it with every Session it
+   *  holds, and the open conversation if it was one of them. */
+  deleteProject: (project: Project) => void;
   dismissConfirm: () => void;
   dismissToast: (id: number) => void;
   finishSetup: () => void;
@@ -209,6 +214,7 @@ export interface WorkspaceActions {
   /** `projectId` is the Project the row came from: naming it lets the app file
    *  later writes under it before the Session read comes back. */
   openSession: (sessionId: string, projectId?: string) => Promise<void>;
+  renameProject: (project: Project, name: string) => Promise<void>;
   renameSession: (session: Session, title: string) => Promise<void>;
   /** Re-read the model catalog after the wizard or settings changed it. */
   refreshCatalog: () => Promise<void>;
@@ -1679,6 +1685,36 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       closeTab,
       confirmAction,
       createProject: createProjectAndOpen,
+      deleteProject: (project) =>
+        confirmAction({
+          accept: TEXT.menu.delete,
+          // The Project's own name, because the row is the only place the user
+          // named it — unlike a Session, whose title the service may have
+          // chosen from the first message.
+          body: TEXT.errors.deleteProjectWarning(project.name),
+          eyebrow: TEXT.menu.delete,
+          onAccept: async () => {
+            try {
+              await deleteProjectRequest(client, project.id);
+            } catch (reason) {
+              // A Project with a run still going is refused with a 409 saying
+              // so; the toast carries that, and nothing is removed here.
+              report(reason);
+              return;
+            }
+            // The conversation on screen was inside the Project that just went
+            // away. It cannot stay: its Session no longer exists, and the next
+            // send has to land in the inbox rather than in a Project that is
+            // gone.
+            if (projectRef.current === project.id) {
+              projectRef.current = inboxRef.current?.id;
+              setActiveProjectId(inboxRef.current?.id);
+              startDraft();
+            }
+            await refreshSessionLists();
+          },
+          title: project.name,
+        }),
       deleteSession: (session) =>
         confirmAction({
           accept: TEXT.menu.delete,
@@ -1699,6 +1735,16 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       openArtifact,
       openFile,
       openSession,
+      renameProject: async (project, name) => {
+        try {
+          const updated = await renameProjectRequest(client, project.id, name);
+          // The server's answer, not the typed name: it trims, and it is the
+          // one that refused a duplicate.
+          setProjects((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+        } catch (reason) {
+          report(reason);
+        }
+      },
       renameSession: (session, title) =>
         mutate({ id: session.id, operation: () => updateSession(client, session.id, { title }) }),
       refreshCatalog,
@@ -1746,6 +1792,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       send,
       setApprovalMode,
       setDefaultModel,
+      startDraft,
       stop,
       toast,
       uploadFiles,

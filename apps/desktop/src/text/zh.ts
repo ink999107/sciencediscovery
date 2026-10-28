@@ -61,6 +61,9 @@ export const ZH = {
     /** The `+` on a Project fold; the name is in it because a row of several
      *  identical buttons is not distinguishable to a screen reader. */
     newSessionInProject: (name: string) => `在「${name}」中新建会话`,
+    /** The `⋯` on a Project fold: rename and delete, the same two the session
+     *  row offers. */
+    projectMenu: "项目菜单",
     noTasks: "暂无会话",
     showMore: "显示更多",
     collapseSidebar: "收起侧栏",
@@ -1110,6 +1113,10 @@ export const ZH = {
     modelRequired: "还没有可用的模型，请先在设置里配置。",
     rename: "重命名失败",
     deleteWarning: (title: string) => `删除「${title}」会连同它的工作区数据一起清掉，且无法恢复。`,
+    /** A Project takes its Sessions with it, so the sentence has to say so —
+     *  deleting one Session is not what the reader is agreeing to. */
+    deleteProjectWarning: (name: string) =>
+      `删除项目「${name}」会连同它下面的所有会话、工作区和产物一起清掉，且无法恢复。`,
   },
 
   status: {
