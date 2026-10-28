@@ -83,21 +83,17 @@ body.is-resizing {
   z-index: 3;
 }
 
+/* The application mark: its own dark tile and gradient monogram, so the rail
+   draws the artwork rather than a coloured box around a glyph. 128px is four
+   times the 32px it is shown at, which keeps the gradient smooth on a retina
+   screen. */
 .rail-logo {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  display: grid;
-  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   margin: 0 0 20px;
-  border-radius: 7px;
-  background: #1476ff;
-  color: #fff;
-}
-
-.rail-logo svg {
-  width: 16px;
-  height: 16px;
+  border-radius: 8px;
+  background: url("../assets/brand/app-mark.png") center / 32px 32px no-repeat;
 }
 
 .rail-nav {
