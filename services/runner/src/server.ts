@@ -68,6 +68,7 @@ import {
 } from "./request-auth.js";
 import { resolveEgressInterpreter } from "./egress-bridge.js";
 import { assertUnixSocketPathFits, EgressGatewayRegistry } from "./egress-gateway.js";
+import { resolveEgressSocketDirectory } from "./egress-socket-root.js";
 import { SECCOMP_BASELINE_VERSION } from "./seccomp.js";
 import { EnvironmentStore } from "./environment-store.js";
 import { collectRunnerResources } from "./resources.js";
@@ -553,7 +554,7 @@ export function createRunnerServer(
           platform: process.platform,
           runnerVersion: RUNNER_VERSION,
           sandbox: executorSandboxKind(config),
-          sandboxNetwork: await sandboxNetworkCapability(executorSandboxKind(config), config.dataDir),
+          sandboxNetwork: await sandboxNetworkCapability(executorSandboxKind(config), gateways),
           scientificEnvs: environmentStore?.capability ?? DISABLED_SCIENTIFIC_ENVS,
           seccompBaseline: executorSandboxKind(config) === "bubblewrap" ? SECCOMP_BASELINE_VERSION : null,
           status: "ok",
@@ -1085,12 +1086,15 @@ export function createRunnerServer(
  * the process-wide interpreter probe: no subprocess per request, and no data
  * directory writes. Staging the bridge script stays on the launch path.
  */
-async function sandboxNetworkCapability(sandbox: "bubblewrap" | "seatbelt", dataDir: string): Promise<SandboxNetworkCapability> {
+async function sandboxNetworkCapability(
+  sandbox: "bubblewrap" | "seatbelt",
+  gateways: Pick<EgressGatewayRegistry, "socketPath">,
+): Promise<SandboxNetworkCapability> {
   try {
     // Every egress-enabled execution needs this exact socket layout. Check it
     // before the interpreter probe so /health never advertises a mode whose
-    // first command would fail solely because the data directory is too deep.
-    assertUnixSocketPathFits(new EgressGatewayRegistry(dataDir).socketPath("capability"));
+    // first command would fail solely because the socket path does not fit.
+    assertUnixSocketPathFits(gateways.socketPath("capability"));
   } catch (error) {
     return {
       available: false,
@@ -1131,9 +1135,17 @@ export async function startRunnerServer(config = loadRunnerConfig()): Promise<Se
   });
   await environmentStore.initialize();
   const envProfiles = new SessionEnvProfileStore();
+  // A short runtime directory keeps the socket independent of how deep the
+  // checkout (and therefore the data directory) happens to be. Resolution is
+  // best-effort: `<dataDir>/eg` is the fallback and the gateway still refuses
+  // an overlong path before libuv can truncate it.
+  const egressSocketRoot = await resolveEgressSocketDirectory({ dataDir: config.dataDir });
+  if (egressSocketRoot.source !== "data-directory") {
+    logger.info("egress_socket_root", { directory: egressSocketRoot.directory, source: egressSocketRoot.source });
+  }
   const egressGateways = new EgressGatewayRegistry(config.dataDir, (event, detail) => {
     logger[event === "allowed" ? "info" : "warn"]("sandbox_network_request", { event, ...detail });
-  });
+  }, undefined, egressSocketRoot.directory);
   const shellSessionManager = new ShellSessionManager({
     bwrapPath: config.bwrapPath,
     sandboxProvider: config.sandboxProvider,
@@ -1210,7 +1222,7 @@ export async function startRunnerServer(config = loadRunnerConfig()): Promise<Se
   const outputLabel = config.maxOutputBytes === 0
     ? "unlimited (no truncation)"
     : `${config.maxOutputBytes} bytes (truncate)`;
-  const sandboxNetwork = await sandboxNetworkCapability(sandbox, config.dataDir);
+  const sandboxNetwork = await sandboxNetworkCapability(sandbox, egressGateways);
   console.log(
     `Sandbox: ${sandbox} (${RUNNER_VERSION}); sandbox network access: default none`
     + `${sandboxNetwork.available ? ", domain-allowlist and open available" : ` (domain-allowlist unavailable: ${sandboxNetwork.unavailableReason})`}`

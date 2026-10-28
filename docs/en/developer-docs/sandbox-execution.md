@@ -83,6 +83,7 @@ sandbox process (own netns, no interface)
 Properties:
 
 - **No root, no CAP_NET_ADMIN, no socat dependency.** The bridge is a product-owned stdlib Python script; its interpreter and standard library are bind-mounted read-only under `/opt/sciencediscovery-net/`. When the host has no usable python3 the mode fails closed and `/health.sandboxNetwork` reports why.
+- **The host socket lives in a short runtime directory**, not in the data directory: `$RUNTIME_DIRECTORY` (systemd `RuntimeDirectory=`), `$XDG_RUNTIME_DIR`, `/run/user/<uid>`, `/tmp` in that order, with `<dataDir>/eg` only when none of them is usable. Each candidate is created `0700` and checked for ownership before use, so the length of `SCIENCE_DISCOVERY_DATA_DIR` no longer decides whether network access works; the sandbox always sees the fixed `/run/sciencediscovery/egress.sock`.
 - The bridge listens before it forks and runs the real workload as its child with inherited stdio; the child's exit status is passed through.
 - seccomp switches to the network profile: it allows only the socket family (`socket/connect/bind/listen/accept/accept4/socketpair`) and keeps denying ptrace, mount, setns, bpf, keyring, io_uring and the rest. Raw and packet sockets need `CAP_NET_RAW`, which `--cap-drop ALL` already removes.
 - Entries are `example.org` or `*.example.org` (label-boundary match, never the apex), optionally with `:443` to pin a port. IP literals are rejected both as entries and as request targets.

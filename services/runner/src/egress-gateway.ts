@@ -66,9 +66,10 @@ import {
 export const MAX_UNIX_SOCKET_PATH_BYTES = process.platform === "darwin" ? 103 : 107;
 
 /**
- * Directory holding the gateway sockets, relative to the runner data directory.
- * Two characters on purpose: every byte of this path is charged against
- * `sun_path`, and the sockets are runtime state nothing else reads.
+ * Historical socket directory under the runner data directory. Two characters
+ * on purpose: every byte of this path is charged against `sun_path`. It is
+ * only the default and the last-resort location now; the runner normally
+ * injects a short runtime directory instead.
  */
 const EGRESS_SOCKET_DIRECTORY = "eg";
 
@@ -90,9 +91,9 @@ export class EgressSocketPathTooLongError extends Error {
     super(
       `Sandbox network access (domain-allowlist and open) is unavailable: the egress socket path is ${bytes} bytes, `
       + `over this platform's ${limit}-byte Unix socket path limit — ${socketPath}. `
-      + "The socket has to stay inside the runner data directory, so shorten that directory by at least "
-      + `${bytes - limit} byte(s) (SCIENCE_DISCOVERY_DATA_DIR); it must leave `
-      + `${EGRESS_SOCKET_RELATIVE_BYTES} bytes for the socket itself.`,
+      + "No short runtime directory was usable, so the socket fell back to the runner data directory; "
+      + `shorten that directory by at least ${bytes - limit} byte(s) (SCIENCE_DISCOVERY_DATA_DIR), or make `
+      + `$XDG_RUNTIME_DIR or /tmp usable. It must leave ${EGRESS_SOCKET_RELATIVE_BYTES} bytes for the socket itself.`,
     );
     this.name = "EgressSocketPathTooLongError";
   }
@@ -509,17 +510,22 @@ export class EgressGatewayRegistry {
   private readonly tcpGateways = new Map<string, Promise<EgressGateway>>();
 
   constructor(
-    private readonly dataDir: string,
+    dataDir: string,
     private readonly log?: EgressGatewayLog,
     private readonly resolveAddresses?: EgressAddressResolver,
+    /**
+     * Directory holding the gateway sockets. The runner passes a short runtime
+     * directory (see `egress-socket-root.ts`) because the whole absolute path
+     * has to fit in `sun_path`; `<dataDir>/eg` stays the default for a caller
+     * that has no shorter place to put them.
+     */
+    private readonly socketDirectory: string = resolve(dataDir, EGRESS_SOCKET_DIRECTORY),
   ) {}
 
   /**
-   * Where the gateway for this policy listens. The layout is as short as the
-   * data directory allows — `<dataDir>/eg/<16 hex>`, no `runner-runtime/`
-   * prefix and no `.sock` suffix — because the whole absolute path has to fit
-   * in `sun_path`; the previous layout cost 44 bytes and truncated inside an
-   * ordinary worktree data directory.
+   * Where the gateway for this policy listens — `<socketDirectory>/<16 hex>`,
+   * no `runner-runtime/` prefix and no `.sock` suffix, because every byte is
+   * charged against `sun_path`.
    *
    * The name is a digest of the revision rather than the revision itself, so a
    * revision of any length or shape produces a fixed-length name that cannot
@@ -528,7 +534,7 @@ export class EgressGatewayRegistry {
    */
   socketPath(revision: string): string {
     const name = createHash("sha256").update(revision).digest("hex").slice(0, EGRESS_SOCKET_NAME_LENGTH);
-    return resolve(this.dataDir, EGRESS_SOCKET_DIRECTORY, name);
+    return resolve(this.socketDirectory, name);
   }
 
   /**

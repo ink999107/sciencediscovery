@@ -115,6 +115,7 @@ Docker 默认的 readonlyPaths / maskedPaths 会让内核拒绝在沙箱自己�
 要点：
 
 - **无 root、无 CAP_NET_ADMIN、不依赖 socat**。bridge 是产品自带的标准库 Python 脚本，解释器与标准库以只读方式绑到 `/opt/sciencediscovery-net/`；宿主没有可用 python3 时该模式直接失败（fail-closed），并在 `/health.sandboxNetwork` 报告原因。
+- **宿主侧 socket 放在短的运行时目录**，而不是数据目录：依次尝试 `$RUNTIME_DIRECTORY`（systemd `RuntimeDirectory=`）、`$XDG_RUNTIME_DIR`、`/run/user/<uid>`、`/tmp`，全部不可用时才退回 `<dataDir>/eg`。每个候选目录都以 `0700` 创建并校验属主后才使用，因此 `SCIENCE_DISCOVERY_DATA_DIR` 的长度不再决定网络功能能否使用；沙箱内看到的始终是固定的 `/run/sciencediscovery/egress.sock`。
 - bridge 先监听再 fork，真实负载是它的子进程并继承 stdin/stdout/stderr；退出码透传。
 - seccomp 换成 network profile：只放行 socket 族调用（`socket/connect/bind/listen/accept/accept4/socketpair`），ptrace、mount、setns、bpf、keyring、io_uring 等继续拒绝；raw/packet socket 需要 `CAP_NET_RAW`，已被 `--cap-drop ALL` 挡住。
 - 允许列表条目为 `example.org`、`*.example.org`（只在 label 边界匹配，且不含 apex），可加 `:443` 限定端口；IP 字面量既不能作为条目，也不能作为请求目标。

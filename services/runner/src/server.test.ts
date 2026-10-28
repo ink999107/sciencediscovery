@@ -2140,6 +2140,30 @@ test("a runner started for an SSH tunnel listens on a private socket and opens n
   assert.equal(health.platform, process.platform);
 });
 
+test("a runner started with a deep data directory still offers network access", async (context) => {
+  // The socket historically lived in `<dataDir>/eg`; startRunnerServer now
+  // chooses a short runtime directory, so a deep data directory is only a
+  // storage location again.
+  const root = await mkdtemp(resolve(tmpdir(), "sd-deep-"));
+  const dataDir = resolve(root, "x".repeat(MAX_UNIX_SOCKET_PATH_BYTES));
+  const socketPath = resolve(await mkdtemp(resolve(tmpdir(), "sd-sock-")), "runner.sock");
+  const server = await startRunnerServer({ ...config(dataDir), socketPath });
+  context.after(() => new Promise<void>((resolveClose) => server.close(() => resolveClose())));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  context.after(() => rm(dirname(socketPath), { force: true, recursive: true }));
+
+  const health = await new Promise<RunnerHealth>((resolveBody, reject) => {
+    const request = httpRequest({ path: "/health", socketPath }, (response) => {
+      let body = "";
+      response.on("data", (chunk: Buffer) => { body += chunk.toString("utf8"); });
+      response.once("end", () => resolveBody(JSON.parse(body) as RunnerHealth));
+    });
+    request.once("error", reject);
+    request.end();
+  });
+  assert.doesNotMatch(health.sandboxNetwork.unavailableReason ?? "", /Unix socket path limit/);
+});
+
 test("the runner socket is configured by environment like every other listener setting", () => {
   const socketConfig = loadRunnerConfig({
     SCIENCE_AGENT_DATA_DIR: "/tmp/data",
@@ -2149,7 +2173,7 @@ test("the runner socket is configured by environment like every other listener s
   assert.equal(loadRunnerConfig({}, "/tmp").socketPath, undefined);
 });
 
-test("health marks egress unavailable when the configured data directory cannot hold its socket", async (context) => {
+test("health marks egress unavailable when the fallback socket directory cannot hold its socket", async (context) => {
   const dataDir = resolve(tmpdir(), "x".repeat(MAX_UNIX_SOCKET_PATH_BYTES));
   const socketPath = new EgressGatewayRegistry(dataDir).socketPath("capability");
   assert.ok(Buffer.byteLength(socketPath) > MAX_UNIX_SOCKET_PATH_BYTES);
@@ -2164,4 +2188,26 @@ test("health marks egress unavailable when the configured data directory cannot 
   assert.deepEqual(health.sandboxNetwork.modes, ["none"]);
   assert.match(health.sandboxNetwork.unavailableReason ?? "", /Unix socket path limit/);
   assert.match(health.sandboxNetwork.unavailableReason ?? "", /SCIENCE_DISCOVERY_DATA_DIR/);
+});
+
+test("health keeps egress available for a deep data directory when the socket directory is short", async (context) => {
+  // startRunnerServer puts the socket in a short runtime directory, so the
+  // configured data directory no longer decides whether network access works.
+  const dataDir = resolve(tmpdir(), "x".repeat(MAX_UNIX_SOCKET_PATH_BYTES));
+  const socketRoot = await mkdtemp(resolve(tmpdir(), "sciencediscovery-egress-root-"));
+  const gateways = new EgressGatewayRegistry(dataDir, undefined, undefined, socketRoot);
+
+  const server = createRunnerServer(config(dataDir), undefined, undefined, undefined, undefined, undefined, gateways);
+  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+  context.after(async () => {
+    await new Promise<void>((done) => server.close(() => done()));
+    await gateways.close();
+    await rm(socketRoot, { force: true, recursive: true });
+  });
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const health = await (await fetch(`${origin}/health`)).json() as RunnerHealth;
+
+  assert.equal(dirname(gateways.socketPath("capability")), socketRoot);
+  assert.ok(Buffer.byteLength(gateways.socketPath("capability")) <= MAX_UNIX_SOCKET_PATH_BYTES);
+  assert.doesNotMatch(health.sandboxNetwork.unavailableReason ?? "", /Unix socket path limit/);
 });
