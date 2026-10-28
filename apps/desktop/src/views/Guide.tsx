@@ -84,20 +84,33 @@ export function Guide({ onClose, onStep }: Props) {
     };
 
     measure();
+    // The anchor is not the same element from one step to the next, and not
+    // even from one render to the next: a step opens the panel, and the tour
+    // moves the app onto the welcome page, whose composer is a different node
+    // from the transcript's. Watching the document for the node being replaced
+    // is what keeps the ring on the thing actually on screen — observing a node
+    // that has left the document reports nothing.
+    const resize = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
+    let watched: Element | null = null;
+    const watch = () => {
+      const node = document.querySelector(guideAnchor(step.key));
+      if (node === watched) return;
+      resize?.disconnect();
+      watched = node;
+      if (node !== null) resize?.observe(node);
+      measure();
+    };
+    watch();
     // One more frame, for the layout the step itself caused: opening the panel
     // changes the middle column's width in the same commit that renders this
     // card, and a first measurement can beat the browser to it.
     const frame = window.requestAnimationFrame(measure);
-    // The panel is display: none until the step that opens it renders, which
-    // can land after that frame. Watching the anchor itself is what catches
-    // it: the element gaining a box is exactly the size change being watched
-    // for, whichever render caused it.
-    const anchorNode = document.querySelector(guideAnchor(step.key));
-    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
-    if (anchorNode !== null) observer?.observe(anchorNode);
+    const mutations = typeof MutationObserver === "undefined" ? undefined : new MutationObserver(watch);
+    mutations?.observe(document.body, { childList: true, subtree: true });
     window.addEventListener("resize", measure);
     return () => {
-      observer?.disconnect();
+      mutations?.disconnect();
+      resize?.disconnect();
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", measure);
     };

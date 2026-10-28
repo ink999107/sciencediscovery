@@ -263,7 +263,7 @@ export const EN: Text = {
     steps: {
       composer: {
         title: "The composer",
-        body: "Type what you need below and press Enter to send. The + on the left attaches files, the picker on the right chooses the model and the permission mode, and typing / references a Skill or a command directly.",
+        body: "Write what you need in the box in the middle and press Enter to send. The + on the left attaches files, the picker on the right chooses the model and the permission mode, and typing / references a Skill or a command directly. The first message turns this page into a conversation.",
       },
       settings: {
         title: "Settings",

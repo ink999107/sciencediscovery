@@ -34,7 +34,7 @@ export const TOKEN_STORAGE_KEY = "sciencediscovery-token";
  *  string is the contract between them. */
 export const GUIDE_STORAGE_KEY = "sciencediscovery-desktop:guide";
 
-const CREATED_AT = "2026-10-01T08:00:00.000Z";
+export const CREATED_AT = "2026-10-01T08:00:00.000Z";
 const UPDATED_AT = "2026-10-01T09:30:00.000Z";
 
 export interface ProjectRecord {

@@ -135,6 +135,10 @@ export function App({ initialToken }: Props) {
    *  and 结束 puts back what was there, so reading three cards does not
    *  rearrange the window. */
   const panelBeforeGuide = useRef(false);
+  /** What the page was on the last render. The guide is opened from a timer and
+   *  from a settings button, neither of which may close over the page as it was
+   *  when the handler was built. */
+  const pageRef = useRef({ landing: false, running: false });
   const workspaceOpenRef = useRef(workspaceOpen);
   useEffect(() => {
     workspaceOpenRef.current = workspaceOpen;
@@ -142,8 +146,16 @@ export function App({ initialToken }: Props) {
 
   const openGuide = useCallback(() => {
     panelBeforeGuide.current = workspaceOpenRef.current;
+    // The welcome page is where a conversation starts, so that is the page the
+    // first card describes. Switched here, before the cards are drawn, so the
+    // card is placed against the composer it is about rather than jumping to
+    // it once the page changes underneath. Nothing is written: a draft is what
+    // the app shows before the first message, and it is where the reader is
+    // left — the tour is for someone who has not started yet.
+    const page = pageRef.current;
+    if (!page.landing && !page.running) actions.startDraft();
     setGuideOpen(true);
-  }, []);
+  }, [actions]);
 
   // Shown on the first arrival at the task page, which is also the first
   // moment it is true: `setup` replaces the shell with the wizard, and the
@@ -303,6 +315,21 @@ export function App({ initialToken }: Props) {
    *  than pinned to the bottom of a page with nothing above it. A run that is
    *  still going keeps the transcript, even before its first event lands. */
   const landing = !state.loadingSession && !state.running && isEmptyTranscript(state);
+
+  useEffect(() => {
+    pageRef.current = { landing, running: state.running };
+  }, [landing, state.running]);
+
+  // The tour is a tour of the page a new conversation starts on, so while it is
+  // on screen the page stays there. Switching once when the guide opens is not
+  // enough: the Session the boot listing resumes can finish opening after the
+  // cards are already up. A run in progress is left alone — it is not a page
+  // the tour may discard, and the composer card is true of it as it stands. The
+  // overlay takes the clicks, so nothing else can move the page in between.
+  useEffect(() => {
+    if (!guideOpen || landing || state.running) return;
+    actions.startDraft();
+  }, [actions, guideOpen, landing, state.running]);
 
   const acceptToken = (next: string) => {
     try {

@@ -23,6 +23,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import {
+  CREATED_AT,
   GUIDE_STORAGE_KEY,
   TOKEN,
   TOKEN_STORAGE_KEY,
@@ -120,6 +121,38 @@ test("Escape ends it too, and the panel it opened goes back", async ({ page }) =
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
   await expect(page.locator(".app-shell")).toHaveClass(/workspace-hidden/);
+});
+
+test("the composer it points at is the welcome page's, not a transcript's", async ({ page }) => {
+  const mock = await installMockApi(page, {
+    guideSeen: false,
+    sessions: [
+      makeSession({
+        messages: [{ content: "晶体结构分析", createdAt: CREATED_AT, id: "message-1", role: "user" }],
+      }),
+    ],
+  });
+  await page.goto("/");
+
+  // Boot resumes the Session the sidebar lists, which would leave the composer
+  // pinned to the bottom of its transcript. The tour is about the page a
+  // conversation starts on, so it is shown over that one instead.
+  const card = guideCard(page);
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("第 1 / 3 步");
+  await expect(page.locator(".composer")).toHaveClass(/is-landing/);
+  await expect(page.locator(".message.user")).toHaveCount(0);
+
+  // Reaching the welcome page is not a new Session: nothing was written.
+  expect(mock.state.sessions).toHaveLength(1);
+
+  // The tour is for someone who has not started yet, so that is where it
+  // leaves them — the Session is still in the sidebar, one click away.
+  await card.getByRole("button", { name: "跳过" }).click();
+  await expect(card).toHaveCount(0);
+  await expect(page.locator(".composer")).toHaveClass(/is-landing/);
+  await expect(page.locator(".side-session-name", { hasText: "晶体结构分析" })).toBeVisible();
+  expect(mock.state.sessions).toHaveLength(1);
 });
 
 test("设置 › 通用 replays it for someone who dismissed it", async ({ page }) => {

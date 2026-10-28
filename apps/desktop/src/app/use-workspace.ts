@@ -198,6 +198,11 @@ export interface WorkspaceActions {
   renameSession: (session: Session, title: string) => Promise<void>;
   /** Re-read the model catalog after the wizard or settings changed it. */
   refreshCatalog: () => Promise<void>;
+  /** Clear the view back to an empty draft, writing nothing. Used by 新增会话
+   *  before it creates, by a deletion that removed the open Session, and by the
+   *  first-run guide, which is about the welcome page and puts the conversation
+   *  it interrupted back through `openSession` when it ends. */
+  startDraft: () => void;
   retryBoot: () => void;
   selectModel: (modelId: string) => Promise<void>;
   send: (content: string) => Promise<void>;
@@ -1567,6 +1572,7 @@ export function useWorkspace(client: ApiClient, onAuthRejected: () => void): Wor
       send,
       setApprovalMode,
       setDefaultModel,
+      startDraft,
       stop,
       toast,
       uploadFiles,
