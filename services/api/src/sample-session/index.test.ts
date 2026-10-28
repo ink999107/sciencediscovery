@@ -16,6 +16,7 @@ import { createTest } from "../../../../test/support/tagged/compat.mjs";
 const { test } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
 import { CasStore } from "@sciencediscovery/cas";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile, rm, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -138,4 +139,34 @@ test("an install that already has conversations is not given a sample", async (c
   assert.equal(await seedSampleSession(store), false);
   assert.deepEqual(store.listUserProjects().map((project) => project.name), ["My analysis"]);
   assert.equal(store.listSessions(mine.id, "all").length, 1);
+});
+
+test("a seed that fails part-way leaves nothing behind, so the next start tries again", async (context) => {
+  const root = tempRoot("sample-session-failed");
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const store = new SessionStore(root);
+  await store.load();
+  // Fail where a full disk or a corrupt payload would: after the Project and
+  // the Session exist, while the artifacts are being catalogued.
+  store.createArtifactVersion = async () => {
+    throw new Error("ENOSPC: no space left on device");
+  };
+
+  assert.equal(await seedSampleSession(store), false);
+
+  // Nothing of the sample survives, so the "already has conversations" check
+  // the next start makes does not mistake the wreckage for the user's work.
+  assert.deepEqual(store.listUserProjects(), []);
+  assert.equal(existsSync(resolve(root, SAMPLE_SESSION_MARKER)), false);
+
+  // The next start — a new process over the same data directory — seeds it
+  // whole, because there is nothing left for it to read as a used install.
+  const reopened = new SessionStore(root);
+  await reopened.load();
+  assert.equal(await seedSampleSession(reopened), true);
+  assert.deepEqual(reopened.listUserProjects().map((project) => project.name), ["示例项目"]);
+  const [project] = reopened.listUserProjects();
+  assert.ok(project);
+  assert.equal(reopened.listSessions(project.id, "all").length, 1);
+  assert.ok(existsSync(resolve(root, SAMPLE_SESSION_MARKER)));
 });

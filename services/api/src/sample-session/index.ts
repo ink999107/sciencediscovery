@@ -18,7 +18,7 @@ import { dirname, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 
 import { CasStore } from "@sciencediscovery/cas";
-import type { ArtifactOrigin, ArtifactOriginMeta, ScientificArtifactKind } from "@sciencediscovery/schema";
+import type { ArtifactOrigin, ArtifactOriginMeta, Project, ScientificArtifactKind } from "@sciencediscovery/schema";
 
 import { apiLog } from "../logging.js";
 import type { SessionStore } from "../store.js";
@@ -119,9 +119,11 @@ export async function seedSampleSession(store: SessionStore): Promise<boolean> {
     await writeMarker(store.dataDir, "existing workspace\n");
     return false;
   }
+  let created: Project | undefined;
   try {
     const sample = sampleSession();
     const project = await store.createProject(sample.projectName);
+    created = project;
     const session = await store.createSession(project.id, sample.sessionTitle, {}, {}, {
       allowUnconfiguredModel: true,
     });
@@ -144,9 +146,24 @@ export async function seedSampleSession(store: SessionStore): Promise<boolean> {
     apiLog.info("sample_session_seeded", { projectId: project.id, sessionId: session.id });
     return true;
   } catch (error) {
-    apiLog.warn("sample_session_failed", {
-      reason: error instanceof Error ? error.message : String(error),
-    });
+    const reason = error instanceof Error ? error.message : String(error);
+    // All or nothing. A seed that stopped part-way leaves its own Project
+    // behind, and the next start reads any Project with a Session as "this
+    // install already has conversations" — so the half-written sample would
+    // stay forever, as the transcript this PR exists to stop shipping: a
+    // first step that reads a file nothing wrote. Removing it lets the next
+    // start seed the sample whole.
+    if (created) {
+      try {
+        await store.deleteProject(created.id, created.id);
+      } catch (cleanupError) {
+        apiLog.warn("sample_session_cleanup_failed", {
+          projectId: created.id,
+          reason: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      }
+    }
+    apiLog.warn("sample_session_failed", { reason });
     return false;
   }
 }
