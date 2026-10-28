@@ -56,7 +56,7 @@ export function GeneralSettings({ onShowGuide }: { onShowGuide: () => void }) {
           and because this is the page a user opens when they cannot find
           something on the interface. */}
       <Group heading={TEXT.settings.general.guide.heading}>
-        <Row hint={TEXT.settings.general.guide.hint} title={TEXT.settings.general.guide.field}>
+        <Row title={TEXT.settings.general.guide.field}>
           <button className="secondary-button" onClick={onShowGuide} type="button">
             {TEXT.settings.general.guide.action}
           </button>

@@ -421,7 +421,6 @@ export const EN: Text = {
       guide: {
         heading: "Interface guide",
         field: "Interface tour",
-        hint: "The composer, settings and the right panel, in three cards.",
         action: "Replay",
       },
     },

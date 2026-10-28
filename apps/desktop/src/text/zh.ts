@@ -447,7 +447,6 @@ export const ZH = {
       guide: {
         heading: "新手引导",
         field: "界面导览",
-        hint: "对话框、设置和右侧栏，三张卡片再看一遍。",
         action: "重新查看",
       },
     },
