@@ -3421,6 +3421,26 @@ export class SessionStore {
     return structuredClone(subagent);
   }
 
+  /**
+   * Put children a Session already ran into the catalog.
+   *
+   * A Session that arrives as a recording — the seeded sample is one — replays
+   * the run it has on disk, and a run stream keeps its `subagent.updated`
+   * snapshots without their steps. The catalog is the one place a finished
+   * child's execution is readable, and only a live child writes it, so a
+   * Session restored from a recording has to bring its rows along or every
+   * child opens on nothing. A row that is already here is left alone.
+   */
+  async restoreSubagents(subagents: Subagent[]): Promise<void> {
+    let added = false;
+    for (const subagent of subagents) {
+      if (this.catalog.subagents.some((candidate) => candidate.id === subagent.id)) continue;
+      this.catalog.subagents.push(structuredClone(subagent));
+      added = true;
+    }
+    if (added) await this.saveCatalog();
+  }
+
   async updateSubagentBrief(
     sessionId: string,
     subagentId: string,
