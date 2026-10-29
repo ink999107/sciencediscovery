@@ -1031,6 +1031,7 @@ export const EN: Text = {
     resizeList: "Resize the list",
     expand: "Expand",
     collapsePanel: "Collapse panel",
+    backToGroups: "Back to artifacts and files",
     allArtifacts: "All artifacts",
     download: "Download",
     version: "Version",
