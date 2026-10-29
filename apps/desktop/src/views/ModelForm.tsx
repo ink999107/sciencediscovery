@@ -138,6 +138,18 @@ export function ModelForm({
   const [busy, setBusy] = useState<"" | "fetch" | "submit" | "test">("");
   const [verdict, setVerdict] = useState<Verdict>();
   const [testPassed, setTestPassed] = useState(false);
+  /**
+   * What a passing test left behind: the profile as it was saved, and the
+   * latency it answered in.
+   *
+   * 测试 saves before it tests, so a pass means this exact configuration is
+   * already in the catalog and already verified. The action that follows — the
+   * wizard's 开始使用, settings' 保存 — can write the default onto that record
+   * instead of saving and asking the provider the same question again, which
+   * the reader sees as the same wait twice. Any edit clears it, together with
+   * `testPassed`: both describe this form's contents, not the wizard's history.
+   */
+  const [verified, setVerified] = useState<(ModelFormResult & { latencyMs: number }) | undefined>();
 
   const tokenOptional = preset?.tokenOptional === true;
   const keyMissing = !tokenOptional && apiKey.trim() === "";
@@ -147,6 +159,7 @@ export function ModelForm({
   const invalidate = () => {
     setVerdict(undefined);
     setTestPassed(false);
+    setVerified(undefined);
   };
 
   const choosePreset = (id: string) => {
@@ -259,50 +272,67 @@ export function ModelForm({
     setBusy("test");
     setVerdict({ kind: "testing", message: TEXT.wizard.testing });
     try {
-      const { profile } = await persist();
-      const test = await testModel(client, profile.id);
+      const saved = await persist();
+      const test = await testModel(client, saved.profile.id);
       setVerdict(
         test.ok
           ? { kind: "ok", message: TEXT.wizard.testOk(test.latencyMs) }
           : { kind: "fail", message: failureMessage(test) },
       );
       setTestPassed(test.ok);
+      setVerified(test.ok ? { ...saved, latencyMs: test.latencyMs } : undefined);
     } catch (reason) {
       setVerdict({
         kind: "fail",
         message: reason instanceof Error ? reason.message : TEXT.errors.generic,
       });
       setTestPassed(false);
+      setVerified(undefined);
     } finally {
       setBusy("");
     }
   };
 
-  /** 保存: create, verify, and point the global default at the new profile. */
+  /**
+   * 保存 / 开始使用: point the global default at the new profile.
+   *
+   * A test that already passed saved this configuration and got an answer from
+   * the provider, so this click has nothing left to verify: it writes the
+   * default onto the record the test left. Asking again would show the same
+   * spinner and the same "connected" line a second time, which reads as the
+   * app testing twice. Without a pass — the reader went straight to 保存, or
+   * edited the form after testing — the save and the test happen here instead,
+   * exactly as before.
+   */
   const submit = async () => {
     if (refuseIncomplete()) return;
+    const passed = testPassed ? verified : undefined;
     setBusy("submit");
-    setVerdict({ kind: "testing", message: TEXT.wizard.testing });
+    if (passed === undefined) setVerdict({ kind: "testing", message: TEXT.wizard.testing });
     try {
-      const { profile, providerId } = await persist();
-      const test = await testModel(client, profile.id);
-      if (!test.ok) {
-        // Saved but unusable. It stays in the list: the fix is correcting this
-        // form (which will now find and update that record), not starting over.
-        setVerdict({ kind: "fail", message: failureMessage(test) });
-        setTestPassed(false);
-        return;
+      let result = passed;
+      if (result === undefined) {
+        const saved = await persist();
+        const test = await testModel(client, saved.profile.id);
+        if (!test.ok) {
+          // Saved but unusable. It stays in the list: the fix is correcting this
+          // form (which will now find and update that record), not starting over.
+          setVerdict({ kind: "fail", message: failureMessage(test) });
+          setTestPassed(false);
+          return;
+        }
+        result = { ...saved, latencyMs: test.latencyMs };
+        setVerdict({ kind: "ok", message: TEXT.wizard.testOk(test.latencyMs) });
       }
 
-      const settings = await setGlobalModel(client, profile.id);
-      if (settings.overrides.modelId !== profile.id) {
+      const settings = await setGlobalModel(client, result.profile.id);
+      if (settings.overrides.modelId !== result.profile.id) {
         // The write came back without the selection, which means the server did
         // not accept the id. Saying "saved" here would be a lie.
-        setVerdict({ kind: "fail", message: TEXT.wizard.saveFailed(providerName(profile.name)) });
+        setVerdict({ kind: "fail", message: TEXT.wizard.saveFailed(providerName(result.profile.name)) });
         return;
       }
-      setVerdict({ kind: "ok", message: TEXT.wizard.testOk(test.latencyMs) });
-      await onConfigured({ profile, providerId });
+      await onConfigured({ profile: result.profile, providerId: result.providerId });
     } catch (reason) {
       setVerdict({
         kind: "fail",
