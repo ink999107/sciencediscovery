@@ -1066,6 +1066,9 @@ export const ZH = {
     /** The control that appears on an edge the divider closed. */
     expand: "展开",
     collapsePanel: "收起面板",
+    /** The way out of a subagent's record or a tool's text, back to the
+     *  panel's own groups. */
+    backToGroups: "返回产物和文件",
     allArtifacts: "所有产物",
     download: "下载",
     /** The picker beside an open document that chooses which version of the
