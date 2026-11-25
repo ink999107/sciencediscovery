@@ -26,6 +26,8 @@ interface Props {
   /** A built-in is read-only but still copyable: it keeps 导出 and loses
    *  both 编辑 and 删除. */
   canDelete?: boolean;
+  /** The detail page offers 删除 alone; the list keeps all three entries. */
+  canExport?: boolean;
   disabled?: boolean;
   name: string;
   onAction: (action: SkillRowAction) => void;
@@ -34,13 +36,13 @@ interface Props {
 const ICON_PROPS = {
   "aria-hidden": true as const,
   fill: "none",
-  height: 14,
+  height: 16,
   stroke: "currentColor",
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
-  strokeWidth: 1.8,
+  strokeWidth: 1.7,
   viewBox: "0 0 24 24",
-  width: 14,
+  width: 16,
 };
 
 /** An arrow falling into a tray: the package leaves this computer. */
@@ -77,7 +79,7 @@ const DeleteGlyph = () => (
  * containing block, so scrolling the pane brings it into view, and staying in
  * the tree keeps it usable where there is no document body to portal into.
  */
-export function SkillRowMenu({ canDelete = true, canEdit, disabled, name, onAction }: Props) {
+export function SkillRowMenu({ canDelete = true, canEdit, canExport = true, disabled, name, onAction }: Props) {
   const [open, setOpen] = useState(false);
   /** Whether the popover opens upwards, because the row sits too close to the
    *  bottom of the pane to show it below. */
@@ -121,9 +123,9 @@ export function SkillRowMenu({ canDelete = true, canEdit, disabled, name, onActi
     onAction(action);
   };
 
-  const entry = (action: SkillRowAction, icon: ReactNode, label: string, danger = false) => (
+  const entry = (action: SkillRowAction, icon: ReactNode, label: string) => (
     <button
-      className={`skill-row-menu-item${danger ? " is-danger" : ""}`}
+      className="skill-row-menu-item"
       onClick={() => choose(action)}
       role="menuitem"
       type="button"
@@ -163,18 +165,18 @@ export function SkillRowMenu({ canDelete = true, canEdit, disabled, name, onActi
         }}
         type="button"
       >
+        {/* The handoff's card offers its actions behind a vertical ellipsis,
+            the shape a reader already knows as "more". */}
         <svg
           aria-hidden="true"
-          fill="none"
-          height="13"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
+          fill="currentColor"
+          height="16"
           viewBox="0 0 24 24"
-          width="13"
+          width="16"
         >
-          <path d="M6 9l6 6 6-6" />
+          <circle cx="12" cy="5" r="1.6" />
+          <circle cx="12" cy="12" r="1.6" />
+          <circle cx="12" cy="19" r="1.6" />
         </svg>
       </button>
 
@@ -184,10 +186,10 @@ export function SkillRowMenu({ canDelete = true, canEdit, disabled, name, onActi
           className={`skill-row-menu-popover${up ? " is-up" : ""}`}
           role="menu"
         >
-          {entry("export", <ExportGlyph />, TEXT.settings.skills.rowMenu.export)}
+          {canExport ? entry("export", <ExportGlyph />, TEXT.settings.skills.rowMenu.export) : null}
           {canEdit ? entry("edit", <EditGlyph />, TEXT.settings.skills.rowMenu.edit) : null}
           {canDelete ? <div className="skill-row-menu-divider" /> : null}
-          {canDelete ? entry("delete", <DeleteGlyph />, TEXT.settings.skills.rowMenu.delete, true) : null}
+          {canDelete ? entry("delete", <DeleteGlyph />, TEXT.settings.skills.rowMenu.delete) : null}
         </div>
       ) : null}
     </div>
